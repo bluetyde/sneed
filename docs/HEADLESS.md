@@ -37,10 +37,15 @@ One JSON object on stdout, nothing else. Exit codes: **0** a reply was produced,
 - `tests/engine/process.test.ts`: `hasOwned` with a real owned process.
 - Mutation checks: `python tests/mutation/verifier_mutations.py seed` (16 mutations, all caught).
 
+## Time limit and size
+
+`--timeout-seconds` bounds the whole analysis, not only SCRAM: after the engine returns, the checks on its report poll the clock and stop (`failed`, reason `timeout`), and a cancel stops them too. A report with more than 50,000 cut sets is refused without being checked (`too-many-cut-sets`), and a report whose minimality check would take more than a fixed amount of work is refused (`result-too-large-to-verify`). Neither is ever a result. Found by the SEED agent while building `adapters/pra`: an AND of 17 two-event ORs (131072 cut sets) ran for over 15 minutes past a 120 s limit in the old quadratic check. Now: 15 pairs (32768 sets) take about 5 s; 17 pairs end as `too-many-cut-sets` in about 20 s (mostly SCRAM and XML parsing).
+
 ## Known limits
 
 - Windows with WSL2 and the installed runtime only, like the rest of the engine path.
 - Cancel is confirmed by a process check, not by a handshake with SCRAM; a process that lingers after being killed is reported as `nativeStopped: false`.
 - SEED runs oracle entries with default settings, so the rare-event, min-cut-upper-bound and product-order-limit rows cannot be SEED entries until `seed.oracle` has a settings field.
 - The runner does not accept a SEED-reserved run folder as the engine's own folder; it writes beside it in `work/`, so the exclusive-create rule of `analyze()` is untouched.
+- `cancel --out` compares the recorded work folder as a string, so the same folder written with forward slashes is `E_NOT_OWNED` (reported by the SEED agent; callers should pass native `path.join` paths, as SEED's adapter does).
 - Memory and core budgets are not enforced (SCRAM is single-threaded); only the wall-clock limit is.

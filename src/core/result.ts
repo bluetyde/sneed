@@ -64,6 +64,69 @@ export interface AssessInput {
   hashes: ResultRecord['input_hashes'];
   /** Basic events written to the exported XML. */
   exportedEvents: string[];
+  /**
+   * Called now and then during the checks on a large report; throws AssessAborted when the run's time is up or it was cancelled.
+   * The checks are CPU-bound and cannot be interrupted from outside, so they poll.
+   */
+  check?: () => void;
+}
+
+/** Thrown by the `check` callback (or by a check that gives up) to stop assessing. assess() turns it into a record. */
+export class AssessAborted extends Error {
+  constructor(readonly why: 'timeout' | 'cancelled' | 'too-large') {
+    super(`assessment stopped: ${why}`);
+  }
+}
+
+/** A report with more cut sets than this is not verified (and so never "completed"): the checks below grow faster than the count. */
+export const MAX_CUT_SETS = 50_000;
+/** Elementary steps the minimality check may take before it gives up. A few seconds of work. */
+export const MINIMALITY_BUDGET = 40_000_000;
+const POLL_EVERY = 4096;
+
+/**
+ * True when some cut set is a proper subset of another. Only a set with fewer events can be a proper subset, so sets of the
+ * same size are never compared (a family of equal-size sets, the common case, costs nothing). Throws AssessAborted('too-large')
+ * when the work exceeds the budget instead of running for an unbounded time.
+ */
+export function hasNonMinimal(sets: string[][], check: () => void = () => undefined): boolean {
+  const order = sets.map((_, i) => i).sort((a, b) => sets[a]!.length - sets[b]!.length);
+  const post = new Map<string, number[]>(); // event -> sets containing it, smallest first
+  let ops = 0;
+  const tick = (n: number): void => {
+    ops += n;
+    if (ops > MINIMALITY_BUDGET) throw new AssessAborted('too-large');
+    if (ops % POLL_EVERY < n) check();
+  };
+  let at = 0;
+  while (at < order.length) {
+    // all sets of this size, checked against every smaller set already indexed, then added to the index
+    const size = sets[order[at]!]!.length;
+    let end = at;
+    while (end < order.length && sets[order[end]!]!.length === size) end++;
+    for (let i = at; i < end; i++) {
+      const s = sets[order[i]!]!;
+      const seen = new Map<number, number>();
+      for (const e of s) {
+        for (const t of post.get(e) ?? []) {
+          tick(1);
+          const c = (seen.get(t) ?? 0) + 1;
+          seen.set(t, c);
+          if (c === sets[t]!.length) return true; // every event of t is in s, and t is smaller
+        }
+      }
+    }
+    for (let i = at; i < end; i++) {
+      for (const e of sets[order[i]!]!) {
+        const list = post.get(e);
+        if (list) list.push(order[i]!);
+        else post.set(e, [order[i]!]);
+      }
+      tick(size);
+    }
+    at = end;
+  }
+  return false;
 }
 
 const APPROXIMATION: Record<Settings['method'], string> = { exact: 'none', 'rare-event': 'rare-event', mcub: 'mcub' };
@@ -136,29 +199,35 @@ export function assess(input: AssessInput): ResultRecord {
   // an exact probability is never above 1; a clamp warning with a printed value of 1 is only rounding, anything else is not
   if (adjusted && settings.method === 'exact' && !close(report.probability, 1)) reasons.push('probability-adjusted-by-engine');
 
+  if (report.products.length > MAX_CUT_SETS) return { ...fail('too-many-cut-sets'), warnings: report.warning ? [report.warning] : [] };
   const known = new Set(input.exportedEvents);
   const p = new Map(model.events.map((e) => [e.id, e.probability]));
   const keys = new Set<string>();
-  for (const prod of report.products) {
-    const ev = prod.events;
-    if (ev.length === 0 || new Set(ev).size !== ev.length || prod.order !== ev.length) reasons.push('malformed-cut-set');
-    else if (ev.some((e) => !known.has(e))) reasons.push('unknown-event-in-cut-set');
-    else {
-      const expected = ev.reduce((acc, e) => acc * p.get(e)!, 1);
-      if (!(prod.probability >= 0 && prod.probability <= 1) || !close(prod.probability, expected)) reasons.push('cut-set-probability-mismatch');
-    }
-    const key = [...ev].sort().join('\u0000');
-    if (keys.has(key)) reasons.push('duplicate-cut-set');
-    keys.add(key);
-  }
+  const check = input.check ?? ((): void => undefined);
   const sets = report.products.map((x) => x.events);
-  outer: for (let i = 0; i < sets.length; i++) {
-    for (let j = 0; j < sets.length; j++) {
-      if (i !== j && sets[i]!.every((e) => sets[j]!.includes(e)) && sets[i]!.length < sets[j]!.length) {
-        reasons.push('non-minimal-cut-sets');
-        break outer;
+  try {
+    check(); // once before the loops: a run whose time is already up must not start them
+    let seenProducts = 0;
+    for (const prod of report.products) {
+      if (++seenProducts % POLL_EVERY === 0) check();
+      const ev = prod.events;
+      if (ev.length === 0 || new Set(ev).size !== ev.length || prod.order !== ev.length) reasons.push('malformed-cut-set');
+      else if (ev.some((e) => !known.has(e))) reasons.push('unknown-event-in-cut-set');
+      else {
+        const expected = ev.reduce((acc, e) => acc * p.get(e)!, 1);
+        if (!(prod.probability >= 0 && prod.probability <= 1) || !close(prod.probability, expected)) reasons.push('cut-set-probability-mismatch');
       }
+      const key = [...ev].sort().join('\u0000');
+      if (keys.has(key)) reasons.push('duplicate-cut-set');
+      keys.add(key);
     }
+    if (hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');
+  } catch (e) {
+    if (e instanceof AssessAborted) {
+      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };
+      return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');
+    }
+    throw e;
   }
   // rare-event and MCUB values are pure functions of the cut sets: recompute them. SCRAM clamps a value above 1 to 1 and
   // only warns. That is not a failure: the record keeps the bound (1) as the probability, carries the method's own value

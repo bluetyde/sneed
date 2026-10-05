@@ -24,6 +24,7 @@ R = ROOT / "tests/oracle/rational.ts"
 X = ROOT / "src/core/export.ts"
 P = ROOT / "src/core/report.ts"
 Rs = ROOT / "src/core/result.ts"
+AN = ROOT / "src/core/analyze.ts"
 B = ROOT / "src/core/bounds.ts"
 A = ROOT / "src/core/analyze.ts"
 N = ROOT / "src/core/engine.ts"
@@ -54,6 +55,7 @@ UNIT = ("tests/unit", 180)
 PROCESS = ("tests/engine/process.test.ts", 420)
 HEADLESS = ("tests/engine/headless.test.ts", 1500)
 SMOKE = ("tests/engine/smoke.test.ts", 900)
+TIMEOUT = ("tests/engine/analyze-timeout.test.ts", 400)
 E2E = ("cmd:npm run e2e --silent", 600)  # builds the web app from the mutated source, then drives real Chrome
 
 MUTATIONS = [
@@ -121,7 +123,7 @@ MUTATIONS = [
     ("result: exact probability not checked against cut sets", Rs, "if (union !== null && union > report.probability && !close(union, report.probability)) {", "if (false as boolean) {"),
     ("result: omission evidence ignored", Rs, "if (emptyButPossible || explainsLess) {", "if (false as boolean) {"),
     ("result: approximation values not recomputed", Rs, "if (reasons.length === 0 && settings.method !== 'exact') {", "if (false as boolean) {"),
-    ("result: non-minimal cut sets accepted", Rs, "sets[i]!.length < sets[j]!.length", "false as boolean"),
+    ("result: non-minimal cut sets accepted", Rs, "if (hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');", ""),
     ("result: clamp warning ignored for exact", Rs, "if (adjusted && settings.method === 'exact' && !close(report.probability, 1))", "if (false as boolean)"),
     # structural bound
     ("bounds: AND takes the maximum", B, "if (g.type === 'and') b = vals.reduce((x, y) => x + y, 0);", "if (g.type === 'and') b = Math.max(...vals);"),
@@ -288,6 +290,13 @@ MUTATIONS = [
     ("headless: another record in its place confirms a cancel", HL, "return r.state === 'ended' && r.workId === rec.workId && r.workDir === rec.workDir && r.pid === rec.pid;", "return r.state === 'ended';"),
     ("runs: the file read is not checked against the path afterwards", SR, "const again = plainPath(dir, ...parts); // the path must still be plain and inside the runs folder", "const again = file;"),
     ("runs: a replaced file is not noticed", SR, "if (now.ino !== st.ino || now.dev !== st.dev) throw new Error('the file was replaced while it was read');", ""),
+    ("result: too many cut sets are checked anyway", Rs, "if (report.products.length > MAX_CUT_SETS) return", "if (false as boolean) return"),
+    ("result: the minimality check has no budget", Rs, "if (ops > MINIMALITY_BUDGET) throw new AssessAborted('too-large');", ""),
+    ("result: the minimality check never polls the deadline", Rs, "if (ops % POLL_EVERY < n) check();", ""),
+    ("result: sets of the same size are compared", Rs, "const size = sets[order[at]!]!.length;", "const size = 0;"),
+    ("result: a subset is not noticed", Rs, "if (c === sets[t]!.length) return true;", "if (c === sets[t]!.length + 1) return true;"),
+    ("result: a timeout during the checks is reported as a result", Rs, "return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');", "return fail('result-too-large-to-verify');"),
+    ("analyze: the time limit covers only the engine", AN, "if (now() > deadline) throw new AssessAborted('timeout');", "", TIMEOUT),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -341,7 +350,7 @@ def main() -> int:
     if only == "compare":  # just the compare-runs mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:", "editor: a failed comparison", "editor: a slow older", "editor: clearing does not", "editor: a listing failure"))]
     if only == "seed":  # just the SEED-side mutations
-        chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process"))]
+        chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process", "analyze:"))]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

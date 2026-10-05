@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assess, type AssessInput, type Outcome } from '../../src/core/result.js';
+import { assess, AssessAborted, hasNonMinimal, MAX_CUT_SETS, MINIMALITY_BUDGET, type AssessInput, type Outcome } from '../../src/core/result.js';
 import { maxCutSetOrderBound, reachableEvents } from '../../src/core/bounds.js';
 import { makeReport, type FakeReport } from '../oracle/reportgen.js';
 import { AND, OR, VOTE, mkDoc, ORACLE_MODELS } from '../oracle/models.js';
@@ -262,5 +262,103 @@ describe('truncation and completeness', () => {
     const big = asModel(mkDoc('TOP', Object.fromEntries(ids.map((i) => [i, 0.5])), [AND('TOP', ids)]));
     const r = run(big, { probability: '4.76837e-07', limit: 20, products: [] });
     expect(r.status).toBe('truncated');
+  });
+});
+
+describe('the checks on a large report are bounded (found by SEED: --timeout-seconds was not enforced)', () => {
+  it('hasNonMinimal finds a proper subset, whatever the order of the sets and of the events', () => {
+    expect(hasNonMinimal([['A', 'B'], ['C']])).toBe(false);
+    expect(hasNonMinimal([['A', 'B', 'C'], ['B', 'A']])).toBe(true);
+    expect(hasNonMinimal([['C', 'B', 'A'], ['X'], ['A']])).toBe(true);
+    expect(hasNonMinimal([['A'], ['B'], ['A', 'B']])).toBe(true);
+    expect(hasNonMinimal([['A', 'B'], ['A', 'C'], ['B', 'C']])).toBe(false);
+    expect(hasNonMinimal([['A', 'B'], ['A', 'B', 'C', 'D'], ['E', 'F']])).toBe(true);
+    expect(hasNonMinimal([])).toBe(false);
+    expect(hasNonMinimal([['A']])).toBe(false);
+  });
+
+  it('agrees with the plain quadratic definition on many random families', () => {
+    let seed = 7;
+    const rnd = (n: number): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff), seed % n);
+    const plain = (sets: string[][]): boolean => sets.some((a, i) => sets.some((b, j) => i !== j && a.length < b.length && a.every((e) => b.includes(e))));
+    for (let t = 0; t < 400; t++) {
+      const events = 'ABCDEFGH'.split('');
+      const sets = Array.from({ length: 1 + rnd(8) }, () => {
+        const k = 1 + rnd(4);
+        const chosen = new Set<string>();
+        while (chosen.size < k) chosen.add(events[rnd(events.length)]!);
+        return [...chosen];
+      });
+      expect(hasNonMinimal(sets), JSON.stringify(sets)).toBe(plain(sets));
+    }
+  });
+
+  it('a family of equal-size sets costs almost nothing, however many (no comparison is needed)', () => {
+    const n = 20000; // 15 pairs would be 32768 sets of size 15
+    const sets = Array.from({ length: n }, (_, i) => Array.from({ length: 15 }, (_, k) => `${(i >> k) & 1 ? 'B' : 'A'}${k}`));
+    const t0 = Date.now();
+    expect(hasNonMinimal(sets)).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(3000);
+  });
+
+  it('work beyond the budget stops with too-large instead of running on', () => {
+    // every larger set meets a posting list as long as the number of smaller sets: about 4e8 steps without a budget
+    const small = Array.from({ length: 20000 }, (_, i) => ['X', `F${i}`]);
+    const large = Array.from({ length: 20000 }, (_, i) => ['X', `G${i}`, `H${i}`]);
+    const t0 = Date.now();
+    let thrown: unknown = null;
+    try {
+      hasNonMinimal([...small, ...large]);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(AssessAborted);
+    expect((thrown as AssessAborted).why).toBe('too-large');
+    expect(Date.now() - t0).toBeLessThan(20000);
+    expect(MINIMALITY_BUDGET).toBe(40_000_000);
+  });
+
+  it('hasNonMinimal polls the check callback while it works, and its abort stops it', () => {
+    const small = Array.from({ length: 3000 }, (_, i) => ['X', `F${i}`]);
+    const large = Array.from({ length: 3000 }, (_, i) => ['X', `G${i}`, `H${i}`]); // millions of steps, far under the budget
+    let polls = 0;
+    expect(() =>
+      hasNonMinimal([...small, ...large], () => {
+        polls++;
+        throw new AssessAborted('timeout');
+      }),
+    ).toThrow(AssessAborted);
+    expect(polls).toBe(1); // stopped at the first poll, which came long before the end
+  });
+
+  it('the check callback is polled during a long check, and its abort ends the assessment as a timeout, a cancel or too large', () => {
+    const products = Array.from({ length: 9000 }, (_, i) => ({ events: [`A${i}`], probability: '0.1' }));
+    const events = Array.from({ length: 9000 }, (_, i) => `A${i}`);
+    const doc = mkDoc('TOP', Object.fromEntries(events.map((e) => [e, 0.1])), [OR('TOP', events)]);
+    const model = asModel(doc);
+    let polls = 0;
+    const base = { probability: '1', limit: 1, products };
+    const go = (why: 'timeout' | 'cancelled' | 'too-large') =>
+      run(model, base, {
+        check: () => {
+          polls++;
+          throw new AssessAborted(why);
+        },
+      });
+    const t = go('timeout');
+    expect(t).toMatchObject({ status: 'failed', reasons: ['timeout'] });
+    expect(polls).toBeGreaterThan(0);
+    expect(go('cancelled')).toMatchObject({ status: 'cancelled', reasons: ['cancelled'] });
+    expect(go('too-large')).toMatchObject({ status: 'failed', reasons: ['result-too-large-to-verify'] });
+  });
+
+  it('a report with more cut sets than the cap is refused before any check, never completed', () => {
+    const n = MAX_CUT_SETS + 1;
+    const events = Array.from({ length: n }, (_, i) => `A${i}`);
+    const doc = mkDoc('TOP', Object.fromEntries(events.map((e) => [e, 0.1])), [OR('TOP', events)]);
+    const r = run(asModel(doc), { probability: '1', limit: 1, products: events.map((e) => ({ events: [e], probability: '0.1' })) });
+    expect(r.status).toBe('failed');
+    expect(r.reasons).toEqual(['too-many-cut-sets']);
+    expect(r.minimal_cut_sets).toEqual([]);
   });
 });
