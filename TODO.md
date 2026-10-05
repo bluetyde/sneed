@@ -71,8 +71,8 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## P3: lessons and suite ([plan 04](docs/plans/04-lessons.md), [06](docs/plans/06-suite-integration.md))
 
-- [ ] Lessons 1 to 3 (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
-- [ ] **[agy]** Lesson checker with a fixture per common mistake.
+- [~] Lessons 1 to 3 (data files and checker done 2026-10-05 on claude/p3-lessons; in-editor panel and keyboard e2e not yet) (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
+- [x] Lesson checker with a fixture per common mistake (src/core/lesson.ts, tests/unit/lesson.test.ts).
 - [ ] Compare-runs view.
 - [ ] SEED adapter: seven verbs, typed errors, oracle coverage in `describe` [seed].
 - [ ] Standalone vs workspace equivalence on the same immutable input; PRA through MCP and direct agree on every oracle (harness test 9) [seed].
@@ -134,4 +134,3 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 ## Done
 
 - [x] 2026-09-30: Planning skeleton, first plan and suite integration links (Codex).
-
