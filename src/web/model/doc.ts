@@ -56,6 +56,11 @@ export function newModel(name = 'Untitled model', now = new Date().toISOString()
   };
 }
 
+/** A model with nothing in it. The first node added becomes the top (see addEvent), so a lesson can start from nothing. */
+export function emptyModel(name = 'Untitled model', now = new Date().toISOString()): Doc {
+  return { ...newModel(name, now), top: '', events: [], gates: [] };
+}
+
 export const isGate = (doc: Doc, id: string): boolean => doc.gates.some((g) => g.id === id);
 export const isEvent = (doc: Doc, id: string): boolean => doc.events.some((e) => e.id === id);
 export const findGate = (doc: Doc, id: string): GateNode | undefined => doc.gates.find((g) => g.id === id);

@@ -191,3 +191,15 @@ dialog.modal h2 { margin: 0; font-size: 15px; }
 
 @media (max-width: 1100px) { .outline { width: 170px; } .side { width: 300px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* lessons */
+.count.ok { background: color-mix(in srgb, var(--ok) 22%, var(--raise)); }
+ol.lessons, ol.steps { list-style: none; margin: 0; padding: 0; }
+ol.lessons > li { border: 1px solid var(--line); border-radius: 4px; padding: 8px; margin: 8px 0; }
+ol.lessons h2 { margin: 0 0 4px; }
+.goals { margin: 0 0 8px; padding-left: 18px; color: var(--muted); font-size: 12px; }
+.step { border-left: 3px solid var(--line); padding: 4px 8px; margin: 6px 0; }
+.step.current { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.step.done { border-left-color: var(--ok); }
+.step-state { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.success { border: 1px solid color-mix(in srgb, var(--ok) 60%, var(--line)); background: color-mix(in srgb, var(--ok) 14%, var(--panel)); border-radius: 4px; padding: 6px 8px; margin: 8px 0; }

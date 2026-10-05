@@ -71,13 +71,13 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## P3: lessons and suite ([plan 04](docs/plans/04-lessons.md), [06](docs/plans/06-suite-integration.md))
 
-- [~] Lessons 1 to 3 (data files and checker done 2026-10-05 on claude/p3-lessons; in-editor panel and keyboard e2e not yet) (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
+- [x] Lessons 1 to 3 plus the optional voting lesson, the in-editor panel and a keyboard-only e2e (2026-10-05) (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
 - [x] Lesson checker with a fixture per common mistake (src/core/lesson.ts, tests/unit/lesson.test.ts).
 - [ ] Compare-runs view.
 - [ ] SEED adapter: seven verbs, typed errors, oracle coverage in `describe` [seed].
 - [ ] Standalone vs workspace equivalence on the same immutable input; PRA through MCP and direct agree on every oracle (harness test 9) [seed].
 - [ ] Stale component-link handling; no automatic derivation from a coolant diagram.
-- [ ] Instructor read-through of the lessons.
+- [ ] Instructor read-through of the lessons: **a human task, not done.** Give the instructor `docs/LESSON-REVIEW.md` (regenerate with `node scripts/lesson-review.mjs`) and record the verdict in it.
 - [ ] **[codex]** P3 exit review.
 
 ## P4: extensions ([plan 07](docs/plans/07-extensions.md))
@@ -118,6 +118,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - An instructor guide with answers and discussion questions.
 - A hosted demo (needs a decision about running the engine for other people's models).
 - Lessons that use NODAL component links for naming only.
+- Fault trees as advisory context for Mica/Jev in the virtual reactor (explain a cut set; never in the protection path, never live state): [plan 09](docs/plans/09-virtual-reactor-link.md). Idea only; waits for P3.
 
 ## Decisions waiting (the user's)
 

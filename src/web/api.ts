@@ -1,4 +1,5 @@
 // The browser's side of the local API (src/server/app.ts). Types only come from the core; no core code runs in the browser.
+import type { Lesson } from '../core/lesson.js';
 import type { ResultRecord } from '../core/result.js';
 
 export interface Issue {
@@ -45,6 +46,7 @@ export interface Api {
   listModels(): Promise<ModelInfo[]>;
   loadModel(name: string): Promise<string>;
   saveModel(name: string, text: string): Promise<ModelInfo>;
+  lessons(): Promise<Lesson[]>;
 }
 
 export class ApiError extends Error {
@@ -73,6 +75,7 @@ export function httpApi(base = ''): Api {
     cancel: () => call('POST', '/api/run/cancel', {}),
     listModels: async () => (await call<{ models: ModelInfo[] }>('GET', '/api/models')).models,
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,
+    lessons: async () => (await call<{ lessons: Lesson[] }>('GET', '/api/lessons')).lessons,
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
   };
 }

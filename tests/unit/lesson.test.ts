@@ -118,7 +118,8 @@ describe('steps and mistakes', () => {
     const one = checkLesson(get('04-voting'), mkDoc('V', { A: 0.1, B: 0.1, C: 0.1 }, [VOTE('V', ['A', 'B', 'C'], 1)]), { probability: 0.271, cutSets: [['A'], ['B'], ['C']] });
     expect(one.steps[1]!.done).toBe(false);
     expect(one.complete).toBe(false);
-    // lesson 4: a vote gate with a duplicated input
+    // lesson 4: a vote gate with a duplicated input among three distinct events
+    expect(checkLesson(get('04-voting'), mkDoc('V', { A: 0.1, B: 0.1, C: 0.1 }, [VOTE('V', ['A', 'B', 'C', 'C'], 2)])).steps[1]!.done).toBe(false);
     expect(checkLesson(get('04-voting'), mkDoc('V', { A: 0.1, B: 0.1, C: 0.1 }, [VOTE('V', ['A', 'B', 'B'], 2)])).steps[1]!.done).toBe(false);
   });
 
@@ -147,6 +148,7 @@ describe('steps and mistakes', () => {
     for (const d of docs) {
       const p = checkLesson(l, d as never, { probability: 0.1, cutSets: [['P']] });
       expect(p.malformed).toBe(true);
+      expect(p.steps.every((s) => !s.done)).toBe(true); // nothing is credited, even for the parts that are readable
       expect(p.complete).toBe(false);
     }
     const vote = checkLesson(get('04-voting'), { top: 'V', events: [{ id: 'A', probability: 0.1 }], gates: [{ id: 'V', type: 'atleast', inputs: [] }] });

@@ -14,8 +14,8 @@
   "steps": [
     {
       "id": "three-events",
-      "prompt": "Add three basic events A, B and C, each with probability 0.1.",
-      "hint": "The system fails if at least two of the three fail.",
+      "prompt": "Add three basic events named A, B and C, each with probability 0.1.",
+      "hint": "The system fails if at least two of the three fail. Name each event in the Name field; the lesson finds your events by their names.",
       "check": {
         "kind": "probabilities",
         "values": [
@@ -28,7 +28,7 @@
     {
       "id": "vote-top",
       "prompt": "Add a voting gate that fails when at least 2 of A, B, C fail. Make it the top event and run with each method.",
-      "hint": "Choose the \"at least\" gate type and set its threshold to 2.",
+      "hint": "Use the K-of-N gate button and set K to 2. The gate then fails when at least 2 of its 3 inputs fail.",
       "check": {
         "kind": "vote",
         "threshold": 2,

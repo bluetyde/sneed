@@ -340,3 +340,57 @@ describe('static files', () => {
     expect((await request('POST', '/', { headers: JSON_HEADERS })).status).toBe(405);
   });
 });
+
+describe('lessons over the API', () => {
+  const lessonsDir = path.join(import.meta.dirname, '../../lessons');
+  const oraclesFile = path.join(import.meta.dirname, '../oracles.json');
+  const withServer = async (extra: Record<string, string>, fn: (url: string) => Promise<void>): Promise<void> => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-lessons-'));
+    const s = await startServer({ projectDir: path.join(dir, 'm'), runsDir: path.join(dir, 'r'), runtimeEnv: { distro: 'Ubuntu', linuxRoot: '/root/none', stateDir: path.join(dir, 's') }, ...extra }, 0);
+    try {
+      await fn(s.url);
+    } finally {
+      await s.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const get = async (url: string): Promise<{ status: number; json: any }> => {
+    const res = await fetch(url + '/api/lessons');
+    return { status: res.status, json: await res.json() };
+  };
+
+  it('serves the four validated lessons', async () => {
+    await withServer({ lessonsDir, oraclesFile }, async (url) => {
+      const r = await get(url);
+      expect(r.status).toBe(200);
+      expect(r.json.lessons.map((l: { id: string }) => l.id)).toEqual(['01-single-pump', '02-redundant-pumps', '03-shared-power-supply', '04-voting']);
+    });
+  });
+
+  it('answers 503 when lessons are not configured', async () => {
+    await withServer({}, async (url) => expect((await get(url)).json.error).toEqual({ code: 'E_LESSONS_UNAVAILABLE', message: 'lessons are not configured' }));
+  });
+
+  it('answers 503 when the oracle file is missing, and serves nothing', async () => {
+    await withServer({ lessonsDir, oraclesFile: path.join(tmp, 'no-such.json') }, async (url) => {
+      const r = await get(url);
+      expect(r.status).toBe(503);
+      expect(r.json.lessons).toBeUndefined();
+    });
+  });
+
+  it('refuses every lesson if one file is invalid, naming the file and not a path', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-badlesson-'));
+    try {
+      writeFileSync(path.join(dir, '01-bad.json'), readFileSync(path.join(lessonsDir, '01-single-pump.json'), 'utf8').replace('"probability": 0.1', '"probability": 0.2'));
+      await withServer({ lessonsDir: dir, oraclesFile }, async (url) => {
+        const r = await get(url);
+        expect(r.status).toBe(503);
+        expect(r.json.error.message).toMatch(/01-bad\.json.*L_ORACLE_MISMATCH/);
+        expect(r.json.error.message).not.toContain(dir);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

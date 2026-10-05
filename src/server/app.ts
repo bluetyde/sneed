@@ -2,6 +2,7 @@ import http from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
+import { loadLessons, LessonsUnavailable } from './lessons.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
@@ -24,6 +25,9 @@ export interface ServerOptions {
   /** Extra origins allowed to call the API, for example the Vite dev server. Same-origin is always allowed. */
   allowedOrigins?: string[];
   runtimeEnv?: RuntimeEnv;
+  /** Lesson files and the oracle file they are checked against. Without both, /api/lessons answers 503. */
+  lessonsDir?: string;
+  oraclesFile?: string;
   /** Replaced in tests. */
   analyzeFn?: (text: string, opts: AnalyzeOptions) => Promise<AnalyzeOutcome>;
 }
@@ -144,6 +148,11 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
 
     if (p === '/api/validate' && method === 'POST') return send(res, 200, validateWithHashes(needText(await readJson(req))));
 
+    if (p === '/api/lessons' && method === 'GET') {
+      if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');
+      return send(res, 200, { lessons: loadLessons(opts.lessonsDir, opts.oraclesFile) });
+    }
+
     if (p === '/api/models' && method === 'GET') return send(res, 200, { models: listModels(opts.projectDir) });
     const m = /^\/api\/models\/([^/]+)$/.exec(p);
     if (m) {
@@ -215,6 +224,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         if (res.headersSent) return void res.end();
         if (e instanceof HttpError) return send(res, e.status, { error: { code: e.code, message: e.message } }, e.status === 413 ? { connection: 'close' } : {});
         if (e instanceof StorageError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_TOO_LARGE' ? 413 : 400, { error: { code: e.code, message: e.message } });
+        if (e instanceof LessonsUnavailable) return send(res, 503, { error: { code: e.code, message: e.message } });
         if (e instanceof RuntimeNotInstalledError) return send(res, 503, { error: { code: e.code, message: e.message } });
         // never leak a stack or a path to the browser
         return send(res, 500, { error: { code: 'E_INTERNAL', message: 'internal error' } });

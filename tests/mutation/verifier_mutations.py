@@ -38,6 +38,9 @@ WC = ROOT / "src/web/ui/canvas.ts"
 WP = ROOT / "src/web/ui/properties.ts"
 WS = ROOT / "src/web/ui/shell.ts"
 WR = ROOT / "src/web/ui/results.ts"
+WL = ROOT / "src/web/ui/lesson.ts"
+LS = ROOT / "src/core/lesson.ts"
+SL = ROOT / "src/server/lessons.ts"
 SA = ROOT / "src/server/app.ts"
 ST = ROOT / "src/server/storage.ts"
 
@@ -204,6 +207,22 @@ MUTATIONS = [
     ("ui shell: no guard against leaving with unsaved work", WS, "window.addEventListener('beforeunload', (e) => {\n    if (editor.dirty) {", "window.addEventListener('beforeunload', (e) => {\n    if (false as boolean) {", E2E),
     ("ui results: no stale banner", WR, "if (ed.stale) {", "if (false as boolean) {", E2E),
     ("ui results: a caveat is not shown", WR, "for (const c of rec.caveats)", "for (const c of [] as string[])", E2E),
+    # lessons (plan 04): the checker, the loader, the editor's use of results, the server, and the panel
+    ("lesson: completion ignores the engine result", LS, "mistakes.length === 0 && matched !== null }", "mistakes.length === 0 }"),
+    ("lesson: tolerance is not capped", LS, "out.tolerance.absolute > MAX_TOLERANCE", "false as boolean"),
+    ("lesson: a malformed document is credited", LS, "  if (p.malformed) return false;\n", ""),
+    ("lesson: gate ids count as shared events", LS, "for (const i of new Set(g.inputs)) if (isEvent.has(i)) n.set(", "for (const i of new Set(g.inputs)) if (true as boolean) n.set("),
+    ("lesson: expected probability not compared with the oracle", LS, "Math.abs(ref.expected_probability - typed.probability) > 1e-12 ||", "false as boolean ||"),
+    ("lesson: a vote gate with a repeated input passes", LS, "distinct.size === topGate.inputs.length && ", ""),
+    ("lesson: percent mistake never fires", LS, "e.probability > 1 && e.probability <= 100", "false as boolean"),
+    ("editor: a lesson credits a stale result", WE, "if (this.result?.kind !== 'ran' || this.stale) return undefined;", "if (this.result?.kind !== 'ran') return undefined;"),
+    ("editor: a lesson credits a truncated result", WE, "if (r.status !== 'completed' || r.completeness !== 'complete' || r.top_event_probability === null) return undefined;", "if (r.top_event_probability === null) return undefined;"),
+    ("editor: lesson merges two nodes with the same name", WE, "if (name && counts.get(name) === 1) label.set(n.id, name);", "if (name) label.set(n.id, name);"),
+    ("editor: hand calculation shown before a run", WE, "if (this.lesson && this.hasTried) {", "if (this.lesson) {"),
+    ("server lessons: an invalid lesson is skipped", SL, "      throw new LessonsUnavailable(`lesson file ${f} is refused (${why})`);", "      continue;"),
+    ("server: lessons served without configuration", SA, "if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');", ""),
+    ("ui lesson: hand calculation button always enabled", WL, "disabled: !ed.hasTried,", "disabled: false as boolean,", E2E),
+    ("ui lesson: completion shown when only the steps are done", WL, "if (p.complete) {", "if (allSteps) {", E2E),    # smoke checker (needs the engine)
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -252,8 +271,10 @@ def main() -> int:
     recover()
     chosen = [m for m in MUTATIONS if only in ("all", "check") or (only == "unit") == (len(m) == 4) and only in ("unit", "engine")]
     if only == "web":  # just the editor and server mutations
-        web = {WD, WV, WE, WC, WP, WS, WR, SA, ST}
+        web = {WD, WV, WE, WC, WP, WS, WR, WL, SL, SA, ST}
         chosen = [m for m in MUTATIONS if m[1] in web]
+    if only == "lessons":  # just the lesson mutations
+        chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
         bad = [m[0] for m in MUTATIONS if m[1].read_bytes().decode("utf-8").count(m[2]) != 1]
         print(f"{len(MUTATIONS) - len(bad)} of {len(MUTATIONS)} patterns occur exactly once", ("; fix: " + ", ".join(bad)) if bad else "")

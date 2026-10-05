@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadLesson, type OracleEntry } from '../../src/core/lesson.js';
 import { documentHash, modelHash } from '../../src/core/canonical.js';
 import { validateModelText } from '../../src/core/validate.js';
 import type { ResultRecord } from '../../src/core/result.js';
@@ -28,6 +31,7 @@ function fakeApi(over: Partial<Api> = {}): Api & { calls: string[]; files: Map<s
       return { kind: 'ran', run_id: 'r1', record: recordFor(text, method) };
     },
     cancel: async () => ({ cancelled: true }),
+    lessons: async () => [],
     listModels: async (): Promise<ModelInfo[]> => [...files.keys()].map((name) => ({ name, bytes: files.get(name)!.length, modified: '2026-10-05T00:00:00Z' })),
     loadModel: async (name) => {
       if (!files.has(name)) throw new ApiError(404, 'E_NOT_FOUND', `no saved model called ${name}`);
@@ -529,5 +533,132 @@ describe('files', () => {
     const seen = n;
     ed.setProbability('E1', 0.3);
     expect(n).toBe(seen);
+  });
+});
+
+describe('lessons in the editor', () => {
+  const lessons = ['01-single-pump', '02-redundant-pumps', '03-shared-power-supply', '04-voting'].map((n) =>
+    loadLesson(readFileSync(join(import.meta.dirname, '../../lessons', `${n}.json`), 'utf8'), JSON.parse(readFileSync(join(import.meta.dirname, '../oracles.json'), 'utf8')) as OracleEntry[]),
+  );
+  const lessonEditor = async (): Promise<{ ed: Editor; api: ReturnType<typeof fakeApi> }> => {
+    const api = fakeApi({ lessons: async () => lessons });
+    const ed = new Editor(api, { debounceMs: 0, now: () => '2026-10-05T12:00:00Z' });
+    await ed.loadHealth();
+    await ed.loadLessons();
+    await ed.settle();
+    return { ed, api };
+  };
+
+  it('a lesson starts from an empty model, with no progress and no hand calculation', async () => {
+    const { ed } = await lessonEditor();
+    expect(ed.lessons).toHaveLength(4);
+    expect(ed.startLesson('02-redundant-pumps')).toBe(true);
+    expect(ed.doc.events).toEqual([]);
+    expect(ed.doc.top).toBe('');
+    expect(ed.dirty).toBe(false);
+    expect(ed.lessonProgress!.steps.every((s) => !s.done)).toBe(true);
+    ed.showCalculation(); // nothing has been run yet
+    expect(ed.calcShown).toBe(false);
+  });
+
+  it('an unknown lesson id starts nothing', async () => {
+    const { ed } = await lessonEditor();
+    expect(ed.startLesson('nope')).toBe(false);
+    expect(ed.lesson).toBeNull();
+  });
+
+  it('the checker reads display names, so events called P1 and P2 match the lesson whatever their ids are', async () => {
+    const { ed } = await lessonEditor();
+    ed.startLesson('02-redundant-pumps');
+    ed.addGate('or');
+    ed.setName('E1', 'P1');
+    ed.setName('E2', 'P2');
+    expect((ed.lessonDoc.events as { id: string }[]).map((e) => e.id)).toEqual(['P1', 'P2']);
+    expect(ed.lessonProgress!.steps.map((s) => s.done)).toEqual([true, true, true]);
+    expect(ed.lessonProgress!.complete).toBe(false); // structure alone never completes
+    await ed.settle();
+    await ed.run();
+    expect(ed.lessonResult).toEqual({ probability: 0.19, cutSets: [['P1'], ['P2']] });
+    expect(ed.lessonProgress!.outcome).toBe('or');
+    expect(ed.lessonProgress!.complete).toBe(true);
+    ed.showCalculation();
+    expect(ed.calcShown).toBe(true);
+  });
+
+  it('events left with their default names do not match the lesson cut sets', async () => {
+    const { ed } = await lessonEditor();
+    ed.startLesson('02-redundant-pumps');
+    ed.addGate('or');
+    await ed.settle();
+    await ed.run();
+    expect(ed.lessonProgress!.outcome).toBeNull();
+    expect(ed.lessonProgress!.complete).toBe(false);
+  });
+
+  it('duplicate display names fall back to ids instead of merging two different nodes', async () => {
+    const { ed } = await lessonEditor();
+    ed.startLesson('02-redundant-pumps');
+    ed.addGate('or');
+    ed.setName('E1', 'P');
+    ed.setName('E2', 'P');
+    expect((ed.lessonDoc.events as { id: string }[]).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+
+  it('a result for an earlier version of the model is not credited', async () => {
+    const { ed } = await lessonEditor();
+    ed.startLesson('02-redundant-pumps');
+    ed.addGate('or');
+    ed.setName('E1', 'P1');
+    ed.setName('E2', 'P2');
+    await ed.settle();
+    await ed.run();
+    expect(ed.lessonProgress!.complete).toBe(true);
+    ed.setProbability('E1', 0.2);
+    await ed.settle();
+    expect(ed.stale).toBe(true);
+    expect(ed.lessonResult).toBeUndefined();
+    expect(ed.lessonProgress!.complete).toBe(false);
+  });
+
+  it('a truncated or failed result is never credited', async () => {
+    const api = fakeApi({
+      lessons: async () => lessons,
+      run: async (text, method) => ({ kind: 'ran', run_id: 'r', record: { ...recordFor(text, method), status: 'truncated', completeness: 'partial' } as never }),
+    });
+    const ed = new Editor(api, { debounceMs: 0 });
+    await ed.loadHealth();
+    await ed.loadLessons();
+    ed.startLesson('02-redundant-pumps');
+    ed.addGate('or');
+    ed.setName('E1', 'P1');
+    ed.setName('E2', 'P2');
+    await ed.settle();
+    await ed.run();
+    expect(ed.lessonResult).toBeUndefined();
+    expect(ed.lessonProgress!.complete).toBe(false);
+  });
+
+  it('New and Open leave the lesson; Leave keeps the model', async () => {
+    const { ed, api } = await lessonEditor();
+    ed.startLesson('01-single-pump');
+    ed.addEvent();
+    ed.leaveLesson();
+    expect(ed.lesson).toBeNull();
+    expect(ed.doc.events).toHaveLength(1);
+    ed.startLesson('01-single-pump');
+    ed.newModel();
+    expect(ed.lesson).toBeNull();
+    api.files.set('m', D.serialize(D.newModel()));
+    ed.startLesson('01-single-pump');
+    await ed.open('m');
+    expect(ed.lesson).toBeNull();
+    expect(ed.calcShown).toBe(false);
+  });
+
+  it('a failure to load lessons is shown and leaves an empty list', async () => {
+    const ed = new Editor(fakeApi({ lessons: async () => Promise.reject(new Error('down')) }), { debounceMs: 0 });
+    await ed.loadLessons();
+    expect(ed.lessons).toEqual([]);
+    expect(ed.notice).toMatchObject({ kind: 'warning' });
   });
 });

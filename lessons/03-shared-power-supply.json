@@ -14,8 +14,8 @@
   "steps": [
     {
       "id": "three-events",
-      "prompt": "Add three basic events: P1 (0.1), P2 (0.1) and S \"Power supply fails\" (0.05).",
-      "hint": "S is one event. Both pumps lose power when it fails.",
+      "prompt": "Add three basic events named P1 (0.1), P2 (0.1) and S for \"Power supply fails\" (0.05).",
+      "hint": "S is one event. Both pumps lose power when it fails. Name each event in the Name field; the lesson finds your events by their names.",
       "check": {
         "kind": "probabilities",
         "values": [
@@ -37,7 +37,7 @@
     {
       "id": "one-s-twice",
       "prompt": "Connect the same event S under both OR gates. Run, then compare with the pair alone.",
-      "hint": "Connect S to a second gate rather than adding another event.",
+      "hint": "Select the second OR gate, choose S in the list \"Add an existing node as an input\", and press Add input. Do not add another event.",
       "check": {
         "kind": "shared-event",
         "minParents": 2

@@ -8,12 +8,13 @@ import { confirmDiscard, openDialog, saveAsDialog } from './dialogs.js';
 import { h } from './dom.js';
 import { METHOD_TEXT } from './hints.js';
 import { icon } from './icons.js';
+import { LessonPanel } from './lesson.js';
 import { Outline } from './outline.js';
 import { ProblemsPanel } from './problems.js';
 import { Properties } from './properties.js';
 import { ResultsPanel } from './results.js';
 
-type Tab = 'properties' | 'problems' | 'results';
+type Tab = 'properties' | 'problems' | 'results' | 'lesson';
 
 export function mountShell(root: HTMLElement, editor: Editor): void {
   let tab: Tab = 'properties';
@@ -22,6 +23,12 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   const properties = new Properties(editor);
   const problems = new ProblemsPanel(editor);
   const results = new ResultsPanel(editor);
+  const lessonPanel = new LessonPanel(editor);
+  lessonPanel.confirmStart = () => confirmDiscard(editor);
+  lessonPanel.onStart = () => {
+    setTab('lesson');
+    canvas.fit(true);
+  };
   canvas.onEdit = () => {
     setTab('properties');
     properties.focusFirst();
@@ -96,10 +103,11 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     properties: h('button', { class: 'stab', role: 'tab', id: 'tab-properties', 'aria-controls': 'panel-properties', 'data-tab': 'properties', onclick: () => setTab('properties') }, 'Properties') as HTMLButtonElement,
     problems: h('button', { class: 'stab', role: 'tab', id: 'tab-problems', 'aria-controls': 'panel-problems', 'data-tab': 'problems', onclick: () => setTab('problems') }) as HTMLButtonElement,
     results: h('button', { class: 'stab', role: 'tab', id: 'tab-results', 'aria-controls': 'panel-results', 'data-tab': 'results', onclick: () => setTab('results') }) as HTMLButtonElement,
+    lesson: h('button', { class: 'stab', role: 'tab', id: 'tab-lesson', 'aria-controls': 'panel-lesson', 'data-tab': 'lesson', onclick: () => setTab('lesson') }, 'Lesson') as HTMLButtonElement,
   };
-  const tablist = h('div', { class: 'stabs', role: 'tablist', 'aria-label': 'Side panels' }, tabs.properties, tabs.problems, tabs.results);
+  const tablist = h('div', { class: 'stabs', role: 'tablist', 'aria-label': 'Side panels' }, tabs.properties, tabs.problems, tabs.results, tabs.lesson);
   tablist.addEventListener('keydown', (e) => {
-    const order: Tab[] = ['properties', 'problems', 'results'];
+    const order: Tab[] = ['properties', 'problems', 'results', 'lesson'];
     const i = order.indexOf(tab);
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -108,8 +116,8 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
       tabs[next].focus();
     }
   });
-  const panels: Record<Tab, HTMLElement> = { properties: properties.el, problems: problems.el, results: results.el };
-  const side = h('aside', { class: 'side', 'aria-label': 'Details' }, tablist, properties.el, problems.el, results.el);
+  const panels: Record<Tab, HTMLElement> = { properties: properties.el, problems: problems.el, results: results.el, lesson: lessonPanel.el };
+  const side = h('aside', { class: 'side', 'aria-label': 'Details' }, tablist, properties.el, problems.el, results.el, lessonPanel.el);
 
   function setTab(next: Tab): void {
     tab = next;
@@ -185,6 +193,8 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     tabs.problems.replaceChildren('Problems', errs || warns ? h('span', { class: `count ${errs ? 'err' : 'warn'}`, 'data-testid': 'problem-count' }, String(errs || warns)) : '');
     tabs.problems.setAttribute('aria-label', `Problems, ${errs} to fix, ${warns} warnings`);
     tabs.results.replaceChildren('Results', ed.result?.kind === 'ran' && ed.stale ? h('span', { class: 'count warn', title: 'out of date' }, 'old') : '');
+    const lp = ed.lessonProgress;
+    tabs.lesson.replaceChildren('Lesson', lp?.complete ? h('span', { class: 'count ok', 'data-testid': 'lesson-tab-complete' }, 'done') : '');
     // selecting a node while looking at results shows its properties
     if (ed.selected !== lastSelected) {
       if (ed.selected && tab === 'results') setTab('properties');
@@ -196,6 +206,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     properties.render();
     problems.render();
     results.render();
+    lessonPanel.render();
     // status
     const hash = v?.model_hash ?? null;
     const rt = ed.runtime;
@@ -245,4 +256,5 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   canvas.fit(true);
   void editor.loadHealth();
   void editor.refreshModels();
+  void editor.loadLessons();
 }
