@@ -1,5 +1,8 @@
 {
-  "schema": { "id": "sneed.lesson", "version": 1 },
+  "schema": {
+    "id": "sneed.lesson",
+    "version": 1
+  },
   "id": "04-voting",
   "title": "Voting (2 out of 3)",
   "goals": [
@@ -13,13 +16,24 @@
       "id": "three-events",
       "prompt": "Add three basic events A, B and C, each with probability 0.1.",
       "hint": "The system fails if at least two of the three fail.",
-      "check": { "kind": "event-count", "count": 3 }
+      "check": {
+        "kind": "probabilities",
+        "values": [
+          0.1,
+          0.1,
+          0.1
+        ]
+      }
     },
     {
       "id": "vote-top",
       "prompt": "Add a voting gate that fails when at least 2 of A, B, C fail. Make it the top event and run with each method.",
       "hint": "Choose the \"at least\" gate type and set its threshold to 2.",
-      "check": { "kind": "top-gate", "type": "atleast" }
+      "check": {
+        "kind": "vote",
+        "threshold": 2,
+        "inputs": 3
+      }
     }
   ],
   "outcomes": [
@@ -28,36 +42,86 @@
       "label": "Exact",
       "oracle": "pra-vote-exact",
       "probability": 0.028,
-      "cut_sets": [["A", "B"], ["A", "C"], ["B", "C"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "B",
+          "C"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     },
     {
       "id": "rare-event",
       "label": "Rare-event approximation",
       "oracle": "pra-vote-rare",
       "probability": 0.03,
-      "cut_sets": [["A", "B"], ["A", "C"], ["B", "C"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "B",
+          "C"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     },
     {
       "id": "mcub",
       "label": "Min-cut upper bound",
       "oracle": "pra-vote-mcub",
       "probability": 0.029701,
-      "cut_sets": [["A", "B"], ["A", "C"], ["B", "C"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "B",
+          "C"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     }
   ],
   "mistakes": [
     {
       "id": "percent",
       "message": "A probability above 1 is not allowed. Write 10 percent as 0.1.",
-      "detect": { "kind": "percent-probability" }
+      "detect": {
+        "kind": "percent-probability"
+      }
     },
     {
       "id": "wrong-gate",
       "message": "The top gate is not a voting gate. AND needs all three to fail and OR needs only one.",
-      "detect": { "kind": "wrong-top-gate", "expected": "atleast" }
+      "detect": {
+        "kind": "wrong-top-gate",
+        "expected": "atleast"
+      }
     }
   ],
   "hand_calculation": [

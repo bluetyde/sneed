@@ -1,6 +1,7 @@
 // Lessons (docs/plans/04-lessons.md): data files, a loader that refuses an unchecked value, and a checker.
 // The checker looks at structure and numbers in the student's model and never at where anything is drawn.
-// Expected values are never computed here: each outcome must name an oracle entry and equal it.
+// Expected values are never computed here: each outcome must name an oracle entry and equal it, and a lesson
+// is complete only when an engine result (completed, complete) also matches one of its outcomes.
 
 export interface LessonDoc {
   top?: unknown;
@@ -9,21 +10,24 @@ export interface LessonDoc {
 }
 type GateType = 'and' | 'or' | 'atleast';
 interface Ev { id: string; probability: number }
-interface Gt { id: string; type: string; inputs: string[] }
+interface Gt { id: string; type: string; inputs: string[]; threshold?: number }
 
 export type Check =
   | { kind: 'top-is-event' }
   /** `type` may list several gate types, for a step the student later revises (lesson 2 moves from AND to OR). */
   | { kind: 'top-gate'; type: GateType | GateType[] }
   | { kind: 'event-count'; count: number }
-  | { kind: 'has-probability'; value: number }
-  | { kind: 'shared-event'; minParents: number };
+  /** The probabilities of all events, as a multiset (order does not matter). */
+  | { kind: 'probabilities'; values: number[] }
+  | { kind: 'shared-event'; minParents: number }
+  /** The top gate is a voting gate with exactly this threshold over this many distinct basic events. */
+  | { kind: 'vote'; threshold: number; inputs: number };
 
 export type Detect =
   | { kind: 'percent-probability' }
   | { kind: 'single-input-gate' }
-  | { kind: 'wrong-top-gate'; expected: 'and' | 'or' | 'atleast' }
-  | { kind: 'no-shared-event' }
+  | { kind: 'wrong-top-gate'; expected: GateType }
+  | { kind: 'extra-events'; max: number }
   | { kind: 'unused-event' };
 
 export interface Step { id: string; prompt: string; hint: string; check: Check }
@@ -61,11 +65,54 @@ export class LessonError extends Error {
   }
 }
 
-const CHECKS = new Set(['top-is-event', 'top-gate', 'event-count', 'has-probability', 'shared-event']);
-const DETECTS = new Set(['percent-probability', 'single-input-gate', 'wrong-top-gate', 'no-shared-event', 'unused-event']);
+/** Largest tolerance a lesson may grade with. Wide enough for floating point, far too narrow to accept a wrong answer. */
+export const MAX_TOLERANCE = 1e-9;
 
+const GATE_TYPES = ['and', 'or', 'atleast'];
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const int = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= min;
+const gateType = (v: unknown): boolean => typeof v === 'string' && GATE_TYPES.includes(v);
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.length > 0 && v.every(str);
+
+function validCheck(c: unknown): boolean {
+  if (!isObj(c) || typeof c.kind !== 'string') return false;
+  switch (c.kind) {
+    case 'top-is-event':
+      return true;
+    case 'top-gate':
+      return gateType(c.type) || (Array.isArray(c.type) && c.type.length > 0 && c.type.every(gateType));
+    case 'event-count':
+      return int(c.count, 1);
+    case 'probabilities':
+      return Array.isArray(c.values) && c.values.length > 0 && c.values.every((p) => num(p) && p >= 0 && p <= 1);
+    case 'shared-event':
+      return int(c.minParents, 2);
+    case 'vote':
+      return int(c.threshold, 1) && int(c.inputs, 2) && c.threshold <= c.inputs;
+    default:
+      return false;
+  }
+}
+
+function validDetect(d: unknown): boolean {
+  if (!isObj(d) || typeof d.kind !== 'string') return false;
+  switch (d.kind) {
+    case 'percent-probability':
+    case 'single-input-gate':
+    case 'unused-event':
+      return true;
+    case 'wrong-top-gate':
+      return gateType(d.expected) && typeof d.expected === 'string';
+    case 'extra-events':
+      return int(d.max, 1);
+    default:
+      return false;
+  }
+}
+
+const sortSets = (c: string[][]): string => JSON.stringify(c.map((s) => [...s].sort()).sort((a, b) => a.length - b.length || a.join().localeCompare(b.join())));
 
 /** Parse and validate a lesson file. Refuses a lesson whose outcome is missing from, or differs from, the oracle. */
 export function loadLesson(text: string, oracles: OracleEntry[]): Lesson {
@@ -82,107 +129,144 @@ export function loadLesson(text: string, oracles: OracleEntry[]): Lesson {
   const l = raw;
   if (!isObj(l.schema) || l.schema.id !== 'sneed.lesson' || l.schema.version !== 1) bad('schema must be sneed.lesson version 1');
   for (const k of ['id', 'title', 'assumptions'] as const) if (!str(l[k])) bad(`${k} must be a non-empty string`);
-  for (const k of ['goals', 'hand_calculation'] as const) {
-    const v = l[k];
-    if (!Array.isArray(v) || v.length === 0 || !v.every(str)) bad(`${k} must be a non-empty list of strings`);
-  }
+  for (const k of ['goals', 'hand_calculation'] as const) if (!strings(l[k])) bad(`${k} must be a non-empty list of strings`);
   if (l.start !== null && !isObj(l.start)) bad('start must be a model or null');
   if (!Array.isArray(l.steps) || l.steps.length === 0) bad('steps must be a non-empty list');
   for (const s of l.steps as unknown[]) {
-    if (!isObj(s) || !str(s.id) || !str(s.prompt) || !str(s.hint) || !isObj(s.check) || !CHECKS.has(String(s.check.kind))) bad('each step needs id, prompt, hint and a known check');
+    if (!isObj(s) || !str(s.id) || !str(s.prompt) || !str(s.hint) || !validCheck(s.check)) bad('each step needs id, prompt, hint and a well-formed known check');
   }
   if (!Array.isArray(l.mistakes)) bad('mistakes must be a list');
   for (const m of l.mistakes as unknown[]) {
-    if (!isObj(m) || !str(m.id) || !str(m.message) || !isObj(m.detect) || !DETECTS.has(String(m.detect.kind))) bad('each mistake needs id, message and a known detector');
+    if (!isObj(m) || !str(m.id) || !str(m.message) || !validDetect(m.detect)) bad('each mistake needs id, message and a well-formed known detector');
   }
   if (!Array.isArray(l.outcomes) || l.outcomes.length === 0) bad('outcomes must be a non-empty list');
   const byId = new Map(oracles.map((o) => [o.id, o]));
   for (const o of l.outcomes as unknown[]) {
-    if (!isObj(o) || !str(o.id) || !str(o.label) || !str(o.oracle) || typeof o.probability !== 'number' || !Array.isArray(o.cut_sets) || !isObj(o.tolerance) || typeof o.tolerance.absolute !== 'number') {
-      bad('each outcome needs id, label, oracle, probability, cut_sets and tolerance.absolute');
+    if (!isObj(o) || !str(o.id) || !str(o.label) || !str(o.oracle) || !num(o.probability) || o.probability < 0 || o.probability > 1) {
+      bad('each outcome needs id, label, oracle and a probability between 0 and 1');
     }
-    const out = o as unknown as Outcome;
-    const ref = byId.get(out.oracle);
-    if (!ref) throw new LessonError('L_NO_ORACLE', `outcome ${JSON.stringify(out.id)} names oracle ${JSON.stringify(out.oracle)}, which does not exist`);
-    const norm = (c: string[][]): string => JSON.stringify(c.map((s) => [...s].sort()).sort((a, b) => a.length - b.length || a.join().localeCompare(b.join())));
-    if (Math.abs(ref.expected_probability - out.probability) > 1e-12 || norm(ref.expected_cut_sets) !== norm(out.cut_sets)) {
-      throw new LessonError('L_ORACLE_MISMATCH', `outcome ${JSON.stringify(out.id)} does not equal oracle ${JSON.stringify(out.oracle)}`);
+    const out = o as unknown as Record<string, unknown>;
+    if (!Array.isArray(out.cut_sets) || out.cut_sets.length === 0 || !out.cut_sets.every(strings)) bad('outcome cut_sets must be a non-empty list of non-empty lists of ids');
+    if (!isObj(out.tolerance) || !num(out.tolerance.absolute) || out.tolerance.absolute < 0 || out.tolerance.absolute > MAX_TOLERANCE) {
+      bad(`outcome tolerance.absolute must be a finite number from 0 to ${MAX_TOLERANCE}`);
+    }
+    const typed = out as unknown as Outcome;
+    const ref = byId.get(typed.oracle);
+    if (!ref) throw new LessonError('L_NO_ORACLE', `outcome ${JSON.stringify(typed.id)} names oracle ${JSON.stringify(typed.oracle)}, which does not exist`);
+    if (Math.abs(ref.expected_probability - typed.probability) > 1e-12 || sortSets(ref.expected_cut_sets) !== sortSets(typed.cut_sets)) {
+      throw new LessonError('L_ORACLE_MISMATCH', `outcome ${JSON.stringify(typed.id)} does not equal oracle ${JSON.stringify(typed.oracle)}`);
     }
   }
   return l as unknown as Lesson;
 }
 
-function parts(doc: LessonDoc): { top: string; events: Ev[]; gates: Gt[] } {
-  const events = Array.isArray(doc.events) ? (doc.events as unknown[]).filter(isObj).map((e) => ({ id: String(e.id), probability: Number(e.probability) })) : [];
-  const gates = Array.isArray(doc.gates)
-    ? (doc.gates as unknown[]).filter(isObj).map((g) => ({ id: String(g.id), type: String(g.type), inputs: Array.isArray(g.inputs) ? g.inputs.map(String) : [] }))
-    : [];
-  return { top: typeof doc.top === 'string' ? doc.top : '', events, gates };
+interface Parts { top: string; events: Ev[]; gates: Gt[]; malformed: boolean }
+
+/** Read a student's document without coercing anything: an entry of the wrong shape is skipped and marks the document malformed. */
+function parts(doc: unknown): Parts {
+  const d: Record<string, unknown> = isObj(doc) ? doc : {};
+  let malformed = !isObj(doc);
+  const events: Ev[] = [];
+  if (Array.isArray(d.events)) {
+    for (const e of d.events) {
+      if (isObj(e) && str(e.id) && num(e.probability)) events.push({ id: e.id, probability: e.probability });
+      else malformed = true;
+    }
+  } else malformed = true;
+  const gates: Gt[] = [];
+  if (Array.isArray(d.gates)) {
+    for (const g of d.gates) {
+      if (isObj(g) && str(g.id) && str(g.type) && Array.isArray(g.inputs) && g.inputs.every(str)) {
+        gates.push({ id: g.id, type: g.type, inputs: g.inputs as string[], ...(num(g.threshold) ? { threshold: g.threshold } : {}) });
+      } else malformed = true;
+    }
+  } else malformed = true;
+  if (!str(d.top)) malformed = true;
+  return { top: typeof d.top === 'string' ? d.top : '', events, gates, malformed };
 }
 
-function parentCounts(gates: Gt[]): Map<string, number> {
+/** For each basic event, how many distinct gates use it. Gate ids are not events and are never counted. */
+function parentCounts(p: Parts): Map<string, number> {
+  const isEvent = new Set(p.events.map((e) => e.id));
   const n = new Map<string, number>();
-  for (const g of gates) for (const i of new Set(g.inputs)) n.set(i, (n.get(i) ?? 0) + 1);
+  for (const g of p.gates) for (const i of new Set(g.inputs)) if (isEvent.has(i)) n.set(i, (n.get(i) ?? 0) + 1);
   return n;
 }
 
+const sameMultiset = (a: number[], b: number[]): boolean => {
+  if (a.length !== b.length) return false;
+  const x = [...a].sort((m, n) => m - n);
+  const y = [...b].sort((m, n) => m - n);
+  return x.every((v, i) => Math.abs(v - y[i]!) <= 1e-12);
+};
+
 export function runCheck(c: Check, doc: LessonDoc): boolean {
-  const { top, events, gates } = parts(doc);
-  const topGate = gates.find((g) => g.id === top);
+  const p = parts(doc);
+  if (p.malformed) return false;
+  const topGate = p.gates.find((g) => g.id === p.top);
   switch (c.kind) {
     case 'top-is-event':
-      return events.some((e) => e.id === top);
+      return p.events.some((e) => e.id === p.top);
     case 'top-gate':
       return topGate !== undefined && (Array.isArray(c.type) ? c.type : [c.type]).includes(topGate.type as GateType);
     case 'event-count':
-      return events.length === c.count;
-    case 'has-probability':
-      return events.some((e) => Math.abs(e.probability - c.value) <= 1e-12);
-    case 'shared-event': {
-      const counts = parentCounts(gates);
-      return events.some((e) => (counts.get(e.id) ?? 0) >= c.minParents);
+      return p.events.length === c.count;
+    case 'probabilities':
+      return sameMultiset(p.events.map((e) => e.probability), c.values);
+    case 'shared-event':
+      return [...parentCounts(p).values()].some((n) => n >= c.minParents);
+    case 'vote': {
+      if (topGate?.type !== 'atleast' || topGate.threshold !== c.threshold) return false;
+      const events = new Set(p.events.map((e) => e.id));
+      const distinct = new Set(topGate.inputs);
+      return distinct.size === topGate.inputs.length && distinct.size === c.inputs && [...distinct].every((i) => events.has(i));
     }
   }
 }
 
 export function runDetect(d: Detect, doc: LessonDoc): boolean {
-  const { top, events, gates } = parts(doc);
+  const p = parts(doc);
   switch (d.kind) {
     case 'percent-probability':
       // The validator rejects these as E_PROB_RANGE; the lesson explains why in student terms.
-      return events.some((e) => e.probability > 1 && e.probability <= 100);
+      return p.events.some((e) => e.probability > 1 && e.probability <= 100);
     case 'single-input-gate':
-      return gates.some((g) => g.type !== 'atleast' && new Set(g.inputs).size === 1);
+      return p.gates.some((g) => g.type !== 'atleast' && new Set(g.inputs).size === 1);
     case 'wrong-top-gate': {
-      const t = gates.find((g) => g.id === top);
+      const t = p.gates.find((g) => g.id === p.top);
       return t !== undefined && t.type !== d.expected;
     }
-    case 'no-shared-event': {
-      // Several events with the same probability and no event under two gates: the "two copies" shape.
-      const counts = parentCounts(gates);
-      return gates.length >= 2 && ![...counts.values()].some((n) => n >= 2);
-    }
+    case 'extra-events':
+      return p.events.length > d.max;
     case 'unused-event': {
-      const used = new Set(gates.flatMap((g) => g.inputs));
-      return events.some((e) => e.id !== top && !used.has(e.id));
+      const used = new Set(p.gates.flatMap((g) => g.inputs));
+      return p.events.some((e) => e.id !== p.top && !used.has(e.id));
     }
   }
 }
 
+export interface EngineResult { probability: number; cutSets: string[][] }
+
 export interface LessonProgress {
   steps: { id: string; done: boolean }[];
   mistakes: { id: string; message: string }[];
+  /** The document has an entry of the wrong shape; nothing is credited. */
+  malformed: boolean;
+  /** The lesson outcome the engine result matched, if a result was given. */
+  outcome: string | null;
+  /** Every step done, no mistake, and the engine result equals one of the lesson's expected outcomes. */
   complete: boolean;
 }
 
-export function checkLesson(lesson: Lesson, doc: LessonDoc): LessonProgress {
+export function checkLesson(lesson: Lesson, doc: LessonDoc, result?: EngineResult): LessonProgress {
   const steps = lesson.steps.map((s) => ({ id: s.id, done: runCheck(s.check, doc) }));
   const mistakes = lesson.mistakes.filter((m) => runDetect(m.detect, doc)).map((m) => ({ id: m.id, message: m.message }));
-  return { steps, mistakes, complete: steps.every((s) => s.done) && mistakes.length === 0 };
+  const malformed = parts(doc).malformed;
+  const matched = result ? matchOutcome(lesson, result.probability, result.cutSets) : null;
+  return { steps, mistakes, malformed, outcome: matched?.id ?? null, complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null };
 }
 
 /** Compare an engine result with a lesson outcome. The caller has already required a completed, complete result. */
 export function matchOutcome(lesson: Lesson, probability: number, cutSets: string[][]): Outcome | null {
-  const key = (c: string[][]): string => JSON.stringify(c.map((s) => [...s].sort()).sort((a, b) => a.length - b.length || a.join().localeCompare(b.join())));
-  return lesson.outcomes.find((o) => Math.abs(o.probability - probability) <= o.tolerance.absolute && key(o.cut_sets) === key(cutSets)) ?? null;
+  return lesson.outcomes.find((o) => Math.abs(o.probability - probability) <= o.tolerance.absolute && sortSets(o.cut_sets) === sortSets(cutSets)) ?? null;
 }

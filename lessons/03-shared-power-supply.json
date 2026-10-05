@@ -1,5 +1,8 @@
 {
-  "schema": { "id": "sneed.lesson", "version": 1 },
+  "schema": {
+    "id": "sneed.lesson",
+    "version": 1
+  },
   "id": "03-shared-power-supply",
   "title": "Redundant pumps with a shared power supply",
   "goals": [
@@ -13,19 +16,32 @@
       "id": "three-events",
       "prompt": "Add three basic events: P1 (0.1), P2 (0.1) and S \"Power supply fails\" (0.05).",
       "hint": "S is one event. Both pumps lose power when it fails.",
-      "check": { "kind": "event-count", "count": 3 }
+      "check": {
+        "kind": "probabilities",
+        "values": [
+          0.1,
+          0.1,
+          0.05
+        ]
+      }
     },
     {
       "id": "and-of-pumps",
       "prompt": "Build each pump's failure as (pump fails OR S fails), then make the top event \"No coolant flow\" the AND of the two.",
       "hint": "Two OR gates, one per pump, under an AND gate.",
-      "check": { "kind": "top-gate", "type": "and" }
+      "check": {
+        "kind": "top-gate",
+        "type": "and"
+      }
     },
     {
       "id": "one-s-twice",
       "prompt": "Connect the same event S under both OR gates. Run, then compare with the pair alone.",
       "hint": "Connect S to a second gate rather than adding another event.",
-      "check": { "kind": "shared-event", "minParents": 2 }
+      "check": {
+        "kind": "shared-event",
+        "minParents": 2
+      }
     }
   ],
   "outcomes": [
@@ -34,33 +50,69 @@
       "label": "One supply S under both pumps",
       "oracle": "pra-pump3-shared",
       "probability": 0.0595,
-      "cut_sets": [["P1", "P2"], ["S"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "P1",
+          "P2"
+        ],
+        [
+          "S"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     },
     {
       "id": "separate",
       "label": "Two separate supplies S1 and S2 (two copies)",
       "oracle": "pra-pump3-separate",
       "probability": 0.021025,
-      "cut_sets": [["P1", "P2"], ["P1", "S2"], ["P2", "S1"], ["S1", "S2"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "P1",
+          "P2"
+        ],
+        [
+          "P1",
+          "S2"
+        ],
+        [
+          "P2",
+          "S1"
+        ],
+        [
+          "S1",
+          "S2"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     }
   ],
   "mistakes": [
     {
       "id": "two-copies",
-      "message": "No event sits under two gates, so each pump has its own supply. That describes two supplies, not one shared supply, and it gives a different answer.",
-      "detect": { "kind": "no-shared-event" }
+      "message": "You have more than three events. One shared power supply is one event, S, used by both pumps. Separate events S1 and S2 describe two supplies, and they give a different answer.",
+      "detect": {
+        "kind": "extra-events",
+        "max": 3
+      }
     },
     {
       "id": "percent",
       "message": "A probability above 1 is not allowed. Write 5 percent as 0.05.",
-      "detect": { "kind": "percent-probability" }
+      "detect": {
+        "kind": "percent-probability"
+      }
     },
     {
       "id": "one-input-gate",
       "message": "A gate with one input only repeats that input.",
-      "detect": { "kind": "single-input-gate" }
+      "detect": {
+        "kind": "single-input-gate"
+      }
     }
   ],
   "hand_calculation": [
