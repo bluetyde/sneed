@@ -110,7 +110,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
   - **Not reported upstream** (user decision 2026-10-05: not now). The upstream project's last push was 2023, so a fix is unlikely.
   - Pinned by a test (`tests/engine/headless.test.ts`, "SCRAM 0.16.2 mishandles atleast ..."): if SCRAM is upgraded and the bug disappears, that test fails and the export rule should be reviewed. The runtime smoke checks include this shape, so a build that loses the workaround fails before activation.
   - Revisit when: upgrading SCRAM, or if the cause is wanted. Possible later work: find the root cause in SCRAM's preprocessor, report it upstream with the reproducer, or patch our own build (a patched build would change the recipe revision and the license bookkeeping).
-- [x] Other engine behaviour handled in our code, not defects to fix: the default product-order limit of 20 silently drops cut sets (we pass a limit of at least the event count), `--cut-off` has an unexplained effect (never used), and a rare-event sum above 1 is clamped to 1 with only a warning (today the result is refused as failed; decided 2026-10-05 to show it labelled instead, being implemented on branch `claude/default-runtime`).
+- [x] Other engine behaviour handled in our code, not defects to fix: the default product-order limit of 20 silently drops cut sets (we pass a limit of at least the event count), `--cut-off` has an unexplained effect (never used), and a rare-event sum above 1 is clamped to 1 with only a warning (decided 2026-10-05 to show it labelled instead of failing; implemented: `top_event_probability` keeps the bound 1, `approximation_value` has the real sum, caveat `approximation-exceeds-1`).
 
 ## Ideas / later
 
@@ -126,8 +126,8 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [x] 2026-10-05 Engine route: WSL2 via argument list (user).
 - [x] 2026-10-05 SCRAM licensing and install: the PRA app never bundles SCRAM; SEED's dedicated installer fetches and builds the pinned source (user). The app publishes a SCRAM runtime recipe; SEED executes it ([SEED plan 11](../experiment-studio/docs/plans/11-runtime-and-shared-acceptance.md) model: staged, hash-checked, isolated versioned location, native smoke check, atomic activation). Distribution license of the app itself and the repo name remain open.
 - [x] 2026-10-05 Repo: private `bluetyde/sneed` (user said go ahead; name chosen as the obvious one and found free).
-- [x] 2026-10-05 Use the installed runtime by default instead of the development build (user); being implemented on branch `claude/default-runtime`.
-- [x] 2026-10-05 Rare-event sum above 1: show it labelled, do not fail (user); being implemented on the same branch.
+- [x] 2026-10-05 Use the installed runtime by default instead of the development build (user); implemented: `analyze()` resolves the installed runtime and fails with a typed `E_SETUP_REQUIRED` if none is installed. Run `npm run runtime -- install` once before using or testing the engine.
+- [x] 2026-10-05 Rare-event sum above 1: show it labelled, do not fail (user); implemented, see Known engine defects.
 - [x] 2026-10-05 Upstream report of the SCRAM `atleast` defect: no, not now (user); tracked under Known engine defects.
 - [x] 2026-10-05 Distribution license of the app itself: MIT (user).
 

@@ -2,17 +2,12 @@
 //   npm run runtime -- install | status | verify | recover | rollback | engine
 // Environment: SNEED_WSL_DISTRO (default Ubuntu), SNEED_RUNTIME_ROOT (Linux dir, default /root/sneed-runtime),
 //              SNEED_RUNTIME_STATE (Windows dir, default ~/.sneed/runtime).
-import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { install, recover, resolveEngine, rollback, status, verifyActive, type RuntimeEnv } from '../src/runtime/install.js';
+import { defaultRuntimeEnv, install, recover, resolveEngine, rollback, status, verifyActive } from '../src/runtime/install.js';
 import { loadRecipe } from '../src/runtime/recipe.js';
 
-const env: RuntimeEnv = {
-  distro: process.env.SNEED_WSL_DISTRO ?? 'Ubuntu',
-  linuxRoot: process.env.SNEED_RUNTIME_ROOT ?? '/root/sneed-runtime',
-  stateDir: process.env.SNEED_RUNTIME_STATE ?? path.join(homedir(), '.sneed', 'runtime'),
-};
+const env = defaultRuntimeEnv();
 const recipeDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../runtime');
 
 async function main(): Promise<number> {

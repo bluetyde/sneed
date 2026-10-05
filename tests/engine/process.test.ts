@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { DEFAULT_ENGINE, execInWsl, killOwned, toWslPath, type ExecResult } from '../../src/core/engine.js';
+import { execInWsl, killOwned, toWslPath, type ExecResult } from '../../src/core/engine.js';
+import { defaultRuntimeEnv } from '../../src/runtime/resolve.js';
 
 // Real process handling in WSL. Needs the Ubuntu distro with python3 (used only as a harmless long-running stand-in).
-const DISTRO = DEFAULT_ENGINE.distro;
+const DISTRO = defaultRuntimeEnv().distro;
 const unique = (label: string): string => `/tmp/sneed-test/${label} (${process.pid}) [${Date.now()}]+x.y-${Math.random().toString(36).slice(2)}`;
 const sleeperArgv = (tag: string): string[] => ['python3', '-c', 'import time; time.sleep(120)', tag];
 

@@ -22,7 +22,11 @@ export interface RuntimeIdentity {
   manifest_sha256: string;
 }
 
-export const DEFAULT_ENGINE: EngineConfig = {
+/**
+ * The developer's own build from the P0 spike, kept only for comparing against the managed runtime
+ * (tests use it when SNEED_DEV_ENGINE=1). Nothing falls back to it: analysis uses the installed runtime.
+ */
+export const DEV_ENGINE: EngineConfig = {
   distro: 'Ubuntu',
   binary: '/root/pra-scram/build/bin/scram',
   libs: '/root/pra-scram/build/lib/scram:/root/pra-scram/env-old/lib',

@@ -114,21 +114,53 @@ describe('outcomes that are never a success', () => {
     });
   }
 
-  it('a probability the engine clamped to 1 is not reported as the method value', () => {
+  describe('an approximation whose own value exceeds 1', () => {
     // rare-event sum of three events at 0.9 is 2.7; SCRAM prints 1 and only warns (seen in a real run)
     const or3 = asModel(mkDoc('TOP', { A: 0.9, B: 0.9, C: 0.9 }, [OR('TOP', ['A', 'B', 'C'])]));
     const products = ['A', 'B', 'C'].map((e) => ({ events: [e], probability: '0.9' }));
-    const r = run(or3, { probability: '1', approximation: 'rare-event', limit: 3, warning: 'Probability may have been adjusted to 1.', products }, {}, { method: 'rare-event' });
-    expect(r.status).toBe('failed');
-    expect(r.reasons).toEqual(['probability-adjusted-by-engine']);
-    expect(r.top_event_probability).toBeNull();
+    const warning = 'Probability may have been adjusted to 1.';
+    const rare = (probability: string, w: string | undefined = warning) => run(or3, { probability, approximation: 'rare-event', limit: 3, ...(w ? { warning: w } : {}), products }, {}, { method: 'rare-event' });
+
+    it('is a completed result that keeps the bound as the probability and shows the real value, labelled', () => {
+      const r = rare('1');
+      expect(r).toMatchObject({ status: 'completed', completeness: 'complete', reasons: [], top_event_probability: 1, caveats: ['approximation-exceeds-1'] });
+      expect(r.approximation_value).toBeCloseTo(2.7, 12);
+      expect(r.warnings).toEqual([warning]); // the engine's own words are kept too
+    });
+
+    it('is still labelled when the engine gave no warning but printed the clamp', () => {
+      expect(rare('1', '').caveats).toEqual(['approximation-exceeds-1']);
+    });
+
+    it('is a failure when the engine printed anything other than the clamp', () => {
+      const expected: Record<string, string> = { '0.5': 'probability-inconsistent-with-cut-sets', '0.9': 'probability-inconsistent-with-cut-sets', '2.7': 'probability-out-of-range' };
+      for (const [printed, reason] of Object.entries(expected)) {
+        const r = rare(printed);
+        expect(r.status, printed).toBe('failed');
+        expect(r.reasons, printed).toEqual([reason]);
+        expect(r.top_event_probability).toBeNull();
+        expect(r.approximation_value).toBeNull();
+      }
+    });
+  });
+
+  it('approximation values are recorded for rare-event and MCUB, and absent for the exact method', () => {
+    const or2 = asModel(ORACLE_MODELS['pra-or']!);
+    const products = [{ events: ['A'], probability: '0.1' }, { events: ['B'], probability: '0.2' }];
+    const r = run(or2, { probability: '0.3', approximation: 'rare-event', limit: 2, products }, {}, { method: 'rare-event' });
+    expect(r).toMatchObject({ status: 'completed', caveats: [] });
+    expect(r.approximation_value).toBeCloseTo(0.3, 12);
+    const m = run(or2, { probability: '0.28', approximation: 'mcub', limit: 2, products }, {}, { method: 'mcub' });
+    expect(m.approximation_value).toBeCloseTo(0.28, 12);
+    expect(run(or2, { probability: '0.28', limit: 2, products }).approximation_value).toBeNull();
   });
 
   it('an engine clamp warning is harmless when the true value is exactly 1 (an event with probability 1)', () => {
     const m = asModel(mkDoc('TOP', { A: 1, B: 0.2 }, [OR('TOP', ['A', 'B'])]));
     const products = [{ events: ['A'], probability: '1' }, { events: ['B'], probability: '0.2' }];
     const r = run(m, { probability: '1', approximation: 'mcub', limit: 2, warning: 'Probability may have been adjusted to 1.', products }, {}, { method: 'mcub' });
-    expect(r).toMatchObject({ status: 'completed', completeness: 'complete', top_event_probability: 1 });
+    expect(r).toMatchObject({ status: 'completed', completeness: 'complete', top_event_probability: 1, caveats: [] });
+    expect(r.approximation_value).toBe(1); // exactly 1 is the method's value, not an overflow
     expect(r.warnings).toEqual(['Probability may have been adjusted to 1.']);
   });
 

@@ -30,6 +30,7 @@ N = ROOT / "src/core/engine.ts"
 RC = ROOT / "src/runtime/recipe.ts"
 RT = ROOT / "src/runtime/install.ts"
 SM = ROOT / "src/runtime/smoke.ts"
+RV = ROOT / "src/runtime/resolve.ts"
 
 # Test selection and time limit (seconds) per mutation. Engine suites need WSL and the pinned SCRAM build.
 UNIT = ("tests/unit", 180)
@@ -149,9 +150,15 @@ MUTATIONS = [
     ("verify: manifest hash not compared", RT, "if (sha256(readFileSync(manifestFile)) !== active.manifest_sha256) return [{ code: 'manifest-changed'", "if (false as boolean) return [{ code: 'manifest-changed'"),
     ("verify: binary hash not compared", RT, "if (!sum.stdout.startsWith(m.binary.sha256 + ' '))", "if (false as boolean)"),
     ("verify: version not compared", RT, "|| ver.stdout.trim() !== m.binary.version_text)", "|| false as boolean)"),
-    ("resolve: manifest integrity not checked", RT, "|| sha256(readFileSync(manifestFile)) !== active.manifest_sha256) throw new Error('the active runtime manifest is missing or changed');", ") throw new Error('the active runtime manifest is missing or changed');"),
+    ("resolve: manifest integrity not checked", RV, "|| sha256(readFileSync(manifestFile)) !== active.manifest_sha256) throw new Error('the active runtime manifest is missing or changed');", ") throw new Error('the active runtime manifest is missing or changed');"),
     ("rollback: previous runtime not verified", RT, "if (issues.length) throw new Error(`the previous runtime does not verify", "if (false as boolean) throw new Error(`the previous runtime does not verify"),
     ("rollback: allowed while an install holds the lock", RT, "if (existsSync(path.join(dir, 'lock.json'))) throw new RuntimeBusyError(", "if (false as boolean) throw new RuntimeBusyError("),
+    ("resolve: a missing runtime is not reported", RV, "if (!active) throw new RuntimeNotInstalledError(env.stateDir);", "if (false as boolean) throw new RuntimeNotInstalledError(env.stateDir);"),
+    ("resolve: wrong default Linux root", RV, "vars.SNEED_RUNTIME_ROOT ?? '/root/sneed-runtime'", "vars.SNEED_RUNTIME_ROOT ?? '/root/other'"),
+    ("resolve: environment ignored", RV, "distro: vars.SNEED_WSL_DISTRO ?? 'Ubuntu',", "distro: 'Ubuntu',"),
+    ("result: sum above 1 not labelled", Rs, "if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');", "if (close(report.probability, 1)) void 0;"),
+    ("result: any printed value accepted for a sum above 1", Rs, "if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');\n      else reasons.push('probability-inconsistent-with-cut-sets');", "caveats.push('approximation-exceeds-1');"),
+    ("result: approximation value not recorded", Rs, "approximation_value: approximationValue,", "approximation_value: null,"),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),

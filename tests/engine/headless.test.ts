@@ -237,12 +237,15 @@ describe('truncation is detected, not trusted', () => {
     expect(low.record.status).toBe('truncated');
   }, 120000);
 
-  it('a rare-event sum above 1 (clamped by the engine) is a failure, not a completed value', async () => {
+  it('a rare-event sum above 1 (clamped to 1 by the engine) is shown labelled: the bound as the probability, the real sum beside it', async () => {
     const d = mkDoc('TOP', { A: 0.9, B: 0.9, C: 0.9 }, [OR('TOP', ['A', 'B', 'C'])]);
     const { record } = await run(d, { settings: { method: 'rare-event' } });
-    expect(record.status).toBe('failed');
-    expect(record.reasons).toEqual(['probability-adjusted-by-engine']);
-    expect((await run(d)).record).toMatchObject({ status: 'completed' }); // the exact method is unaffected
+    expect(record).toMatchObject({ status: 'completed', completeness: 'complete', reasons: [], top_event_probability: 1, caveats: ['approximation-exceeds-1'] });
+    expect(record.approximation_value).toBeCloseTo(2.7, 12);
+    expect(record.warnings).toEqual(['Probability may have been adjusted to 1.']);
+    const exact = (await run(d)).record;
+    expect(exact).toMatchObject({ status: 'completed', caveats: [], approximation_value: null }); // the exact method is unaffected
+    expect(near(exact.top_event_probability!, 1 - 0.1 ** 3)).toBe(true);
   }, 120000);
 });
 
@@ -320,27 +323,32 @@ describe('seeded random trees: engine versus the independent enumeration oracle'
     }
   }, 600000);
 
-  it('rare-event and min-cut-upper-bound methods agree with the oracle (or fail visibly when clamped)', async () => {
+  it('rare-event and min-cut-upper-bound methods agree with the oracle, and a sum above 1 is labelled with its real value', async () => {
     let compared = 0;
-    let clamped = 0;
+    let labelled = 0;
     for (let seed = 101; seed <= 130; seed++) {
       const doc = randomDoc(seed);
       const oracle = enumerate(doc);
       for (const method of ['rare-event', 'mcub'] as const) {
         const want = method === 'rare-event' ? oracle.rareEvent : oracle.mcub;
         const { record } = await run(doc, { settings: { method } });
+        const ctx = `${method} seed ${seed}`;
+        expect(record, ctx).toMatchObject({ status: 'completed', completeness: 'complete', reasons: [] });
+        // the method's own value is always the oracle's, however large; the probability is that value capped at 1
+        expect(near(record.approximation_value!, want.toNumber()), `${ctx}: ${record.approximation_value} vs ${want.toDecimal(12)}`).toBe(true);
         if (want.cmp(qFromNumber(1)) > 0) {
-          clamped++;
-          expect(record.status, `${method} seed ${seed}`).toBe('failed');
-          expect(record.reasons).toEqual(['probability-adjusted-by-engine']);
+          labelled++;
+          expect(record.caveats, ctx).toEqual(['approximation-exceeds-1']);
+          expect(record.top_event_probability, ctx).toBe(1);
         } else {
           compared++;
-          expect(record, `${method} seed ${seed}`).toMatchObject({ status: 'completed', completeness: 'complete' });
-          expect(near(record.top_event_probability!, want.toNumber()), `${method} seed ${seed}: ${record.top_event_probability} vs ${want.toDecimal(12)}`).toBe(true);
+          expect(record.caveats, ctx).toEqual([]);
+          expect(near(record.top_event_probability!, want.toNumber()), `${ctx}: ${record.top_event_probability} vs ${want.toDecimal(12)}`).toBe(true);
         }
       }
     }
     expect(compared).toBeGreaterThanOrEqual(30);
-    expect(compared + clamped).toBe(60);
+    expect(labelled).toBeGreaterThanOrEqual(1);
+    expect(compared + labelled).toBe(60);
   }, 900000);
 });
