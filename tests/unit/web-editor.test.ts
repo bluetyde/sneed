@@ -718,6 +718,34 @@ describe('comparing saved runs', () => {
     expect(ed.comparison!.result).not.toBeNull();
   });
 
+  it('a slow answer to an older comparison never replaces a newer one (Codex review)', async () => {
+    saved.set('r-x', run('r-x', orDoc, 0.5, [['E1']]));
+    const release: Record<string, () => void> = {};
+    const api = withRuns({
+      loadRun: (id) => (id === 'r-and' ? new Promise((resolve) => (release[id] = () => resolve(saved.get(id)!))) : Promise.resolve(saved.get(id)!)),
+    });
+    const { ed } = await ready(api);
+    const slow = ed.compareRuns('r-and', 'r-or'); // started first, answers last
+    await ed.compareRuns('r-x', 'r-or');
+    expect(ed.comparison!.a.id).toBe('r-x');
+    release['r-and']!();
+    expect(await slow).toBe(false);
+    expect(ed.comparison!.a.id).toBe('r-x'); // still the newer request's answer
+    saved.delete('r-x');
+  });
+
+  it('clearing while a comparison is loading means it never appears (Codex review)', async () => {
+    const releases: (() => void)[] = [];
+    const api = withRuns({ loadRun: (id) => new Promise((resolve) => releases.push(() => resolve(saved.get(id)!))) });
+    const { ed } = await ready(api);
+    const pending = ed.compareRuns('r-and', 'r-or');
+    ed.clearComparison();
+    releases.forEach((r) => r());
+    await Promise.resolve();
+    await pending;
+    expect(ed.comparison).toBeNull();
+  });
+
   it('clearing drops the comparison and any error', async () => {
     const { ed } = await ready(withRuns());
     await ed.compareRuns('r-and', 'r-or');
@@ -732,7 +760,8 @@ describe('comparing saved runs', () => {
     const down = await ready(withRuns({ listRuns: async () => Promise.reject(new Error('down')) }));
     await down.ed.refreshRuns();
     expect(down.ed.runs).toEqual([]);
-    expect(down.ed.compareError).toMatch(/Could not list/);
+    expect(down.ed.runsError).toMatch(/Could not list/);
+    expect(down.ed.compareError).toBeNull(); // a listing failure is not a comparison failure
     let lists = 0;
     const { ed } = await ready(withRuns({ listRuns: async () => (lists++, []) }));
     const before = lists;

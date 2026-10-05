@@ -155,4 +155,8 @@ describe('hasOwned (confirms a cancel)', () => {
   it('refuses a tag too short to be unique', () => {
     expect(() => hasOwned(DISTRO, 'short')).toThrow();
   });
+
+  it('a failed query throws instead of answering "no process" (Codex review)', () => {
+    expect(() => hasOwned('NoSuchDistro-for-test', unique('probe-fail'))).toThrow(/query failed/);
+  });
 });

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AnalyzeOptions, AnalyzeOutcome } from '../../src/core/analyze.js';
@@ -497,6 +497,71 @@ describe('saved runs over the API', () => {
         }
         expect(readdirSync(runs)).toEqual(['run-1']);
         expect(readFileSync(path.join(runs, 'run-1', 'results.json'), 'utf8')).toBe(JSON.stringify(rec(0.1)));
+      },
+    );
+  });
+
+  it('a run reached through a link is neither listed nor served, and nothing outside the runs folder is read (Codex review)', async () => {
+    await withRuns(
+      (runs) => {
+        const outside = path.join(path.dirname(runs), 'outside');
+        mkdirSync(path.join(outside, 'native'), { recursive: true });
+        writeFileSync(path.join(outside, 'results.json'), JSON.stringify({ ...rec(0.5), secret: 'OUTSIDE' }));
+        writeFileSync(path.join(outside, 'native', 'model.json'), '{"secret":"OUTSIDE"}');
+        mkdirSync(runs, { recursive: true });
+        symlinkSync(outside, path.join(runs, 'linked-run'), 'junction');
+        makeRun(runs, 'real-run', rec(0.1));
+      },
+      async (url) => {
+        const list = await get(url + '/api/runs');
+        expect(list.json.runs.map((x: { id: string }) => x.id)).toEqual(['real-run']);
+        const one = await get(url + '/api/runs/linked-run');
+        expect(one.status).toBe(422);
+        expect(JSON.stringify(one.json)).not.toContain('OUTSIDE');
+      },
+    );
+  });
+
+  it('a link to another run inside the runs folder is not followed either (a copy would be served under the wrong id)', async () => {
+    await withRuns(
+      (runs) => {
+        makeRun(runs, 'real-run', rec(0.1));
+        symlinkSync(path.join(runs, 'real-run'), path.join(runs, 'alias-run'), 'junction');
+      },
+      async (url) => {
+        expect((await get(url + '/api/runs')).json.runs.map((x: { id: string }) => x.id)).toEqual(['real-run']);
+        expect((await get(url + '/api/runs/alias-run')).status).toBe(422);
+      },
+    );
+  });
+
+  it('a model file that is a link to a file elsewhere is not served', async () => {
+    await withRuns(
+      (runs) => {
+        makeRun(runs, 'run-1', rec(0.1));
+        const target = path.join(path.dirname(runs), 'secret.txt');
+        writeFileSync(target, '{"secret":"OUTSIDE"}');
+        rmSync(path.join(runs, 'run-1', 'native', 'model.json'));
+        try {
+          symlinkSync(target, path.join(runs, 'run-1', 'native', 'model.json'), 'file');
+        } catch {
+          writeFileSync(path.join(runs, 'run-1', 'native', 'model.json'), '{}'); // no privilege to make a file symlink here; the junction test covers links
+        }
+      },
+      async (url) => {
+        const r = await get(url + '/api/runs/run-1');
+        expect(JSON.stringify(r.json)).not.toContain('OUTSIDE');
+      },
+    );
+  });
+
+  it('a model file that is not JSON is not served', async () => {
+    await withRuns(
+      (runs) => makeRun(runs, 'run-1', rec(0.1), 'not json at all'),
+      async (url) => {
+        const r = await get(url + '/api/runs/run-1');
+        expect(r.status).toBe(422);
+        expect(r.json.error.code).toBe('E_UNREADABLE');
       },
     );
   });

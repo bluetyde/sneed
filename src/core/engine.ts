@@ -75,11 +75,14 @@ export function killOwned(distro: string, ownerTag: string): void {
   spawnSync('wsl.exe', ['-d', distro, '--exec', 'pkill', '-KILL', '-f', '--', pattern], { windowsHide: true });
 }
 
-/** True when a Linux process that carries the owner tag is still alive. Used to confirm a cancel. */
+/** True when a Linux process that carries the owner tag is still alive. Used to confirm a cancel. Throws when the query itself fails. */
 export function hasOwned(distro: string, ownerTag: string): boolean {
   if (ownerTag.length < 12) throw new Error('owner tag is too short to be unique');
   const r = spawnSync('wsl.exe', ['-d', distro, '--exec', 'pgrep', '-f', '--', regexEscape(ownerTag)], { windowsHide: true });
-  return r.status === 0; // pgrep: 0 = at least one match, 1 = none
+  // pgrep: 0 = at least one match, 1 = none. Anything else (a launch failure, a signal, an error) means the answer is unknown,
+  // which must never be read as "no process".
+  if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) throw new Error('the process query failed');
+  return r.status === 0;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AnalyzeOptions, AnalyzeOutcome } from '../../src/core/analyze.js';
@@ -60,6 +60,7 @@ function deps(over: Partial<Deps> = {}): { d: Deps; calls: Calls } {
     write: (line) => void calls.lines.push(line),
     newWorkId: () => `pra-${(++n).toString(16).padStart(12, '0')}`,
     pollMs: 10,
+    pidAlive: () => false,
     settleMs: 900,
     sleep: async () => undefined,
     ...over,
@@ -156,6 +157,8 @@ describe('run', () => {
     expect(await main(['run', modelFile, '--out', out, '--run-id', 'pra', '--method', 'mcub', '--limit-order', '3', '--timeout-seconds', '30'], d)).toBe(0);
     expect(seen).toBe(true);
     expect(reply(calls)).toEqual({ ok: true, status: 'completed', runId: 'pra', workId: 'pra-000000000001' });
+    expect(JSON.parse(readFileSync(path.join(out, 'active-run.json'), 'utf8'))).toMatchObject({ workId: 'pra-000000000001', state: 'ended', status: 'completed', pid: process.pid });
+    expect(readdirSync(out).filter((f) => f.includes('.tmp-'))).toEqual([]); // no staging folder is left
     const o = seenCalls[0]!.opts;
     expect(o.runsDir).toBe(path.join(out, 'work'));
     expect(o.runId).toBe('pra-000000000001');
@@ -252,8 +255,9 @@ describe('run', () => {
         throw new RangeError('limitOrder');
       },
     });
-    rmSync(path.join(out, 'active-run.json'), { force: true });
-    expect(await main(['run', modelFile, '--out', out], c.d)).toBe(2);
+    const out2 = path.join(tmp, 'run-2');
+    mkdirSync(out2);
+    expect(await main(['run', modelFile, '--out', out2], c.d)).toBe(2);
     expect(reply(c.calls).errors[0].code).toBe('E_BOUNDS_EXCEEDED');
   });
 
@@ -273,7 +277,7 @@ describe('run', () => {
             aborted = true;
             resolve({ kind: 'ran', runDir: '', record: record({ status: 'cancelled', completeness: 'unknown', reasons: ['cancelled'], top_event_probability: null }) });
           });
-          setTimeout(() => writeFileSync(path.join(out, 'cancel.requested'), 'cancel\n'), 30);
+          setTimeout(() => writeFileSync(path.join(out, 'cancel.requested'), 'pra-000000000001'), 30);
         }),
     });
     expect(await main(['run', modelFile, '--out', out], d)).toBe(0);
@@ -283,9 +287,9 @@ describe('run', () => {
 });
 
 describe('cancel', () => {
-  const activate = (workId = 'pra-0123456789ab'): string => {
+  const activate = (over: Record<string, unknown> = {}, workId = 'pra-0123456789ab'): string => {
     const dir = path.join(out, 'work', workId);
-    writeFileSync(path.join(out, 'active-run.json'), JSON.stringify({ workId, workDir: dir }));
+    writeFileSync(path.join(out, 'active-run.json'), JSON.stringify({ workId, workDir: dir, pid: 4242, state: 'running', ...over }));
     return dir;
   };
 
@@ -296,23 +300,45 @@ describe('cancel', () => {
     expect(calls.kill).toEqual([]);
   });
 
-  it("asks the run to stop, kills by this run's tag only, and reports whether the engine is gone", async () => {
+  it("asks this run to stop by name, kills by this run's tag only, and confirms only when the engine and the run process are gone", async () => {
     const dir = activate();
-    let c = deps({ hasOwned: () => false });
+    let c = deps({ hasOwned: () => false, pidAlive: () => false });
     expect(await main(['cancel', '--out', out], c.d)).toBe(0);
     expect(c.calls.kill).toEqual([['Ubuntu', toWslPath(dir)]]);
     expect(reply(c.calls)).toMatchObject({ ok: true, cancelled: true, nativeStopped: true });
-    expect(existsSync(path.join(out, 'cancel.requested'))).toBe(true);
+    expect(readFileSync(path.join(out, 'cancel.requested'), 'utf8')).toBe('pra-0123456789ab'); // the request names the run
     rmSync(path.join(out, 'cancel.requested'));
     c = deps({ hasOwned: () => true });
     expect(await main(['cancel', '--out', out], c.d)).toBe(0);
     expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: false });
   });
 
+  it('an engine that is gone is not enough: the run process may still be about to start it', async () => {
+    activate();
+    const c = deps({ hasOwned: () => false, pidAlive: () => true, settleMs: 600 });
+    expect(await main(['cancel', '--out', out], c.d)).toBe(0);
+    expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: false });
+    expect(c.calls.kill.length).toBeGreaterThanOrEqual(3); // it kept killing while it waited
+  });
+
+  it('a run that retired its own record (ended) counts as gone even if the process id is reused', async () => {
+    activate();
+    let looks = 0;
+    const c = deps({
+      pidAlive: () => true,
+      hasOwned: () => {
+        if (looks++ === 1) writeFileSync(path.join(out, 'active-run.json'), JSON.stringify({ workId: 'pra-0123456789ab', workDir: path.join(out, 'work', 'pra-0123456789ab'), pid: 4242, state: 'ended', status: 'cancelled' }));
+        return false;
+      },
+    });
+    expect(await main(['cancel', '--out', out], c.d)).toBe(0);
+    expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: true });
+  });
+
   it('keeps killing and checking while an engine process is still there, and reports it gone once it is', async () => {
     activate();
     let looks = 0;
-    const c = deps({ hasOwned: () => ++looks < 3 }); // alive on the first two looks (the engine started just after the first kill)
+    const c = deps({ hasOwned: () => ++looks < 3 });
     expect(await main(['cancel', '--out', out], c.d)).toBe(0);
     expect(c.calls.kill).toHaveLength(3);
     expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: true });
@@ -327,13 +353,39 @@ describe('cancel', () => {
     expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: false });
   });
 
+  it('a process query that fails is never read as "nothing is running" (Codex review)', async () => {
+    activate();
+    const c = deps({
+      hasOwned: () => {
+        throw new Error('query failed');
+      },
+      settleMs: 600,
+    });
+    expect(await main(['cancel', '--out', out], c.d)).toBe(0);
+    const r = reply(c.calls);
+    expect(r).toMatchObject({ ok: true, cancelled: true, nativeStopped: false });
+    expect(r.detail).toMatch(/could not be checked/);
+  });
+
+  it('a run that already ended is not cancelled and nothing is killed', async () => {
+    activate({ state: 'ended', status: 'completed' });
+    const c = deps();
+    expect(await main(['cancel', '--out', out], c.d)).toBe(0);
+    expect(reply(c.calls)).toMatchObject({ ok: true, cancelled: false });
+    expect(reply(c.calls).detail).toMatch(/already ended/);
+    expect(c.calls.kill).toEqual([]);
+    expect(existsSync(path.join(out, 'cancel.requested'))).toBe(false);
+  });
+
   it('refuses a record that does not describe a run of this folder, and kills nothing', async () => {
     for (const rec of [
-      { workId: '../../x', workDir: path.join(out, 'work', '../../x') },
-      { workId: 'pra-0123456789ab', workDir: path.join(tmp, 'elsewhere') },
+      { workId: '../../x', workDir: path.join(out, 'work', '../../x'), pid: 4242, state: 'running' },
+      { workId: 'pra-0123456789ab', workDir: path.join(tmp, 'elsewhere'), pid: 4242, state: 'running' },
       { workId: 'pra-0123456789ab' },
       { workId: 7, workDir: out },
-      { workId: 'pra-short', workDir: path.join(out, 'work', 'pra-short') },
+      { workId: 'pra-short', workDir: path.join(out, 'work', 'pra-short'), pid: 4242, state: 'running' },
+      { workId: 'pra-0123456789ab', workDir: path.join(out, 'work', 'pra-0123456789ab'), pid: 'x', state: 'running' },
+      { workId: 'pra-0123456789ab', workDir: path.join(out, 'work', 'pra-0123456789ab'), pid: 4242, state: 'paused' },
     ]) {
       writeFileSync(path.join(out, 'active-run.json'), JSON.stringify(rec));
       const c = deps();
@@ -344,10 +396,134 @@ describe('cancel', () => {
     }
   });
 
+  it('a record that cannot be read or parsed is an error, not "no active run" (Codex review)', async () => {
+    writeFileSync(path.join(out, 'active-run.json'), '{ half a record');
+    let c = deps();
+    expect(await main(['cancel', '--out', out], c.d)).toBe(1);
+    expect(reply(c.calls).errors[0].code).toBe('E_NOT_OWNED');
+    rmSync(path.join(out, 'active-run.json'));
+    mkdirSync(path.join(out, 'active-run.json')); // unreadable as a file
+    c = deps();
+    expect(await main(['cancel', '--out', out], c.d)).toBe(1);
+    expect(reply(c.calls).errors[0].code).toBe('E_NOT_OWNED');
+    expect(c.calls.kill).toEqual([]);
+  });
+
   it('needs an absolute folder', async () => {
     const c = deps();
     expect(await main(['cancel', '--out', 'rel'], c.d)).toBe(2);
     expect(reply(c.calls).errors[0].code).toBe('E_PATH_INVALID');
+  });
+});
+
+describe('one run per folder, and nothing followed or replaced (Codex review)', () => {
+  it('a second run in the same folder is refused and the first result is untouched', async () => {
+    const a = deps();
+    expect(await main(['run', modelFile, '--out', out], a.d)).toBe(0);
+    const before = readFileSync(path.join(out, 'pra', 'results.json'), 'utf8');
+    const b = deps({ analyze: async (_t, opts) => ({ kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ top_event_probability: 0.5 }) }) });
+    expect(await main(['run', modelFile, '--out', out], b.d)).toBe(1);
+    expect(reply(b.calls).errors[0].code).toBe('E_EXISTS');
+    expect(readFileSync(path.join(out, 'pra', 'results.json'), 'utf8')).toBe(before);
+    expect(b.calls.analyze).toHaveLength(0);
+  });
+
+  it('two runs started together: exactly one is admitted, and its result is the one on disk', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = deps({
+      analyze: async (_t, opts) => {
+        await gate;
+        return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ top_event_probability: 0.19 }) };
+      },
+    });
+    const first = main(['run', modelFile, '--out', out], slow.d);
+    await new Promise((r) => setTimeout(r, 30)); // the first has reserved the folder and is waiting for the engine
+    const second = deps({ analyze: async (_t, opts) => ({ kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ top_event_probability: 0.77 }) }) });
+    expect(await main(['run', modelFile, '--out', out], second.d)).toBe(1);
+    expect(reply(second.calls).errors[0].code).toBe('E_EXISTS');
+    expect(second.calls.analyze).toHaveLength(0);
+    release();
+    expect(await first).toBe(0);
+    expect(JSON.parse(readFileSync(path.join(out, 'pra', 'results.json'), 'utf8')).top_event_probability).toBe(0.19);
+  });
+
+  it('a run record that another start has just reserved is never overwritten, even before its work folder exists', async () => {
+    const theirs = JSON.stringify({ workId: 'pra-0123456789ab', workDir: path.join(out, 'work', 'pra-0123456789ab'), pid: 4242, state: 'running' });
+    writeFileSync(path.join(out, 'active-run.json'), theirs); // the other start passed its checks and reserved, and has not made `work` yet
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_EXISTS');
+    expect(readFileSync(path.join(out, 'active-run.json'), 'utf8')).toBe(theirs);
+    expect(existsSync(path.join(out, 'work'))).toBe(false);
+    expect(calls.analyze).toHaveLength(0);
+  });
+
+  it('a work folder that is a link to somewhere else is refused and nothing is written there', async () => {
+    const outside = path.join(tmp, 'outside');
+    mkdirSync(outside);
+    symlinkSync(outside, path.join(out, 'work'), 'junction');
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_PATH_TRAVERSAL');
+    expect(readdirSync(outside)).toEqual([]);
+    expect(calls.analyze).toHaveLength(0);
+    expect(existsSync(path.join(out, 'active-run.json'))).toBe(false);
+  });
+
+  it('a run record that is a link to a file elsewhere is never written through', async () => {
+    const sentinel = path.join(tmp, 'sentinel.txt');
+    writeFileSync(sentinel, 'keep');
+    try {
+      symlinkSync(sentinel, path.join(out, 'active-run.json'), 'file');
+    } catch {
+      return; // creating a file symlink needs a privilege on some Windows setups; the junction test above covers the folder case
+    }
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(['E_PATH_TRAVERSAL', 'E_EXISTS']).toContain(reply(calls).errors[0].code);
+    expect(readFileSync(sentinel, 'utf8')).toBe('keep');
+    expect(calls.analyze).toHaveLength(0);
+  });
+
+  it('a cancel request left by an earlier run never stops a new one, and a run starts only in a folder with no request in it', async () => {
+    writeFileSync(path.join(out, 'cancel.requested'), 'pra-000000000001');
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_EXISTS');
+    expect(calls.analyze).toHaveLength(0);
+  });
+
+  it('a request that names a different run does not abort this one', async () => {
+    let aborted = false;
+    const { d, calls } = deps({
+      pollMs: 5,
+      analyze: (_t, opts) =>
+        new Promise((resolve) => {
+          opts.signal!.addEventListener('abort', () => (aborted = true));
+          setTimeout(() => writeFileSync(path.join(out, 'cancel.requested'), 'pra-0123456789ab'), 10); // someone else's work id
+          setTimeout(() => resolve({ kind: 'ran', runDir: '', record: record() }), 120);
+        }),
+    });
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(0);
+    expect(aborted).toBe(false);
+    expect(reply(calls).status).toBe('completed');
+  });
+
+  it('a result that cannot be placed leaves no half-written folder behind', async () => {
+    const { d, calls } = deps({
+      analyze: async (_t, opts) => {
+        mkdirSync(path.join(out, 'pra')); // the destination appears while the engine runs
+        writeFileSync(path.join(out, 'pra', 'theirs.txt'), 'theirs');
+        return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record() };
+      },
+    });
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_EXISTS');
+    expect(readFileSync(path.join(out, 'pra', 'theirs.txt'), 'utf8')).toBe('theirs');
+    expect(readdirSync(path.join(out, 'pra'))).toEqual(['theirs.txt']);
+    expect(readdirSync(out).filter((f) => f.includes('.tmp-'))).toEqual([]);
+    expect(JSON.parse(readFileSync(path.join(out, 'active-run.json'), 'utf8')).state).toBe('ended');
   });
 });
 

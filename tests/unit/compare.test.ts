@@ -12,7 +12,7 @@ function record(doc: Doc, over: Record<string, unknown> = {}): Record<string, un
     completeness: 'complete',
     method: 'exact',
     assumptions: { independence: 'declared-independent' },
-    engine: { name: 'SCRAM', version: '0.16.2' },
+    engine: { name: 'SCRAM', version: '0.16.2', sha256: 'build-1' },
     input_hashes: { model_hash: JSON.stringify(doc.events) + JSON.stringify(doc.gates) },
     top_event_probability: r.probability.toNumber(),
     minimal_cut_sets: r.cutSets.map((c) => ({ events: c, probability: c.reduce((p, id) => p * doc.events.find((e) => e.id === id)!.probability, 1) })),
@@ -169,13 +169,49 @@ describe('diffResults', () => {
     expect(z.probability.delta).toBeCloseTo(0.19, 12);
   });
 
-  it('refuses non-objects and survives hostile content', () => {
+  it('refuses non-objects and records that are not usable, and never throws on hostile content', () => {
     expect(diffResults(null, record(OR2))).toBeNull();
     expect(diffResults(record(OR2), [])).toBeNull();
-    const hostile = { minimal_cut_sets: [null, 3, { events: 'x', probability: 1 }, { events: [1], probability: 1 }, { events: ['A'], probability: Number.NaN }], assumptions: 5, engine: 7, input_hashes: [], top_event_probability: 'x' };
-    const d = diffResults(hostile, hostile)!;
-    expect(d.cutSets.unchanged).toBe(0);
-    expect(d.probability.delta).toBeNull();
-    expect(d.sameModel).toBe(false);
+    const hostile = { status: 'completed', minimal_cut_sets: [null, 3, { events: 'x', probability: 1 }, { events: [1], probability: 1 }, { events: ['A'], probability: Number.NaN }], assumptions: 5, engine: 7, input_hashes: [], top_event_probability: 'x' };
+    expect(diffResults(hostile, hostile)).toBeNull();
+    // missing or malformed cut-set data is "unreadable", never "zero cut sets" (Codex review)
+    expect(diffResults({}, {})).toBeNull();
+    expect(diffResults({ status: 'completed' }, { status: 'completed' })).toBeNull();
+    const noSets = { ...record(OR2) } as Record<string, unknown>;
+    delete noSets.minimal_cut_sets;
+    expect(diffResults(noSets, record(OR2))).toBeNull();
+    expect(diffResults({ ...record(OR2), minimal_cut_sets: [{ events: ['A'], probability: 'x' }] }, record(OR2))).toBeNull();
+    expect(diffResults({ ...record(OR2), status: 7 }, record(OR2))).toBeNull();
+    // a genuinely empty list is a valid, empty result
+    expect(diffResults({ ...record(OR2), minimal_cut_sets: [] }, { ...record(OR2), minimal_cut_sets: [] })!.cutSets.unchanged).toBe(0);
+  });
+
+  it('says what each run is, always, also when both are the same (Codex review)', () => {
+    const trunc = record(OR2, { status: 'truncated', completeness: 'truncated' });
+    const d = diffResults(trunc, trunc)!;
+    expect(d.status).toBeNull();
+    expect(d.runs).toEqual({ a: { status: 'truncated', completeness: 'truncated' }, b: { status: 'truncated', completeness: 'truncated' } });
+    const odd = diffResults(record(OR2, { completeness: undefined }), record(OR2))!;
+    expect(odd.runs.a.completeness).toBeNull();
+  });
+
+  it('"nothing differs" is not "the same": method, engine and engine build must be stated in both records (Codex review)', () => {
+    const base = record(OR2);
+    expect(diffResults(base, record(OR2))!.sameInputs).toBe(true);
+    const noMethod = { ...record(OR2) } as Record<string, unknown>;
+    delete noMethod.method;
+    expect(diffResults(noMethod, { ...noMethod })!.sameInputs).toBe(false);
+    expect(diffResults(base, noMethod)!.sameInputs).toBe(false);
+    const noEngine = { ...record(OR2) } as Record<string, unknown>;
+    delete noEngine.engine;
+    expect(diffResults(noEngine, { ...noEngine })!.sameInputs).toBe(false);
+    // same name and version, a different build of the binary
+    const otherBuild = record(OR2, { engine: { name: 'SCRAM', version: '0.16.2', sha256: 'build-2' } });
+    expect(diffResults(base, otherBuild)!.sameInputs).toBe(false);
+    const noBuild = record(OR2, { engine: { name: 'SCRAM', version: '0.16.2' } });
+    expect(diffResults(noBuild, { ...noBuild })!.sameInputs).toBe(false);
+    // no model hash
+    const noHash = record(OR2, { input_hashes: {} });
+    expect(diffResults(noHash, { ...noHash })!.sameInputs).toBe(false);
   });
 });
