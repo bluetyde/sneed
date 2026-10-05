@@ -54,6 +54,9 @@ export class Editor {
   runs: RunInfo[] = [];
   comparison: Comparison | null = null;
   compareError: string | null = null;
+  /** Why the list of saved runs could not be read (shown instead of "no saved runs"). */
+  runsError: string | null = null;
+  private compareSeq = 0;
 
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
@@ -354,17 +357,20 @@ export class Editor {
   async refreshRuns(): Promise<void> {
     try {
       this.runs = await this.api.listRuns();
+      this.runsError = null;
     } catch (e) {
       this.runs = [];
-      this.compareError = `Could not list the saved runs: ${(e as Error).message}`;
+      this.runsError = `Could not list the saved runs: ${(e as Error).message}`;
     }
     this.emit();
   }
   /** Loads two saved runs and works out what differs. `a` is shown as the earlier run and `b` as the later one. */
   async compareRuns(idA: string, idB: string): Promise<boolean> {
     this.compareError = null;
+    const mine = ++this.compareSeq; // only the newest request may show its answer
     try {
       const [a, b] = await Promise.all([this.api.loadRun(idA), this.api.loadRun(idB)]);
+      if (mine !== this.compareSeq) return false;
       const parse = (t: string): unknown => {
         try {
           return JSON.parse(t);
@@ -376,6 +382,7 @@ export class Editor {
       this.emit();
       return true;
     } catch (e) {
+      if (mine !== this.compareSeq) return false;
       this.comparison = null;
       this.compareError = `Could not load the runs: ${(e as Error).message}`;
       this.emit();
@@ -383,6 +390,7 @@ export class Editor {
     }
   }
   clearComparison(): void {
+    this.compareSeq++; // a request still in flight must not bring the comparison back
     if (!this.comparison && !this.compareError) return;
     this.comparison = null;
     this.compareError = null;

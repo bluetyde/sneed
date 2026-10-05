@@ -71,7 +71,7 @@ test.describe('compare saved runs', () => {
     const runs = path.join(srv.dir, 'runs');
     const ids = ['9999-01-01T00-00-00-000Z-fake-a', '9999-01-01T00-00-01-000Z-fake-b'];
     const rec = (p: number): string =>
-      JSON.stringify({ schema_version: 1, status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: p, assumptions: {}, engine: { name: 'SCRAM', version: '0.16.2' }, input_hashes: { model_hash: 'same' }, minimal_cut_sets: [{ events: ['E1'], probability: p }] });
+      JSON.stringify({ schema_version: 1, status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: p, assumptions: {}, engine: { name: 'SCRAM', version: '0.16.2', sha256: 'b'.repeat(64) }, input_hashes: { model_hash: 'same' }, minimal_cut_sets: [{ events: ['E1'], probability: p }] });
     try {
       ids.forEach((id, i) => {
         mkdirSync(path.join(runs, id, 'native'), { recursive: true });
@@ -86,5 +86,36 @@ test.describe('compare saved runs', () => {
     } finally {
       for (const id of ids) rmSync(path.join(runs, id), { recursive: true, force: true });
     }
+  });
+
+  test('two runs that are not complete results are said to be diagnostic only, and the state of each run is always stated', async ({ app, page, srv }) => {
+    const runs = path.join(srv.dir, 'runs');
+    const ids = ['9999-01-01T00-00-10-000Z-fake-c', '9999-01-01T00-00-11-000Z-fake-d'];
+    const rec = (p: number): string =>
+      JSON.stringify({ schema_version: 1, status: 'truncated', completeness: 'truncated', method: 'exact', top_event_probability: p, assumptions: {}, engine: { name: 'SCRAM', version: '0.16.2', sha256: 'b'.repeat(64) }, input_hashes: { model_hash: 'm' + p }, minimal_cut_sets: [{ events: ['E1'], probability: p }] });
+    try {
+      ids.forEach((id, i) => {
+        mkdirSync(path.join(runs, id, 'native'), { recursive: true });
+        writeFileSync(path.join(runs, id, 'results.json'), rec(i === 0 ? 0.1 : 0.2));
+        writeFileSync(path.join(runs, id, 'native', 'model.json'), JSON.stringify({ events: [{ id: 'E1', probability: 0.1 }], gates: [], top: 'E1' }));
+      });
+      await app.open();
+      await app.tab('compare');
+      await page.getByTestId('compare-go').click();
+      await expect(page.getByTestId('compare-states')).toContainText('Earlier run: truncated / truncated. Later run: truncated / truncated.');
+      await expect(page.getByTestId('compare-not-complete')).toContainText('diagnosis only');
+      await expect(page.getByTestId('compare-which')).toHaveAttribute('data-a', ids[0]!);
+      await expect(page.getByTestId('compare-which')).toHaveAttribute('data-b', ids[1]!);
+    } finally {
+      for (const id of ids) rmSync(path.join(runs, id), { recursive: true, force: true });
+    }
+  });
+
+  test('a failure to read the list of saved runs is shown as that, not as "no saved runs"', async ({ app, page }) => {
+    await page.route('**/api/runs', (route) => route.abort());
+    await app.open();
+    await app.tab('compare');
+    await expect(page.getByTestId('runs-error')).toContainText('Could not list the saved runs');
+    await expect(page.getByTestId('compare-need-two')).toHaveCount(0);
   });
 });

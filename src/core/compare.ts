@@ -33,6 +33,8 @@ export interface CutSetChange {
 export interface ResultDiff {
   status: Change<string> | null;
   completeness: Change<string> | null;
+  /** What each run is, always: a comparison of numbers must say whether each side is a complete result. */
+  runs: { a: { status: string | null; completeness: string | null }; b: { status: string | null; completeness: string | null } };
   method: Change<string> | null;
   probability: { from: number | null; to: number | null; delta: number | null; ratio: number | null };
   cutSets: { added: { events: string[]; probability: number }[]; removed: { events: string[]; probability: number }[]; changed: CutSetChange[]; unchanged: number };
@@ -40,7 +42,7 @@ export interface ResultDiff {
   engine: Change<string> | null;
   /** The two runs analysed the same model (same semantic hash). */
   sameModel: boolean;
-  /** Same model, same method, same engine: any difference in the numbers is then unexpected and worth investigating. */
+  /** Same model, same method and same engine build, each stated in both records: any difference in the numbers is then unexpected. */
   sameInputs: boolean;
 }
 
@@ -107,18 +109,20 @@ export function diffModels(a: unknown, b: unknown): ModelDiff | null {
 
 const key = (events: string[]): string => JSON.stringify([...events].sort());
 
+/** The part of a results record the comparison relies on. A record without it is unreadable, not "empty". */
+function usable(r: unknown): r is Record<string, unknown> {
+  if (!isObj(r) || !str(r.status) || !Array.isArray(r.minimal_cut_sets)) return false;
+  return r.minimal_cut_sets.every((c) => isObj(c) && Array.isArray(c.events) && c.events.every(str) && num(c.probability));
+}
+
 export function diffResults(a: unknown, b: unknown): ResultDiff | null {
-  if (!isObj(a) || !isObj(b)) return null;
+  if (!usable(a) || !usable(b)) return null;
   const change = (f: unknown, t: unknown): Change<string> | null => (str(f) && str(t) && f !== t ? { from: f, to: t } : null);
   const pa = num(a.top_event_probability) ? a.top_event_probability : null;
   const pb = num(b.top_event_probability) ? b.top_event_probability : null;
   const sets = (r: Record<string, unknown>): Map<string, { events: string[]; probability: number }> => {
     const m = new Map<string, { events: string[]; probability: number }>();
-    if (Array.isArray(r.minimal_cut_sets)) {
-      for (const c of r.minimal_cut_sets) {
-        if (isObj(c) && Array.isArray(c.events) && c.events.every(str) && num(c.probability)) m.set(key(c.events as string[]), { events: [...(c.events as string[])].sort(), probability: c.probability });
-      }
-    }
+    for (const c of r.minimal_cut_sets as { events: string[]; probability: number }[]) m.set(key(c.events), { events: [...c.events].sort(), probability: c.probability });
     return m;
   };
   const sa = sets(a);
@@ -147,6 +151,8 @@ export function diffResults(a: unknown, b: unknown): ResultDiff | null {
   }
 
   const eng = (r: Record<string, unknown>): string | null => (isObj(r.engine) && str(r.engine.name) && str(r.engine.version) ? `${r.engine.name} ${r.engine.version}` : null);
+  const build = (r: Record<string, unknown>): string | null => (isObj(r.engine) && str(r.engine.sha256) && r.engine.sha256 !== '' ? r.engine.sha256 : null);
+  const state = (r: Record<string, unknown>): { status: string | null; completeness: string | null } => ({ status: str(r.status) ? r.status : null, completeness: str(r.completeness) ? r.completeness : null });
   const ea = eng(a);
   const eb = eng(b);
   const hash = (r: Record<string, unknown>): string | null => (isObj(r.input_hashes) && str(r.input_hashes.model_hash) ? r.input_hashes.model_hash : null);
@@ -155,15 +161,19 @@ export function diffResults(a: unknown, b: unknown): ResultDiff | null {
   const sameModel = ha !== null && ha === hb;
   const method = change(a.method, b.method);
   const engine = ea !== null && eb !== null && ea !== eb ? { from: ea, to: eb } : null;
+  // "nothing differs" is not "the same": method, engine name and version and the engine build must each be present in both records and equal
+  const sameEngine = ea !== null && ea === eb && build(a) !== null && build(a) === build(b);
+  const sameMethod = str(a.method) && a.method === b.method;
   return {
     status: change(a.status, b.status),
     completeness: change(a.completeness, b.completeness),
+    runs: { a: state(a), b: state(b) },
     method,
     probability: { from: pa, to: pb, delta: pa !== null && pb !== null ? pb - pa : null, ratio: pa !== null && pb !== null && pa !== 0 ? pb / pa : null },
     cutSets: cut,
     assumptions,
     engine,
     sameModel,
-    sameInputs: sameModel && method === null && engine === null,
+    sameInputs: sameModel && sameMethod && sameEngine,
   };
 }

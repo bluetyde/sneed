@@ -33,7 +33,7 @@ export class ComparePanel {
       this.b = ids[0] ?? '';
       this.a = ids[1] ?? '';
     }
-    const sig = JSON.stringify([ids, this.a, this.b, ed.comparison?.a.id, ed.comparison?.b.id, ed.compareError]);
+    const sig = JSON.stringify([ids, this.a, this.b, ed.comparison?.a.id, ed.comparison?.b.id, ed.compareError, ed.runsError]);
     if (sig === this.signature) return;
     this.signature = sig;
     rerender(this.el, () => this.content());
@@ -55,7 +55,10 @@ export class ComparePanel {
     const out: Child[] = [
       h('p', { class: 'hint' }, 'Compare two saved runs. Each run keeps the exact model it analysed. Differences are shown as differences: nothing here says one run is better or safer.'),
     ];
+    // a failure to read the list is shown as that, never as "no saved runs"
+    if (ed.runsError) out.push(h('div', { class: 'notice error', role: 'alert', 'data-testid': 'runs-error' }, ed.runsError));
     if (ed.runs.length < 2) {
+      if (ed.runsError) return out;
       out.push(h('p', { class: 'empty-state', 'data-testid': 'compare-need-two' }, ed.runs.length === 0 ? 'No saved runs yet. Press Run, change something, and run again.' : 'Only one saved run so far. Change something and run again to compare.'));
       return out;
     }
@@ -78,6 +81,11 @@ export class ComparePanel {
     const out: Child[] = [];
     const r = c.result;
     const m = c.model;
+    const named = (id: string): string => {
+      const info = this.editor.runs.find((x) => x.id === id);
+      return info ? label(info) : id;
+    };
+    out.push(h('p', { 'data-testid': 'compare-which', 'data-a': c.a.id, 'data-b': c.b.id }, h('strong', {}, 'Earlier: '), named(c.a.id), h('br'), h('strong', {}, 'Later: '), named(c.b.id)));
     out.push(h('h2', {}, 'Result'));
     if (!r) out.push(h('p', { class: 'caveat', role: 'status' }, 'A results file could not be read, so the results are not compared.'));
     else {
@@ -89,8 +97,13 @@ export class ComparePanel {
             ? `Top probability: unchanged at ${fmt(p.to)}.`
             : `Top probability: ${fmt(p.from)} then ${fmt(p.to)} (change ${signed(p.delta!)}${p.ratio !== null ? `, ${fmt(p.ratio)} times the earlier value` : ''}).`;
       out.push(h('p', { 'data-testid': 'compare-probability', 'data-from': String(p.from), 'data-to': String(p.to) }, sentence));
-      if (r.status) out.push(h('p', {}, `Status: ${r.status.from} then ${r.status.to}.`));
-      if (r.completeness) out.push(h('p', {}, `Completeness: ${r.completeness.from} then ${r.completeness.to}.`));
+      // each run's own state is always stated, also when both are the same
+      const st = (x: { status: string | null; completeness: string | null }): string => `${x.status ?? 'unknown status'} / ${x.completeness ?? 'unknown completeness'}`;
+      out.push(h('p', { 'data-testid': 'compare-states' }, `Earlier run: ${st(r.runs.a)}. Later run: ${st(r.runs.b)}.`));
+      const solid = (x: { status: string | null; completeness: string | null }): boolean => x.status === 'completed' && x.completeness === 'complete';
+      if (!solid(r.runs.a) || !solid(r.runs.b)) {
+        out.push(h('div', { class: 'caveat', role: 'status', 'data-testid': 'compare-not-complete' }, h('strong', {}, 'Not a complete result. '), 'At least one of these runs did not finish as completed and complete. Its numbers are for diagnosis only, so the differences below do not describe two valid analyses.'));
+      }
       if (r.method) out.push(h('p', {}, `Method: ${r.method.from} then ${r.method.to}.`));
       if (r.engine) out.push(h('p', {}, `Engine: ${r.engine.from} then ${r.engine.to}.`));
       if (r.sameInputs && p.delta !== null && p.delta !== 0) {

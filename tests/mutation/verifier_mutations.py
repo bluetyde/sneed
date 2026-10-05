@@ -236,9 +236,7 @@ MUTATIONS = [
     ("compare: a name change makes the models differ", CM, "events.changed.filter((e) => e.probability).length;", "events.changed.length;"),
     ("compare: cut-set identity depends on event order", CM, "const key = (events: string[]): string => JSON.stringify([...events].sort());", "const key = (events: string[]): string => JSON.stringify(events);"),
     ("compare: a changed cut-set probability is not noticed", CM, "else if (w.probability !== v.probability) cut.changed.push(", "else if (false as boolean) cut.changed.push("),
-    ("compare: same inputs ignores the method", CM, "sameInputs: sameModel && method === null && engine === null,", "sameInputs: sameModel && engine === null,"),
     ("compare: a ratio is given for a zero earlier value", CM, "ratio: pa !== null && pb !== null && pa !== 0 ? pb / pa : null", "ratio: pa !== null && pb !== null ? pb / pa : null"),
-    ("compare: hostile cut sets are accepted", CM, "if (isObj(c) && Array.isArray(c.events) && c.events.every(str) && num(c.probability))", "if (isObj(c))"),
     # (no mutation for the dirname check in runs.ts runDir: RUN_ID and the ".." test already refuse every path, so removing it changes nothing; it stays as defence in depth)
     ("runs: a damaged run is listed", SR, "if (!isObj(rec) || rec.schema_version !== 1) continue;", ""),
     ("runs: listing is oldest first", SR, ".sort().reverse().slice(0, MAX_LISTED_RUNS * 2)", ".sort().slice(0, MAX_LISTED_RUNS * 2)"),
@@ -247,20 +245,41 @@ MUTATIONS = [
     ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
     # SEED side (plan 11): the headless runner and the generated oracle entries
     ("headless: a truncated result is written as a result", HL, "if (rec.status !== 'completed' || rec.completeness !== 'complete') {", "if (rec.status !== 'completed') {"),
-    ("headless: the active-run record is not written before the engine", HL, "writeFileSync(path.join(outDir, 'active-run.json'), JSON.stringify({ workId, workDir }, null, 2) + '\\n');", ""),
-    ("headless: cancel trusts a record that points elsewhere", HL, " || active.workDir !== expected) return fail('E_NOT_OWNED'", ") return fail('E_NOT_OWNED'"),
-    ("headless: cancel claims the engine stopped without checking", HL, "nativeStopped: !alive,", "nativeStopped: true,"),
-    ("headless: an existing result folder is overwritten", HL, "if (existsSync(finalDir)) return fail('E_EXISTS', 'the output folder already exists');", ""),
     ("headless: an invalid model reaches the engine", HL, "if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);\n    let engine: EngineConfig;", "let engine: EngineConfig;"),
     ("headless: model text is not labelled as app content", HL, "  source: 'app-content',\n", ""),
     ("headless: SEED's schema code is not used", HL, "code: i.code === 'E_SCHEMA' ? 'E_SCHEMA_INVALID' : i.code,", "code: i.code,"),
     ("headless: a run id with a path is accepted", HL, "if (!RUN_ID.test(runId))", "if (false as boolean)"),
     ("headless: the timeout is not bounded", HL, "if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 10 || timeoutSeconds > 86400)", "if (false as boolean)"),
     ("headless: an unexpected failure leaks its text", HL, "message: 'the runner failed unexpectedly'", "message: String(e)"),
-    ("headless: the cancel flag is ignored while running", HL, "if (existsSync(flag)) abort.abort();", ""),
     ("seed oracle: the tolerance pin leaves out the expected value", SO, "sha256(canon({ expected, tolerance }))", "sha256(canon({ tolerance }))"),
     ("seed oracle: approximation rows are exported", SO, "x.type === 'numerical' && x.method === 'exact'", "x.type === 'numerical'"),
-    ("engine: hasOwned never sees a live process", N, "return r.status === 0; // pgrep: 0 = at least one match, 1 = none", "return false;", PROCESS),
+    ("compare: same inputs ignores the method", CM, "sameInputs: sameModel && sameMethod && sameEngine,", "sameInputs: sameModel && sameEngine,"),
+    ("compare: same inputs ignores the engine build", CM, "const sameEngine = ea !== null && ea === eb && build(a) !== null && build(a) === build(b);", "const sameEngine = ea !== null && ea === eb;"),
+    ("compare: hostile cut sets are accepted", CM, "return r.minimal_cut_sets.every((c) => isObj(c) && Array.isArray(c.events) && c.events.every(str) && num(c.probability));", "return true;"),
+    ("compare: a record without cut sets is accepted", CM, "if (!isObj(r) || !str(r.status) || !Array.isArray(r.minimal_cut_sets)) return false;", "if (!isObj(r)) return false;"),
+    ("compare: the state of each run is not reported", CM, "runs: { a: state(a), b: state(b) },", "runs: { a: { status: null, completeness: null }, b: { status: null, completeness: null } },"),
+    ("headless: the active-run record is not written before the engine", HL, "writeFileSync(activeFile, activeText({ workId, workDir, pid: process.pid, state: 'running' }), { flag: 'wx' });", ""),
+    ("headless: the run record may be replaced by a second run", HL, "state: 'running' }), { flag: 'wx' });", "state: 'running' }), { flag: 'w' });"),
+    ("headless: cancel trusts a record that points elsewhere", HL, " || a.workDir !== expected ||", " ||"),
+    ("headless: cancel claims the engine stopped without checking", HL, "nativeStopped: confirmed,", "nativeStopped: true,"),
+    ("headless: an existing result folder is overwritten", HL, "for (const p of [finalDir, workRoot, flag]) {", "for (const p of [workRoot, flag]) {"),
+    ("headless: the cancel flag is ignored while running", HL, "if (readFlag(flag) === workId) abort.abort();", ""),
+    ("headless: any cancel request stops a run", HL, "if (readFlag(flag) === workId) abort.abort();", "if (readFlag(flag) !== null) abort.abort();"),
+    ("headless: a failed process query counts as no process", HL, "probeFailed = true; // the state of the engine is not known", "probeFailed = false;"),
+    ("headless: cancel confirms before the run process is gone", HL, "confirmed = !probeFailed && !owned && (retired || !deps.pidAlive(rec.pid));", "confirmed = !probeFailed && !owned;"),
+    ("headless: an ended run is cancelled again", HL, "if (rec.state === 'ended') return reply(", "if (false as boolean) return reply("),
+    ("headless: a link in the output folder is followed", HL, "return fail(isLink(p) ? 'E_PATH_TRAVERSAL' : 'E_EXISTS',", "return fail('E_EXISTS',"),
+    ("headless: the run record is never retired", HL, "writeAtomic(activeFile, activeText({ workId, workDir, pid: process.pid, state: 'ended', status: ended }));", ""),
+    ("headless: an unreadable run record means no run", HL, "if ((e as NodeJS.ErrnoException).code === 'ENOENT') return reply(", "if (true as boolean) return reply("),
+    ("engine: hasOwned never sees a live process", N, "return r.status === 0;", "return false;", PROCESS),
+    ("engine: a failed process query is read as no process", N, "if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) throw new Error('the process query failed');", "", PROCESS),
+    ("runs: a link inside the runs folder is followed", SR, "if (lstatSync(cur).isSymbolicLink()) throw new Error('a link');", ""),
+    ("runs: a model that is not JSON is served", SR, "JSON.parse(model_text); // the model of a run is a JSON document; anything else is not served", ""),
+    ("editor: a slow older comparison replaces a newer one", WE, "await Promise.all([this.api.loadRun(idA), this.api.loadRun(idB)]);\n      if (mine !== this.compareSeq) return false;", "await Promise.all([this.api.loadRun(idA), this.api.loadRun(idB)]);"),
+    ("editor: clearing does not cancel a comparison in flight", WE, "this.compareSeq++; // a request still in flight must not bring the comparison back", ""),
+    ("editor: a listing failure is shown as a comparison failure", WE, "this.runsError = `Could not list the saved runs: ${(e as Error).message}`;", "this.compareError = `Could not list the saved runs: ${(e as Error).message}`;"),
+    ("ui compare: a listing failure is not shown", WK, "if (ed.runsError) out.push(h('div', { class: 'notice error', role: 'alert', 'data-testid': 'runs-error' }, ed.runsError));", "", E2E),
+    ("ui compare: no warning for runs that are not complete", WK, "if (!solid(r.runs.a) || !solid(r.runs.b)) {", "if (false as boolean) {", E2E),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -312,9 +331,9 @@ def main() -> int:
         web = {WD, WV, WE, WC, WP, WS, WR, WL, SL, SA, ST, CM, SR, WK}
         chosen = [m for m in MUTATIONS if m[1] in web]
     if only == "compare":  # just the compare-runs mutations
-        chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:")) or m[0] == "editor: a failed comparison keeps showing the old one"]
+        chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:", "editor: a failed comparison", "editor: a slow older", "editor: clearing does not", "editor: a listing failure"))]
     if only == "seed":  # just the SEED-side mutations
-        chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned"))]
+        chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process"))]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
