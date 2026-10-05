@@ -280,6 +280,14 @@ MUTATIONS = [
     ("editor: a listing failure is shown as a comparison failure", WE, "this.runsError = `Could not list the saved runs: ${(e as Error).message}`;", "this.compareError = `Could not list the saved runs: ${(e as Error).message}`;"),
     ("ui compare: a listing failure is not shown", WK, "if (ed.runsError) out.push(h('div', { class: 'notice error', role: 'alert', 'data-testid': 'runs-error' }, ed.runsError));", "", E2E),
     ("ui compare: no warning for runs that are not complete", WK, "if (!solid(r.runs.a) || !solid(r.runs.b)) {", "if (false as boolean) {", E2E),
+    ("headless: a staging folder that is not ours is deleted", HL, "if (stagingOwned && !(e instanceof Unsafe)) {", "if (!(e instanceof Unsafe)) {"),
+    ("headless: a failed publication is recorded as completed", HL, "ended = 'failed'; // decided before any cleanup, so a cleanup error cannot leave the record saying \"completed\"", ""),
+    ("headless: a staging folder swapped for a link is published", HL, "if (isLink(staging) || !isInside(outDir, staging) || [", "if (["),
+    ("headless: a missing output folder is not created", HL, "mkdirSync(outDir, { recursive: true });", ""),
+    # (no mutation for the non-EEXIST branch of the run-record reservation: it handles EACCES or a full disk, which a unit test cannot cause without a test seam)
+    ("headless: another record in its place confirms a cancel", HL, "return r.state === 'ended' && r.workId === rec.workId && r.workDir === rec.workDir && r.pid === rec.pid;", "return r.state === 'ended';"),
+    ("runs: the file read is not checked against the path afterwards", SR, "const again = plainPath(dir, ...parts); // the path must still be plain and inside the runs folder", "const again = file;"),
+    ("runs: a replaced file is not noticed", SR, "if (now.ino !== st.ino || now.dev !== st.dev) throw new Error('the file was replaced while it was read');", ""),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),

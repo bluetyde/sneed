@@ -527,6 +527,84 @@ describe('one run per folder, and nothing followed or replaced (Codex review)', 
   });
 });
 
+
+describe('second Codex review', () => {
+  it('only a staging folder this run created is ever deleted (unowned data survives)', async () => {
+    const theirs = path.join(out, '.pra.tmp-000000000001'); // exactly where this run would stage its result
+    mkdirSync(theirs);
+    writeFileSync(path.join(theirs, 'sentinel.txt'), 'not yours');
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_APP_FAILED');
+    expect(readFileSync(path.join(theirs, 'sentinel.txt'), 'utf8')).toBe('not yours');
+    expect(existsSync(path.join(out, 'pra'))).toBe(false);
+  });
+
+  it('a failed publication is recorded as failed, never as the completed status the engine reported', async () => {
+    const { d, calls } = deps({
+      analyze: async (_t, opts) => {
+        mkdirSync(path.join(out, 'pra')); // the destination appears while the engine runs
+        return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record() };
+      },
+    });
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_EXISTS');
+    expect(JSON.parse(readFileSync(path.join(out, 'active-run.json'), 'utf8'))).toMatchObject({ state: 'ended', status: 'failed' });
+  });
+
+  it('a staging folder replaced by a link before publication is not published and nothing is deleted through it', async () => {
+    const outside = path.join(tmp, 'outside-stage');
+    mkdirSync(outside);
+    writeFileSync(path.join(outside, 'keep.txt'), 'keep');
+    const { d, calls } = deps({
+      afterStage: (staging) => {
+        // the files are moved into the link's target first, so each one is "really inside" whatever the staging path now names
+        for (const f of readdirSync(staging)) writeFileSync(path.join(outside, f), readFileSync(path.join(staging, f)));
+        rmSync(staging, { recursive: true, force: true });
+        symlinkSync(outside, staging, 'junction');
+      },
+    });
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_PATH_TRAVERSAL');
+    expect(existsSync(path.join(out, 'pra'))).toBe(false);
+    expect(readFileSync(path.join(outside, 'keep.txt'), 'utf8')).toBe('keep'); // nothing was deleted through the link
+    expect(JSON.parse(readFileSync(path.join(out, 'active-run.json'), 'utf8')).status).toBe('failed');
+  });
+
+  it('an output folder that does not exist yet is created', async () => {
+    const fresh = path.join(tmp, 'new', 'deeper', 'run');
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', fresh], d)).toBe(0);
+    expect(reply(calls)).toMatchObject({ ok: true, status: 'completed' });
+    expect(existsSync(path.join(fresh, 'pra', 'manifest.json'))).toBe(true);
+  });
+
+  it('a run record that cannot be created for another reason is not called "already exists"', async () => {
+    const asFile = path.join(tmp, 'a-file');
+    writeFileSync(asFile, 'x');
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', asFile], d)).toBe(1);
+    expect(reply(calls).errors[0].code).toBe('E_APP_FAILED');
+    expect(calls.analyze).toHaveLength(0);
+  });
+
+  it("another run's retired record in its place does not confirm this run is gone", async () => {
+    const dir = path.join(out, 'work', 'pra-0123456789ab');
+    writeFileSync(path.join(out, 'active-run.json'), JSON.stringify({ workId: 'pra-0123456789ab', workDir: dir, pid: 4242, state: 'running' }));
+    let looks = 0;
+    const c = deps({
+      pidAlive: () => true, // this run's process is still there
+      settleMs: 600,
+      hasOwned: () => {
+        if (looks++ === 0) writeFileSync(path.join(out, 'active-run.json'), JSON.stringify({ workId: 'pra-ffffffffffff', workDir: path.join(out, 'work', 'pra-ffffffffffff'), pid: 9, state: 'ended', status: 'completed' }));
+        return false;
+      },
+    });
+    expect(await main(['cancel', '--out', out], c.d)).toBe(0);
+    expect(reply(c.calls)).toMatchObject({ cancelled: true, nativeStopped: false });
+  });
+});
+
 describe('the verb set', () => {
   it('an unknown verb is E_VERB_UNKNOWN (exit 2)', async () => {
     const c = deps();

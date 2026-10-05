@@ -1,6 +1,6 @@
 // Read-only access to the saved run folders (runs/<id>/{native/model.json, results.json}) for the Compare view.
 // An id is a plain folder name; the resolved path must stay directly inside the runs folder. Nothing here writes.
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -52,10 +52,31 @@ function plainPath(dir: string, ...parts: string[]): string {
   return cur;
 }
 
-function readJsonFile(file: string): unknown {
-  const st = statSync(file);
-  if (!st.isFile() || st.size > MAX_FILE_BYTES) throw new Error('missing or too large');
-  return JSON.parse(readFileSync(file, 'utf8'));
+/**
+ * Reads a file below the runs folder through one open handle and checks that the path still names the file that was read.
+ * `afterCheck` is a test seam, called between the path check and the open. A swap after the final check of the open file
+ * is a documented limit (Node has no no-follow open on Windows); the point is to make an ordinary replacement visible.
+ */
+function readPlain(dir: string, parts: string[], afterCheck?: () => void, afterRead?: () => void): string {
+  const file = plainPath(dir, ...parts);
+  afterCheck?.();
+  const fd = openSync(file, 'r');
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.size > MAX_FILE_BYTES) throw new Error('missing or too large');
+    const text = readFileSync(fd, 'utf8');
+    afterRead?.(); // test seam
+    const again = plainPath(dir, ...parts); // the path must still be plain and inside the runs folder
+    const now = statSync(again);
+    if (now.ino !== st.ino || now.dev !== st.dev) throw new Error('the file was replaced while it was read');
+    return text;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readJsonFile(dir: string, parts: string[], afterCheck?: () => void): unknown {
+  return JSON.parse(readPlain(dir, parts, afterCheck));
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -69,11 +90,11 @@ export function listRuns(dir: string): RunInfo[] {
     if (out.length >= MAX_LISTED_RUNS) break;
     const d = path.join(dir, id);
     try {
-      const rec = readJsonFile(plainPath(dir, id, 'results.json'));
+      const rec = readJsonFile(dir, [id, 'results.json']);
       if (!isObj(rec) || rec.schema_version !== 1) continue;
       let model_name: string | null = null;
       try {
-        const m = readJsonFile(plainPath(dir, id, 'native', 'model.json'));
+        const m = readJsonFile(dir, [id, 'native', 'model.json']);
         if (isObj(m) && isObj(m.model) && typeof m.model.name === 'string') model_name = m.model.name.slice(0, 200);
       } catch {
         /* the model file is optional for the list */
@@ -97,14 +118,12 @@ export function listRuns(dir: string): RunInfo[] {
 }
 
 /** One run: the model text exactly as it was submitted and the results record. */
-export function readRun(dir: string, id: string): { id: string; model_text: string; record: unknown } {
+export function readRun(dir: string, id: string, afterCheck?: () => void, afterRead?: () => void): { id: string; model_text: string; record: unknown } {
   const d = runDir(dir, id);
   if (!existsSync(d)) throw new RunsError('E_NOT_FOUND', `no saved run called ${id}`);
   try {
-    const record = readJsonFile(plainPath(dir, id, 'results.json'));
-    const modelFile = plainPath(dir, id, 'native', 'model.json');
-    if (statSync(modelFile).size > MAX_FILE_BYTES) throw new Error('too large');
-    const model_text = readFileSync(modelFile, 'utf8');
+    const record = readJsonFile(dir, [id, 'results.json']);
+    const model_text = readPlain(dir, [id, 'native', 'model.json'], afterCheck, afterRead);
     JSON.parse(model_text); // the model of a run is a JSON document; anything else is not served
     return { id, model_text, record };
   } catch {
