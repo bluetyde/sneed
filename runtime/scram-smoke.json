@@ -1,0 +1,80 @@
+{
+  "description": "Native checks run against a freshly built engine before it can be activated. Expected values are the hand-derived numbers frozen in tests/oracles.json (not engine output); a unit test keeps this file consistent with that file.",
+  "assumptions": { "probability_model": "constant", "independence": "declared-independent", "coherence": "coherent", "time": "none" },
+  "cases": [
+    {
+      "id": "pra-and",
+      "method": "exact",
+      "top": "TOP",
+      "events": { "A": 0.1, "B": 0.2 },
+      "gates": [{ "id": "TOP", "type": "and", "inputs": ["A", "B"] }],
+      "expected_probability": 0.02,
+      "expected_cut_sets": [["A", "B"]]
+    },
+    {
+      "id": "pra-pump1",
+      "method": "exact",
+      "top": "P",
+      "events": { "P": 0.1 },
+      "gates": [],
+      "expected_probability": 0.1,
+      "expected_cut_sets": [["P"]]
+    },
+    {
+      "id": "pra-pump3-shared",
+      "method": "exact",
+      "top": "TOP",
+      "events": { "P1": 0.1, "P2": 0.1, "S": 0.05 },
+      "gates": [
+        { "id": "TOP", "type": "or", "inputs": ["S", "PUMPS"] },
+        { "id": "PUMPS", "type": "and", "inputs": ["P1", "P2"] }
+      ],
+      "expected_probability": 0.0595,
+      "expected_cut_sets": [["S"], ["P1", "P2"]]
+    },
+    {
+      "id": "pra-pump3-separate",
+      "method": "exact",
+      "top": "TOP",
+      "events": { "P1": 0.1, "P2": 0.1, "S1": 0.05, "S2": 0.05 },
+      "gates": [
+        { "id": "TOP", "type": "and", "inputs": ["L", "R"] },
+        { "id": "L", "type": "or", "inputs": ["P1", "S1"] },
+        { "id": "R", "type": "or", "inputs": ["P2", "S2"] }
+      ],
+      "expected_probability": 0.021025,
+      "expected_cut_sets": [["P1", "P2"], ["P1", "S2"], ["P2", "S1"], ["S1", "S2"]]
+    },
+    {
+      "id": "pra-vote-exact",
+      "method": "exact",
+      "top": "V",
+      "events": { "A": 0.1, "B": 0.1, "C": 0.1 },
+      "gates": [{ "id": "V", "type": "atleast", "inputs": ["A", "B", "C"], "threshold": 2 }],
+      "expected_probability": 0.028,
+      "expected_cut_sets": [["A", "B"], ["A", "C"], ["B", "C"]]
+    },
+    {
+      "id": "pra-vote-mcub",
+      "method": "mcub",
+      "top": "V",
+      "events": { "A": 0.1, "B": 0.1, "C": 0.1 },
+      "gates": [{ "id": "V", "type": "atleast", "inputs": ["A", "B", "C"], "threshold": 2 }],
+      "expected_probability": 0.029701,
+      "expected_cut_sets": [["A", "B"], ["A", "C"], ["B", "C"]]
+    },
+    {
+      "id": "vote-over-gate-input",
+      "method": "exact",
+      "top": "TOP",
+      "events": { "A": 0.1, "B": 0.2, "C": 0.3 },
+      "gates": [
+        { "id": "TOP", "type": "atleast", "inputs": ["C", "A", "G0", "B"], "threshold": 2 },
+        { "id": "G0", "type": "or", "inputs": ["A", "C"] }
+      ],
+      "expected_probability": 0.37,
+      "expected_cut_sets": [["A"], ["C"]],
+      "note": "SCRAM 0.16.2's own atleast gets this wrong (docs/spike/README.md); the exporter must route around it"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "m1",
+    "name": "Fixture",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "declared-independent",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "A",
+      "probability": 0.1,
+      "x-owner": "student"
+    },
+    {
+      "id": "B",
+      "probability": 0.2
+    },
+    {
+      "id": "U",
+      "probability": 0.3
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "and",
+      "inputs": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "and",
+      "inputs": [
+        "A",
+        "B"
+      ]
+    }
+  ],
+  "layout": {
+    "nodes": [
+      {
+        "id": "GHOST",
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "references": [
+      {
+        "node": "r",
+        "target": "NOPE",
+        "x": 0,
+        "y": 0
+      }
+    ]
+  },
+  "x-note": {
+    "kept": true
+  }
+}

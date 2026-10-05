@@ -1,0 +1,33 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "declared-independent",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "A",
+      "probability": 0.1
+    },
+    {
+      "id": "B",
+      "probability": 0.2
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "and",
+      "inputs": [
+        "A",
+        "B"
+      ]
+    }
+  ]
+}

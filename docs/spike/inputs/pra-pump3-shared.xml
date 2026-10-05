@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<opsa-mef>
+<define-fault-tree name="FT">
+<define-gate name="TOP"><or><basic-event name="S"/><and><basic-event name="P1"/><basic-event name="P2"/></and></or></define-gate>
+<define-basic-event name="P1"><float value="0.1"/></define-basic-event><define-basic-event name="P2"><float value="0.1"/></define-basic-event><define-basic-event name="S"><float value="0.05"/></define-basic-event>
+</define-fault-tree>
+</opsa-mef>

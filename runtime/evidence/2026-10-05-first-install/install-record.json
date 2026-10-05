@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "20261005T120010Z-5683c1",
+  "artifact": {
+    "id": "scram",
+    "version": "0.16.2",
+    "recipe_revision": 1
+  },
+  "recipe_sha256": "abc0c314b4a244db07e03953a4e23c41d33ca25dbcba6de14c05616babcda226",
+  "prefix": "/root/sneed-runtime-test/scram/0.16.2-r1-20261005T120010Z-5683c1",
+  "state": "ready",
+  "step": null,
+  "started_at": "2026-10-05T12:00:10.848Z",
+  "updated_at": "2026-10-05T12:01:01.021Z",
+  "reasons": [],
+  "previous_active": null
+}

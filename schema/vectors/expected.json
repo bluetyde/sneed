@@ -1,0 +1,221 @@
+{
+ "bad/E_CYCLE__self.json": {
+  "errors": [
+   "E_CYCLE"
+  ],
+  "warnings": []
+ },
+ "bad/E_CYCLE__two-gates.json": {
+  "errors": [
+   "E_CYCLE"
+  ],
+  "warnings": []
+ },
+ "bad/E_DUP_ID__event-gate-clash.json": {
+  "errors": [
+   "E_DUP_ID"
+  ],
+  "warnings": []
+ },
+ "bad/E_DUP_ID__two-events.json": {
+  "errors": [
+   "E_DUP_ID"
+  ],
+  "warnings": []
+ },
+ "bad/E_DUP_ID__two-gates.json": {
+  "errors": [
+   "E_DUP_ID"
+  ],
+  "warnings": []
+ },
+ "bad/E_GATE_ARITY__and-one-input.json": {
+  "errors": [
+   "E_GATE_ARITY"
+  ],
+  "warnings": []
+ },
+ "bad/E_GATE_ARITY__or-no-inputs.json": {
+  "errors": [
+   "E_GATE_ARITY"
+  ],
+  "warnings": []
+ },
+ "bad/E_ID_FORMAT__dot.json": {
+  "errors": [
+   "E_ID_FORMAT"
+  ],
+  "warnings": []
+ },
+ "bad/E_ID_FORMAT__leading-digit.json": {
+  "errors": [
+   "E_ID_FORMAT"
+  ],
+  "warnings": []
+ },
+ "bad/E_MISSING_REF__gate-input.json": {
+  "errors": [
+   "E_MISSING_REF"
+  ],
+  "warnings": []
+ },
+ "bad/E_NO_TOP__missing.json": {
+  "errors": [
+   "E_NO_TOP"
+  ],
+  "warnings": []
+ },
+ "bad/E_NO_TOP__not-a-string.json": {
+  "errors": [
+   "E_NO_TOP"
+  ],
+  "warnings": []
+ },
+ "bad/E_NO_TOP__unknown-id.json": {
+  "errors": [
+   "E_NO_TOP"
+  ],
+  "warnings": []
+ },
+ "bad/E_PROB_RANGE__above-one.json": {
+  "errors": [
+   "E_PROB_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_PROB_RANGE__boolean.json": {
+  "errors": [
+   "E_PROB_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_PROB_RANGE__negative.json": {
+  "errors": [
+   "E_PROB_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_PROB_RANGE__string.json": {
+  "errors": [
+   "E_PROB_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__assumption-not-v1.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__gate-type-unknown.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__invalid-json.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__missing-model-block.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__not-an-object.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__schema-version-2.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__sourced-without-citation.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__threshold-on-and.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_VOTE_DUP__repeated-input.json": {
+  "errors": [
+   "E_VOTE_DUP"
+  ],
+  "warnings": []
+ },
+ "bad/E_VOTE_RANGE__k-1.json": {
+  "errors": [
+   "E_VOTE_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_VOTE_RANGE__k-equals-n.json": {
+  "errors": [
+   "E_VOTE_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_VOTE_RANGE__missing.json": {
+  "errors": [
+   "E_VOTE_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_VOTE_RANGE__non-integer.json": {
+  "errors": [
+   "E_VOTE_RANGE"
+  ],
+  "warnings": []
+ },
+ "good/and-duplicate-input.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/case-distinct-ids.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/id-64-chars.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/probability-bounds.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/pump3-shared.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/single-event-top.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/voting-2-of-3.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/warnings-only.json": {
+  "errors": [],
+  "warnings": [
+   "W_LAYOUT_STALE",
+   "W_LAYOUT_STALE",
+   "W_UNKNOWN_FIELD",
+   "W_UNKNOWN_FIELD",
+   "W_UNREACHABLE",
+   "W_UNREACHABLE"
+  ]
+ }
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/model-1.json",
+  "title": "SNEED native fault-tree model, schema version 1",
+  "description": "Structural rules only (docs/SCHEMA.md). Cross-reference checks (duplicate IDs, missing references, cycles, arity, voting range) are in src/core/validate.ts. Unknown fields are allowed and preserved.",
+  "type": "object",
+  "required": ["schema", "model", "assumptions", "top", "events", "gates"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "const": "sneed.fault-tree" },
+        "version": { "const": 1 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["id", "name", "created", "updated"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "created": { "type": "string", "minLength": 1 },
+        "updated": { "type": "string", "minLength": 1 }
+      }
+    },
+    "assumptions": {
+      "type": "object",
+      "required": ["probability_model", "independence", "coherence", "time"],
+      "properties": {
+        "probability_model": { "const": "constant" },
+        "independence": { "const": "declared-independent" },
+        "coherence": { "const": "coherent" },
+        "time": { "const": "none" }
+      }
+    },
+    "top": { "type": "string" },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/event" }
+    },
+    "gates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "layout": { "$ref": "#/$defs/layout" }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$"
+    },
+    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "event": {
+      "type": "object",
+      "required": ["id", "probability"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/label" },
+        "probability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": { "enum": ["synthetic", "sourced", "assumed"] },
+            "citation": { "type": "string" }
+          },
+          "if": { "properties": { "kind": { "const": "sourced" } }, "required": ["kind"] },
+          "then": { "required": ["citation"], "properties": { "citation": { "type": "string", "minLength": 1 } } }
+        },
+        "note": { "type": "string", "maxLength": 2000 },
+        "link": {
+          "type": "object",
+          "required": ["app", "component_id", "revision", "review"],
+          "properties": {
+            "app": { "type": "string", "minLength": 1 },
+            "component_id": { "type": "string", "minLength": 1 },
+            "revision": { "type": "string", "minLength": 1 },
+            "review": { "enum": ["reviewed", "needs-review"] }
+          }
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["id", "type", "inputs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/label" },
+        "type": { "enum": ["and", "or", "atleast"] },
+        "inputs": { "type": "array", "items": { "type": "string" } },
+        "threshold": {}
+      },
+      "if": { "properties": { "type": { "enum": ["and", "or"] } }, "required": ["type"] },
+      "then": { "properties": { "threshold": false } }
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "x", "y"],
+            "properties": { "id": { "type": "string" }, "x": { "type": "number" }, "y": { "type": "number" } }
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node", "target", "x", "y"],
+            "properties": {
+              "node": { "type": "string" },
+              "target": { "type": "string" },
+              "x": { "type": "number" },
+              "y": { "type": "number" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

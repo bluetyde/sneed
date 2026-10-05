@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/runtime-recipe-1.json",
+  "title": "SNEED runtime recipe, schema version 1",
+  "description": "Structural rules only. Cross-checks (placeholders, commit and lock hashes, shell refusal, phase order) are in src/runtime/recipe.ts. A recipe is trusted catalog content, never project or study content.",
+  "type": "object",
+  "required": ["schema", "artifact", "platform", "compatibility", "license", "trust", "sizes", "prerequisites", "steps", "outputs", "smoke"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": { "id": { "const": "sneed.runtime-recipe" }, "version": { "const": 1 } },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["id", "version", "recipe_revision", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "recipe_revision": { "type": "integer", "minimum": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "platform": {
+      "type": "object",
+      "required": ["os", "arch", "host"],
+      "properties": { "os": { "const": "linux" }, "arch": { "const": "x86_64" }, "host": { "const": "wsl2" } },
+      "additionalProperties": false
+    },
+    "compatibility": {
+      "type": "object",
+      "required": ["app", "native_model_schema", "exporter", "report_parser", "engine_version_regex"],
+      "properties": {
+        "app": { "const": "sneed" },
+        "native_model_schema": { "type": "integer", "minimum": 1 },
+        "exporter": { "type": "string", "minLength": 1 },
+        "report_parser": { "type": "string", "minLength": 1 },
+        "engine_version_regex": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "license": {
+      "type": "object",
+      "required": ["spdx", "evidence", "source_obligations"],
+      "properties": {
+        "spdx": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 },
+        "source_obligations": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "trust": {
+      "type": "object",
+      "required": ["source_url", "source_commit", "source_identity", "toolchain_channel", "toolchain_lock", "toolchain_lock_sha256", "authenticity"],
+      "properties": {
+        "source_url": { "type": "string", "pattern": "^https://" },
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "source_identity": { "type": "string", "minLength": 1 },
+        "toolchain_channel": { "type": "string", "pattern": "^https://" },
+        "toolchain_lock": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "toolchain_lock_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "authenticity": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "sizes": {
+      "type": "object",
+      "required": ["download_bytes", "expanded_bytes", "required_free_bytes"],
+      "properties": {
+        "download_bytes": { "type": "integer", "minimum": 0 },
+        "expanded_bytes": { "type": "integer", "minimum": 1 },
+        "required_free_bytes": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "prerequisites": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "fix"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "fix": { "type": "string", "minLength": 1 },
+          "var": { "enum": ["CONDA", "GIT"] },
+          "candidates": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^/" } },
+          "probe_args": { "type": "array", "items": { "type": "string" } },
+          "windows_probe": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "phase", "argv", "timeout_s"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "phase": { "enum": ["toolchain", "source", "build", "verify"] },
+          "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "env": { "type": "object", "additionalProperties": { "type": "string" } },
+          "timeout_s": { "type": "integer", "minimum": 1, "maximum": 14400 },
+          "expect_stdout_equals": { "type": "string" },
+          "expect_stdout_regex": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "required": ["binary", "library_dirs", "version_argv"],
+      "properties": {
+        "binary": { "type": "string", "pattern": "^[A-Za-z0-9._/-]+$" },
+        "library_dirs": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[A-Za-z0-9._/-]+$" } },
+        "version_argv": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "smoke": {
+      "type": "object",
+      "required": ["cases_file"],
+      "properties": { "cases_file": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" } },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

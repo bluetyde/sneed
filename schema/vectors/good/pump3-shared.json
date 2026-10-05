@@ -1,0 +1,88 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "m1",
+    "name": "Fixture",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "declared-independent",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "P1",
+      "probability": 0.1,
+      "name": "Pump 1",
+      "source": {
+        "kind": "synthetic"
+      },
+      "note": "lesson 2",
+      "link": {
+        "app": "nodal",
+        "component_id": "pump-1",
+        "revision": "r1",
+        "review": "needs-review"
+      }
+    },
+    {
+      "id": "P2",
+      "probability": 0.1
+    },
+    {
+      "id": "S",
+      "probability": 0.05,
+      "source": {
+        "kind": "sourced",
+        "citation": "NUREG/CR-6928 (example citation)"
+      }
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "or",
+      "inputs": [
+        "S",
+        "PUMPS"
+      ]
+    },
+    {
+      "id": "PUMPS",
+      "type": "and",
+      "inputs": [
+        "P1",
+        "P2"
+      ]
+    }
+  ],
+  "layout": {
+    "nodes": [
+      {
+        "id": "TOP",
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "PUMPS",
+        "x": 1,
+        "y": 1
+      }
+    ],
+    "references": [
+      {
+        "node": "ref-1",
+        "target": "S",
+        "x": 2,
+        "y": 1
+      }
+    ]
+  }
+}
