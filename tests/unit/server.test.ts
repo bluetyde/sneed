@@ -394,3 +394,110 @@ describe('lessons over the API', () => {
     }
   });
 });
+
+describe('saved runs over the API', () => {
+  const makeRun = (runs: string, id: string, rec: Record<string, unknown>, model: string | null = '{"model":{"name":"Pumps"},"events":[],"gates":[],"top":""}'): void => {
+    mkdirSync(path.join(runs, id, 'native'), { recursive: true });
+    writeFileSync(path.join(runs, id, 'results.json'), JSON.stringify(rec));
+    if (model !== null) writeFileSync(path.join(runs, id, 'native', 'model.json'), model);
+  };
+  const rec = (p: number): Record<string, unknown> => ({ schema_version: 1, status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: p, input_hashes: { model_hash: 'h' } });
+  const withRuns = async (setup: (runs: string) => void, fn: (url: string, runs: string) => Promise<void>): Promise<void> => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-runs-'));
+    const runs = path.join(dir, 'runs');
+    setup(runs);
+    const s = await startServer({ projectDir: path.join(dir, 'm'), runsDir: runs, runtimeEnv: { distro: 'Ubuntu', linuxRoot: '/root/none', stateDir: path.join(dir, 's') } }, 0);
+    try {
+      await fn(s.url, runs);
+    } finally {
+      await s.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const get = async (url: string): Promise<{ status: number; json: any }> => {
+    const res = await fetch(url);
+    return { status: res.status, json: await res.json() };
+  };
+
+  it('lists runs newest first with a summary, and skips folders that are not readable runs', async () => {
+    await withRuns(
+      (runs) => {
+        makeRun(runs, '2026-10-05T10-00-00-000Z-aaaa', rec(0.01));
+        makeRun(runs, '2026-10-05T11-00-00-000Z-bbbb', rec(0.19));
+        makeRun(runs, '2026-10-05T12-00-00-000Z-broken', { schema_version: 2 });
+        mkdirSync(path.join(runs, '2026-10-05T13-00-00-000Z-empty'), { recursive: true });
+        writeFileSync(path.join(runs, 'stray-file.txt'), 'x');
+        makeRun(runs, '2026-10-05T09-00-00-000Z-nomodel', rec(0.5), null);
+      },
+      async (url) => {
+        const r = await get(url + '/api/runs');
+        expect(r.status).toBe(200);
+        expect(r.json.runs.map((x: { id: string }) => x.id)).toEqual(['2026-10-05T11-00-00-000Z-bbbb', '2026-10-05T10-00-00-000Z-aaaa', '2026-10-05T09-00-00-000Z-nomodel']);
+        expect(r.json.runs[0]).toMatchObject({ status: 'completed', method: 'exact', top_event_probability: 0.19, model_name: 'Pumps', model_hash: 'h' });
+        expect(r.json.runs[2].model_name).toBeNull();
+      },
+    );
+  });
+
+  it('a missing runs folder is an empty list', async () => {
+    await withRuns(() => undefined, async (url) => expect((await get(url + '/api/runs')).json.runs).toEqual([]));
+  });
+
+  it('returns one run: the model text as saved and the record', async () => {
+    await withRuns(
+      (runs) => makeRun(runs, 'run-1', rec(0.19), '{"events":[],"gates":[]}'),
+      async (url) => {
+        const r = await get(url + '/api/runs/run-1');
+        expect(r.status).toBe(200);
+        expect(r.json).toEqual({ id: 'run-1', model_text: '{"events":[],"gates":[]}', record: rec(0.19) });
+      },
+    );
+  });
+
+  it('refuses path tricks and unknown ids, and never reads outside the runs folder', async () => {
+    await withRuns(
+      (runs) => {
+        makeRun(runs, 'run-1', rec(0.1));
+        writeFileSync(path.join(path.dirname(runs), 'results.json'), JSON.stringify({ secret: true }));
+      },
+      async (url) => {
+        for (const id of ['..', '%2e%2e', 'a%2f..%2f..', '..%2F', '.hidden', 'run-1%5C..', 'x'.repeat(200), '%']) {
+          const r = await get(`${url}/api/runs/${id}`);
+          expect([400, 404], id).toContain(r.status);
+          expect(JSON.stringify(r.json)).not.toContain('secret');
+        }
+        expect((await get(url + '/api/runs/no-such-run')).status).toBe(404);
+        expect((await get(url + '/api/runs/no-such-run')).json.error.code).toBe('E_NOT_FOUND');
+      },
+    );
+  });
+
+  it('a run whose files are damaged answers 422 without leaking a path', async () => {
+    await withRuns(
+      (runs) => {
+        mkdirSync(path.join(runs, 'bad', 'native'), { recursive: true });
+        writeFileSync(path.join(runs, 'bad', 'results.json'), '{ not json');
+      },
+      async (url, runs) => {
+        const r = await get(url + '/api/runs/bad');
+        expect(r.status).toBe(422);
+        expect(r.json.error.code).toBe('E_UNREADABLE');
+        expect(JSON.stringify(r.json)).not.toContain(runs);
+      },
+    );
+  });
+
+  it('the runs routes are read-only', async () => {
+    await withRuns(
+      (runs) => makeRun(runs, 'run-1', rec(0.1)),
+      async (url, runs) => {
+        for (const m of ['PUT', 'DELETE', 'POST']) {
+          const res = await fetch(url + '/api/runs/run-1', { method: m, headers: { 'x-sneed-request': '1', 'content-type': 'application/json' }, body: m === 'DELETE' ? undefined : '{}' });
+          expect(res.status, m).toBeGreaterThanOrEqual(400);
+        }
+        expect(readdirSync(runs)).toEqual(['run-1']);
+        expect(readFileSync(path.join(runs, 'run-1', 'results.json'), 'utf8')).toBe(JSON.stringify(rec(0.1)));
+      },
+    );
+  });
+});

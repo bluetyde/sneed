@@ -32,6 +32,10 @@ function fakeApi(over: Partial<Api> = {}): Api & { calls: string[]; files: Map<s
     },
     cancel: async () => ({ cancelled: true }),
     lessons: async () => [],
+    listRuns: async () => [],
+    loadRun: async (id) => {
+      throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);
+    },
     listModels: async (): Promise<ModelInfo[]> => [...files.keys()].map((name) => ({ name, bytes: files.get(name)!.length, modified: '2026-10-05T00:00:00Z' })),
     loadModel: async (name) => {
       if (!files.has(name)) throw new ApiError(404, 'E_NOT_FOUND', `no saved model called ${name}`);
@@ -660,5 +664,79 @@ describe('lessons in the editor', () => {
     await ed.loadLessons();
     expect(ed.lessons).toEqual([]);
     expect(ed.notice).toMatchObject({ kind: 'warning' });
+  });
+});
+
+describe('comparing saved runs', () => {
+  const run = (id: string, doc: D.Doc, p: number, sets: string[][]): { id: string; model_text: string; record: unknown } => ({
+    id,
+    model_text: D.serialize(doc),
+    record: { schema_version: 1, status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: p, minimal_cut_sets: sets.map((events) => ({ events, probability: 0.1 })), input_hashes: { model_hash: id }, engine: { name: 'SCRAM', version: '0.16.2' } },
+  });
+  const orDoc = D.newModel();
+  const andDoc = D.setGateType(orDoc, 'G1', 'and');
+  const saved = new Map([
+    ['r-or', run('r-or', orDoc, 0.19, [['E1'], ['E2']])],
+    ['r-and', run('r-and', andDoc, 0.01, [['E1', 'E2']])],
+  ]);
+  const withRuns = (over: Partial<Api> = {}): Api & { calls: string[]; files: Map<string, string> } =>
+    fakeApi({
+      listRuns: async () => [...saved.keys()].map((id) => ({ id, modified: '2026-10-05T12:00:00Z', status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: 0.1, model_name: 'M', model_hash: id })),
+      loadRun: async (id) => {
+        const r = saved.get(id);
+        if (!r) throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);
+        return r;
+      },
+      ...over,
+    });
+
+  it('loads two runs and reports what differs in the model and in the result', async () => {
+    const { ed } = await ready(withRuns());
+    await ed.refreshRuns();
+    expect(ed.runs.map((r) => r.id)).toEqual(['r-or', 'r-and']);
+    expect(await ed.compareRuns('r-and', 'r-or')).toBe(true);
+    const c = ed.comparison!;
+    expect(c.model!.gates.changed).toEqual([{ id: 'G1', type: { from: 'and', to: 'or' }, threshold: null, inputs: null }]);
+    expect(c.result!.probability).toMatchObject({ from: 0.01, to: 0.19 });
+    expect(c.result!.cutSets.added.map((x) => x.events)).toEqual([['E1'], ['E2']]);
+  });
+
+  it('an unknown run is an error message, not a stale comparison', async () => {
+    const { ed } = await ready(withRuns());
+    await ed.compareRuns('r-and', 'r-or');
+    expect(ed.comparison).not.toBeNull();
+    expect(await ed.compareRuns('r-and', 'gone')).toBe(false);
+    expect(ed.comparison).toBeNull();
+    expect(ed.compareError).toMatch(/no saved run called gone/);
+  });
+
+  it('an unreadable model file leaves the model diff empty and still compares the results', async () => {
+    const api = withRuns({ loadRun: async (id) => ({ ...saved.get(id)!, model_text: id === 'r-or' ? '{ broken' : saved.get(id)!.model_text }) });
+    const { ed } = await ready(api);
+    await ed.compareRuns('r-and', 'r-or');
+    expect(ed.comparison!.model).toBeNull();
+    expect(ed.comparison!.result).not.toBeNull();
+  });
+
+  it('clearing drops the comparison and any error', async () => {
+    const { ed } = await ready(withRuns());
+    await ed.compareRuns('r-and', 'r-or');
+    ed.clearComparison();
+    expect(ed.comparison).toBeNull();
+    await ed.compareRuns('r-and', 'gone');
+    ed.clearComparison();
+    expect(ed.compareError).toBeNull();
+  });
+
+  it('a failure to list runs is shown and leaves an empty list; a run refreshes the list', async () => {
+    const down = await ready(withRuns({ listRuns: async () => Promise.reject(new Error('down')) }));
+    await down.ed.refreshRuns();
+    expect(down.ed.runs).toEqual([]);
+    expect(down.ed.compareError).toMatch(/Could not list/);
+    let lists = 0;
+    const { ed } = await ready(withRuns({ listRuns: async () => (lists++, []) }));
+    const before = lists;
+    await ed.run();
+    expect(lists).toBeGreaterThan(before);
   });
 });

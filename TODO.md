@@ -73,10 +73,11 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 - [x] Lessons 1 to 3 plus the optional voting lesson, the in-editor panel and a keyboard-only e2e (2026-10-05) (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
 - [x] Lesson checker with a fixture per common mistake (src/core/lesson.ts, tests/unit/lesson.test.ts).
-- [ ] Compare-runs view.
+- [x] Compare-runs view (2026-10-05; plan 03, docs/EDITOR.md).
 - [ ] SEED adapter: seven verbs, typed errors, oracle coverage in `describe` [seed].
 - [ ] Standalone vs workspace equivalence on the same immutable input; PRA through MCP and direct agree on every oracle (harness test 9) [seed].
 - [ ] Stale component-link handling; no automatic derivation from a coolant diagram.
+- [ ] Human screen-reader pass: **not done.** Script and record in `docs/SCREEN-READER-PASS.md`.
 - [ ] Instructor read-through of the lessons: **a human task, not done.** Give the instructor `docs/LESSON-REVIEW.md` (regenerate with `node scripts/lesson-review.mjs`) and record the verdict in it.
 - [ ] **[codex]** P3 exit review.
 
@@ -118,6 +119,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - An instructor guide with answers and discussion questions.
 - A hosted demo (needs a decision about running the engine for other people's models).
 - Lessons that use NODAL component links for naming only.
+- A built-in second engine (BDD, TypeScript, MIT) so students need no SCRAM install, with SCRAM kept as the independent cross-check: [plan 10](docs/plans/10-builtin-solver.md). Idea only; needs the user's go-ahead and four decisions listed there.
 - Fault trees as advisory context for Mica/Jev in the virtual reactor (explain a cut set; never in the protection path, never live state): [plan 09](docs/plans/09-virtual-reactor-link.md). Idea only; waits for P3.
 
 ## Decisions waiting (the user's)

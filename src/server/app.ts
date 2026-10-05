@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
+import { listRuns, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
@@ -61,6 +62,15 @@ const MIME: Record<string, string> = {
 };
 
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
+
+/** decodeURIComponent throws on a stray percent sign; that is the caller's mistake (400), not ours. */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    throw new HttpError(400, 'E_NAME', 'not a run id');
+  }
+}
 
 function send(res: http.ServerResponse, status: number, body: unknown, extra: Record<string, string> = {}): void {
   const text = JSON.stringify(body);
@@ -153,6 +163,10 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       return send(res, 200, { lessons: loadLessons(opts.lessonsDir, opts.oraclesFile) });
     }
 
+    if (p === '/api/runs' && method === 'GET') return send(res, 200, { runs: listRuns(opts.runsDir) });
+    const rm = /^\/api\/runs\/([^/]+)$/.exec(p);
+    if (rm && method === 'GET') return send(res, 200, readRun(opts.runsDir, safeDecode(rm[1]!)));
+
     if (p === '/api/models' && method === 'GET') return send(res, 200, { models: listModels(opts.projectDir) });
     const m = /^\/api\/models\/([^/]+)$/.exec(p);
     if (m) {
@@ -224,6 +238,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         if (res.headersSent) return void res.end();
         if (e instanceof HttpError) return send(res, e.status, { error: { code: e.code, message: e.message } }, e.status === 413 ? { connection: 'close' } : {});
         if (e instanceof StorageError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_TOO_LARGE' ? 413 : 400, { error: { code: e.code, message: e.message } });
+        if (e instanceof RunsError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_NAME' ? 400 : 422, { error: { code: e.code, message: e.message } });
         if (e instanceof LessonsUnavailable) return send(res, 503, { error: { code: e.code, message: e.message } });
         if (e instanceof RuntimeNotInstalledError) return send(res, 503, { error: { code: e.code, message: e.message } });
         // never leak a stack or a path to the browser

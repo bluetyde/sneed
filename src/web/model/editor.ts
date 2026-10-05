@@ -1,7 +1,8 @@
 // The editor's state and commands, with no DOM: what is selected, the undo history, validation, runs and what is stale.
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
-import { ApiError, type Api, type Issue, type Method, type ModelInfo, type RunResponse, type RuntimeInfo, type ValidateResponse } from '../api.js';
+import { ApiError, type Api, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
+import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
 import { buildVisual, type Visual } from './visual.js';
@@ -14,6 +15,14 @@ export interface Notice {
 interface Snapshot {
   doc: D.Doc;
   label: string;
+}
+
+/** Two saved runs side by side. A diff is null when a file could not be read; the view then says which one. */
+export interface Comparison {
+  a: SavedRun;
+  b: SavedRun;
+  model: ModelDiff | null;
+  result: ResultDiff | null;
 }
 
 export interface EditorOptions {
@@ -41,6 +50,10 @@ export class Editor {
   lesson: Lesson | null = null;
   /** The hand calculation is shown only after the student has run the model (docs/plans/04-lessons.md). */
   calcShown = false;
+  /** Saved runs offered to the Compare view (newest first), and the comparison on show. */
+  runs: RunInfo[] = [];
+  comparison: Comparison | null = null;
+  compareError: string | null = null;
 
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
@@ -323,6 +336,7 @@ export class Editor {
     try {
       this.result = await this.api.run(this.text, this.method);
       this.highlight = [];
+      void this.refreshRuns();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'E_SETUP_REQUIRED') this.runtime = { installed: false, code: e.code, message: e.message };
       this.runError = e instanceof ApiError ? `${e.message} (${e.code})` : (e as Error).message;
@@ -334,6 +348,45 @@ export class Editor {
   async cancel(): Promise<void> {
     if (!this.running) return;
     await this.api.cancel().catch(() => undefined);
+  }
+
+  // ---- compare ----
+  async refreshRuns(): Promise<void> {
+    try {
+      this.runs = await this.api.listRuns();
+    } catch (e) {
+      this.runs = [];
+      this.compareError = `Could not list the saved runs: ${(e as Error).message}`;
+    }
+    this.emit();
+  }
+  /** Loads two saved runs and works out what differs. `a` is shown as the earlier run and `b` as the later one. */
+  async compareRuns(idA: string, idB: string): Promise<boolean> {
+    this.compareError = null;
+    try {
+      const [a, b] = await Promise.all([this.api.loadRun(idA), this.api.loadRun(idB)]);
+      const parse = (t: string): unknown => {
+        try {
+          return JSON.parse(t);
+        } catch {
+          return null;
+        }
+      };
+      this.comparison = { a, b, model: diffModels(parse(a.model_text), parse(b.model_text)), result: diffResults(a.record, b.record) };
+      this.emit();
+      return true;
+    } catch (e) {
+      this.comparison = null;
+      this.compareError = `Could not load the runs: ${(e as Error).message}`;
+      this.emit();
+      return false;
+    }
+  }
+  clearComparison(): void {
+    if (!this.comparison && !this.compareError) return;
+    this.comparison = null;
+    this.compareError = null;
+    this.emit();
   }
 
   // ---- lessons ----

@@ -104,6 +104,8 @@ test.describe('keyboard-only operation', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('[data-tab="results"]')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('ArrowRight');
+    await expect(page.locator('[data-tab="compare"]')).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('[data-tab="lesson"]')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('[data-tab="properties"]')).toHaveAttribute('aria-selected', 'true');
