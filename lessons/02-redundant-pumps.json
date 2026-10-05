@@ -1,5 +1,8 @@
 {
-  "schema": { "id": "sneed.lesson", "version": 1 },
+  "schema": {
+    "id": "sneed.lesson",
+    "version": 1
+  },
   "id": "02-redundant-pumps",
   "title": "Redundant pumps",
   "goals": [
@@ -13,19 +16,34 @@
       "id": "two-events",
       "prompt": "Add two basic events, P1 and P2, each with probability 0.1.",
       "hint": "Either pump alone can supply the flow, so both must fail to lose it.",
-      "check": { "kind": "event-count", "count": 2 }
+      "check": {
+        "kind": "probabilities",
+        "values": [
+          0.1,
+          0.1
+        ]
+      }
     },
     {
       "id": "and-top",
       "prompt": "Add a gate \"No coolant flow\" that is true only when P1 AND P2 both fail. Make it the top event and run.",
       "hint": "An AND gate fails only when every input fails.",
-      "check": { "kind": "top-gate", "type": ["and", "or"] }
+      "check": {
+        "kind": "top-gate",
+        "type": [
+          "and",
+          "or"
+        ]
+      }
     },
     {
       "id": "switch-to-or",
       "prompt": "Now suppose either pump failing stops the flow. Change the gate to OR and run again.",
       "hint": "Select the gate and change its type in the properties panel. An OR gate fails when any input fails.",
-      "check": { "kind": "top-gate", "type": "or" }
+      "check": {
+        "kind": "top-gate",
+        "type": "or"
+      }
     }
   ],
   "outcomes": [
@@ -34,33 +52,55 @@
       "label": "Either pump is enough (AND)",
       "oracle": "pra-pump2-and",
       "probability": 0.01,
-      "cut_sets": [["P1", "P2"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "P1",
+          "P2"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     },
     {
       "id": "or",
       "label": "Either pump failing stops flow (OR)",
       "oracle": "pra-pump2-or",
       "probability": 0.19,
-      "cut_sets": [["P1"], ["P2"]],
-      "tolerance": { "absolute": 1e-12 }
+      "cut_sets": [
+        [
+          "P1"
+        ],
+        [
+          "P2"
+        ]
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
     }
   ],
   "mistakes": [
     {
       "id": "percent",
       "message": "A probability above 1 is not allowed. Write 10 percent as 0.1.",
-      "detect": { "kind": "percent-probability" }
+      "detect": {
+        "kind": "percent-probability"
+      }
     },
     {
       "id": "one-input-gate",
       "message": "A gate with one input only repeats that input. Give the gate both pumps.",
-      "detect": { "kind": "single-input-gate" }
+      "detect": {
+        "kind": "single-input-gate"
+      }
     },
     {
       "id": "unused-event",
       "message": "One of your events is not connected to any gate, so it does not change the result.",
-      "detect": { "kind": "unused-event" }
+      "detect": {
+        "kind": "unused-event"
+      }
     }
   ],
   "hand_calculation": [

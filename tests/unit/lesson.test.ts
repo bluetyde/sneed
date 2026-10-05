@@ -85,11 +85,72 @@ describe('steps and mistakes', () => {
       '04-voting': NATIVE_VOTE,
     };
     for (const [id, doc] of Object.entries(last)) {
-      const p = checkLesson(get(id), doc);
+      const r = enumerate(doc);
+      const p = checkLesson(get(id), doc, { probability: r.probability.toNumber(), cutSets: r.cutSets });
       expect(p.mistakes, id).toEqual([]);
       expect(p.steps.filter((s) => !s.done), id).toEqual([]);
-      expect(p.complete).toBe(true);
+      expect(p.complete, id).toBe(true);
     }
+  });
+
+  it('structure alone never completes a lesson: an engine result that matches an outcome is required', () => {
+    const p = checkLesson(get('01-single-pump'), ORACLE_MODELS['pra-pump1']!);
+    expect(p.steps.every((s) => s.done)).toBe(true);
+    expect(p.complete).toBe(false);
+    expect(checkLesson(get('01-single-pump'), ORACLE_MODELS['pra-pump1']!, { probability: 0.2, cutSets: [['P']] }).complete).toBe(false);
+  });
+
+  const solve = (id: string, doc: Doc) => {
+    const r = enumerate(doc);
+    return checkLesson(get(id), doc, { probability: r.probability.toNumber(), cutSets: r.cutSets });
+  };
+
+  it('wrong models that look right are not complete (Codex review)', () => {
+    // lesson 2: OR of two pumps at 0.5 each
+    expect(solve('02-redundant-pumps', mkDoc('T', { P1: 0.5, P2: 0.5 }, [OR('T', ['P1', 'P2'])])).complete).toBe(false);
+    // lesson 3: shares a pump instead of the supply
+    const wrong3 = mkDoc('T', { P1: 0.1, P2: 0.1, S: 0.05 }, [AND('T', ['L', 'R']), OR('L', ['P1', 'P2']), OR('R', ['P1', 'S'])]);
+    const w3 = solve('03-shared-power-supply', wrong3);
+    expect(w3.steps.every((s) => s.done)).toBe(true);
+    expect(w3.complete).toBe(false);
+    // lesson 4: at least 1 of 3
+    // (the validator refuses K = 1, so the checker is given the model and an engine-shaped result directly)
+    const one = checkLesson(get('04-voting'), mkDoc('V', { A: 0.1, B: 0.1, C: 0.1 }, [VOTE('V', ['A', 'B', 'C'], 1)]), { probability: 0.271, cutSets: [['A'], ['B'], ['C']] });
+    expect(one.steps[1]!.done).toBe(false);
+    expect(one.complete).toBe(false);
+    // lesson 4: a vote gate with a duplicated input
+    expect(checkLesson(get('04-voting'), mkDoc('V', { A: 0.1, B: 0.1, C: 0.1 }, [VOTE('V', ['A', 'B', 'B'], 2)])).steps[1]!.done).toBe(false);
+  });
+
+  it('the two-supplies detector is false for both single-supply forms and true for two supplies', () => {
+    const l = get('03-shared-power-supply');
+    for (const doc of [SHARED, ORACLE_MODELS['pra-pump3-shared']!]) expect(checkLesson(l, doc).mistakes.map((m) => m.id)).not.toContain('two-copies');
+    expect(checkLesson(l, ORACLE_MODELS['pra-pump3-separate']!).mistakes.map((m) => m.id)).toContain('two-copies');
+  });
+
+  it('a repeated gate is not a shared event', () => {
+    const doc = mkDoc('T', { P1: 0.1, P2: 0.1, S: 0.05 }, [AND('T', ['L', 'R']), OR('L', ['G']), OR('R', ['G']), OR('G', ['P1', 'P2', 'S'])]);
+    expect(checkLesson(get('03-shared-power-supply'), doc).steps.find((s) => s.id === 'one-s-twice')!.done).toBe(false);
+  });
+
+  it('malformed documents are credited with nothing and never throw (Codex review)', () => {
+    const l = get('01-single-pump');
+    const docs = [
+      { top: 'undefined', events: [{ probability: [0.1] }], gates: [] },
+      { top: 'P', events: [{ id: { toString: 0 }, probability: 0.1 }], gates: [] },
+      { top: 'P', events: [{ id: 'P', probability: '0.1' }], gates: [] },
+      { top: 'P', events: [{ id: 'P', probability: 0.1 }], gates: [{ id: 'G', type: 'or', inputs: [{ toString: 0 }] }] },
+      { top: 'P', events: [{ id: 'P', probability: 0.1 }, null], gates: [] },
+      null,
+      7,
+    ];
+    for (const d of docs) {
+      const p = checkLesson(l, d as never, { probability: 0.1, cutSets: [['P']] });
+      expect(p.malformed).toBe(true);
+      expect(p.complete).toBe(false);
+    }
+    const vote = checkLesson(get('04-voting'), { top: 'V', events: [{ id: 'A', probability: 0.1 }], gates: [{ id: 'V', type: 'atleast', inputs: [] }] });
+    expect(vote.steps.every((s) => s.done)).toBe(false);
   });
 
   it('an empty model completes nothing and reports no mistake', () => {
@@ -129,14 +190,14 @@ describe('steps and mistakes', () => {
     expect(votes.mistakes).toEqual([]);
   });
 
-  it('a lesson is not complete while a mistake is present, even if every step passes', () => {
-    const doc = { top: 'T', events: [{ id: 'P1', probability: 0.1 }, { id: 'P2', probability: 10 }], gates: [{ id: 'T', type: 'or', inputs: ['P1', 'P2'] }] };
-    const p = checkLesson(get('02-redundant-pumps'), doc);
+  it('a lesson is not complete while a mistake is present, even if every step passes and the result matches', () => {
+    const doc = mkDoc('T', { P1: 0.1, P2: 0.1 }, [OR('T', ['P1', 'P2']), OR('X', ['P1'])]);
+    const p = checkLesson(get('02-redundant-pumps'), doc, { probability: 0.19, cutSets: [['P1'], ['P2']] });
     expect(p.steps.every((s) => s.done)).toBe(true);
-    expect(p.mistakes.map((m) => m.id)).toEqual(['percent']);
+    expect(p.outcome).toBe('or');
+    expect(p.mistakes.map((m) => m.id)).toEqual(['one-input-gate']);
     expect(p.complete).toBe(false);
   });
-
   it('the shared-event step needs an event under two gates, not just any gate input', () => {
     const p = checkLesson(get('03-shared-power-supply'), ORACLE_MODELS['pra-pump3-shared']!);
     expect(p.steps.find((s) => s.id === 'one-s-twice')!.done).toBe(false);
@@ -171,6 +232,36 @@ describe('loader refusals', () => {
   it('refuses a lesson with no outcomes', () => expect(code(mutate((l) => (l.outcomes = [])))).toBe('L_SCHEMA'));
   it('refuses a step with an unknown check', () => expect(code(mutate((l) => (l.steps[0].check = { kind: 'drawing-position' })))).toBe('L_SCHEMA'));
   it('refuses a mistake with an unknown detector', () => expect(code(mutate((l) => (l.mistakes[0].detect = { kind: 'x' })))).toBe('L_SCHEMA'));
+  it('refuses a tolerance that is too wide, negative, non-finite or missing (Codex review)', () => {
+    for (const t of [1, 1e-6, -1e-12]) expect(code(mutate((l) => (l.outcomes[0].tolerance.absolute = t))), String(t)).toBe('L_SCHEMA');
+    expect(code(base.replace(/"absolute": 1e-12/, '"absolute": 1e400'))).toBe('L_SCHEMA');
+    expect(code(mutate((l) => (l.outcomes[0].tolerance = {})))).toBe('L_SCHEMA');
+    expect(code(mutate((l) => delete l.outcomes[0].tolerance))).toBe('L_SCHEMA');
+  });
+  it('refuses malformed cut sets with L_SCHEMA, never a raw error (Codex review)', () => {
+    for (const cs of ['P', ['P'], [null], [[]], [[1]], [['']], []]) expect(code(mutate((l) => (l.outcomes[0].cut_sets = cs))), JSON.stringify(cs)).toBe('L_SCHEMA');
+  });
+  it('refuses check operands that are missing or malformed (Codex review)', () => {
+    const bad = [
+      { kind: 'event-count' },
+      { kind: 'event-count', count: 0 },
+      { kind: 'event-count', count: 1.5 },
+      { kind: ['event-count'], count: 1 },
+      { kind: 'probabilities', values: [] },
+      { kind: 'probabilities', values: [10] },
+      { kind: 'top-gate' },
+      { kind: 'top-gate', type: 'xor' },
+      { kind: 'top-gate', type: [] },
+      { kind: 'shared-event', minParents: 1 },
+      { kind: 'vote', threshold: 3, inputs: 2 },
+      { kind: 'vote', threshold: 2 },
+    ];
+    for (const c of bad) expect(code(mutate((l) => (l.steps[0].check = c))), JSON.stringify(c)).toBe('L_SCHEMA');
+  });
+  it('refuses detector operands that are missing or malformed (Codex review)', () => {
+    const bad = [{ kind: 'wrong-top-gate' }, { kind: 'wrong-top-gate', expected: 'nand' }, { kind: 'extra-events' }, { kind: 'extra-events', max: 0 }, { kind: ['unused-event'] }];
+    for (const d of bad) expect(code(mutate((l) => (l.mistakes[0].detect = d))), JSON.stringify(d)).toBe('L_SCHEMA');
+  });
   it('refuses a wrong schema id', () => expect(code(mutate((l) => (l.schema.id = 'other')))).toBe('L_SCHEMA'));
   it('refuses text that is not JSON', () => expect(code('{')).toBe('L_SCHEMA'));
   it('accepts the unmodified lesson', () => expect(code(base)).toBeUndefined());
