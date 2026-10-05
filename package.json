@@ -9,13 +9,20 @@
     "test": "vitest run tests/unit",
     "test:engine": "vitest run tests/engine",
     "test:all": "vitest run",
-    "runtime": "tsx scripts/runtime.ts"
+    "runtime": "tsx scripts/runtime.ts",
+    "server": "tsx src/server/main.ts",
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "1.63",
     "@types/node": "^24.19.1",
+    "axe-core": "^4.13.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
+    "vite": "^8.3.2",
     "vitest": "^5.0.3"
   },
   "dependencies": {
