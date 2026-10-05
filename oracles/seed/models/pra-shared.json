@@ -1,0 +1,59 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "oracle",
+    "name": "Oracle model",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "declared-independent",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "A",
+      "probability": 0.1
+    },
+    {
+      "id": "B",
+      "probability": 0.2
+    },
+    {
+      "id": "C",
+      "probability": 0.3
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "or",
+      "inputs": [
+        "AB",
+        "AC"
+      ]
+    },
+    {
+      "id": "AB",
+      "type": "and",
+      "inputs": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "AC",
+      "type": "and",
+      "inputs": [
+        "A",
+        "C"
+      ]
+    }
+  ]
+}

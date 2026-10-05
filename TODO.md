@@ -74,7 +74,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [x] Lessons 1 to 3 plus the optional voting lesson, the in-editor panel and a keyboard-only e2e (2026-10-05) (single pump; redundant pumps; shared power supply, including the one-event vs two-events contrast 0.0595 vs 0.021025); optional voting lesson.
 - [x] Lesson checker with a fixture per common mistake (src/core/lesson.ts, tests/unit/lesson.test.ts).
 - [x] Compare-runs view (2026-10-05; plan 03, docs/EDITOR.md).
-- [ ] SEED adapter: seven verbs, typed errors, oracle coverage in `describe` [seed]. Mapping written 2026-10-05 after reading SEED's contract: [plan 11](docs/plans/11-seed-adapter.md). Waits on the user's four decisions there; the SNEED side (headless runner, `oracles/seed/`) can come first.
+- [ ] SEED adapter: seven verbs, typed errors, oracle coverage in `describe` [seed]. Mapping written 2026-10-05 after reading SEED's contract: [plan 11](docs/plans/11-seed-adapter.md). SNEED side built 2026-10-05 (`src/cli/headless.ts`, `oracles/seed/`, [docs/HEADLESS.md](docs/HEADLESS.md)); the SEED side (`adapters/pra`) waits on the user's decisions in plan 11.
 - [ ] Standalone vs workspace equivalence on the same immutable input; PRA through MCP and direct agree on every oracle (harness test 9) [seed].
 - [ ] Stale component-link handling; no automatic derivation from a coolant diagram.
 - [ ] Human screen-reader pass: **not done.** Script and record in `docs/SCREEN-READER-PASS.md`.

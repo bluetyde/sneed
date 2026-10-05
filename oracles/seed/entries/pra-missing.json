@@ -1,0 +1,30 @@
+{
+  "schema": "seed.oracle/0.1",
+  "oracleId": "pra-missing",
+  "entryVersion": 1,
+  "adapter": "pra",
+  "adapterVersions": [
+    "*"
+  ],
+  "tag": "bad-input",
+  "inputs": [
+    {
+      "path": "models/pra-missing.json",
+      "sha256": "7265a594da6a8696a72164d66db59d7d669b82ffe2375fa063ccf4fe633920f1"
+    }
+  ],
+  "expected": {
+    "refusalCode": "E_MISSING_REF"
+  },
+  "source": {
+    "kind": "analytic",
+    "text": "gate input ID not defined: a model the schema and the cross-reference checks must refuse with E_MISSING_REF, because the document itself breaks the rule (the vector is schema/vectors/bad/E_MISSING_REF__gate-input.json)."
+  },
+  "coverage": {
+    "quantities": [
+      "top_event_probability"
+    ],
+    "domain": "refusal of an invalid model: gate input ID not defined"
+  },
+  "toleranceHash": "ee1ac43d8420d397435172bfbf8489ae80c77d4b9aec6a6d348fa09a49cdaf97"
+}

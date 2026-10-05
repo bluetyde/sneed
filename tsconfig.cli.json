@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": false, "outDir": "dist/node", "rootDir": "src", "declaration": false, "sourceMap": false },
+  "include": ["src/core", "src/runtime", "src/cli"]
+}

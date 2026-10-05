@@ -1,0 +1,37 @@
+{
+  "schema": "seed.oracle/0.1",
+  "oracleId": "pra-vote-exact",
+  "entryVersion": 1,
+  "adapter": "pra",
+  "adapterVersions": [
+    "*"
+  ],
+  "tag": "good",
+  "inputs": [
+    {
+      "path": "models/pra-vote-exact.json",
+      "sha256": "1df20f16d739efa89695c61fb42ecce237223cb9922a332a8db4a72296a58cdc"
+    }
+  ],
+  "expected": {
+    "quantity": "top_event_probability",
+    "value": 0.028,
+    "unit": "1"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 0
+  },
+  "source": {
+    "kind": "hand",
+    "text": "A=0.1, B=0.1, C=0.1; 2-of-3. Exact top-event probability by hand: 3*(0.1^2) - 2*(0.1^3).",
+    "check": "Second method: exhaustive enumeration over every failure state of the reachable basic events with exact rational arithmetic (tests/oracle/enumerate.ts), which agrees with the hand derivation exactly; and the same model run through SCRAM in the engine tests."
+  },
+  "coverage": {
+    "quantities": [
+      "top_event_probability"
+    ],
+    "domain": "static fault tree with constant, independent basic-event probabilities, exact method: A=0.1, B=0.1, C=0.1; 2-of-3"
+  },
+  "toleranceHash": "9a3e487a74e9b8e511d213b9e2f9c24df3840dd82462a59455c980e031673301"
+}

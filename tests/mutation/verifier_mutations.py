@@ -44,6 +44,8 @@ SR = ROOT / "src/server/runs.ts"
 WK = ROOT / "src/web/ui/compare.ts"
 LS = ROOT / "src/core/lesson.ts"
 SL = ROOT / "src/server/lessons.ts"
+HL = ROOT / "src/cli/headless.ts"
+SO = ROOT / "scripts/lib/seed-oracles.ts"
 SA = ROOT / "src/server/app.ts"
 ST = ROOT / "src/server/storage.ts"
 
@@ -134,7 +136,8 @@ MUTATIONS = [
     ("engine: owner tag not regex-escaped", N, "const pattern = regexEscape(ownerTag);", "const pattern = ownerTag;", PROCESS),
     ("engine: timeout never fires", N, "const timer = setTimeout(() => stop('timeout'), opts.timeoutMs);", "const timer = setTimeout(() => undefined, opts.timeoutMs);", PROCESS),
     ("engine: cancellation after exit still recorded", N, "      if (settled) return;\n      settled = true;\n      if (why", "      settled = true;\n      if (why", PROCESS),
-    ("engine: owner tag length not checked", N, "if (ownerTag.length < 12)", "if (false as boolean)", PROCESS),
+    ("engine: owner tag length not checked", N, "export function killOwned(distro: string, ownerTag: string): void {\n  if (ownerTag.length < 12)", "export function killOwned(distro: string, ownerTag: string): void {\n  if (false as boolean)", PROCESS),
+    ("engine: hasOwned accepts a short tag", N, "export function hasOwned(distro: string, ownerTag: string): boolean {\n  if (ownerTag.length < 12)", "export function hasOwned(distro: string, ownerTag: string): boolean {\n  if (false as boolean)", PROCESS),
     ("engine: regexEscape does not escape", N, r"return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');", "return text;"),
     # recipe loader
     ("recipe: shell steps accepted", RC, "if (SHELLS.has(base(s.argv[0]!)) || SHELLS.has(base(cmd)))", "if (false as boolean)"),
@@ -242,6 +245,22 @@ MUTATIONS = [
     ("editor: a failed comparison keeps showing the old one", WE, "      this.comparison = null;\n      this.compareError = `Could not load the runs:", "      this.compareError = `Could not load the runs:"),
     ("ui compare: the choice follows new runs after the student picked", WK, "if (!this.chosen || !ids.includes(this.a) || !ids.includes(this.b)) {", "if (!ids.includes(this.a) || !ids.includes(this.b)) {", E2E),
     ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
+    # SEED side (plan 11): the headless runner and the generated oracle entries
+    ("headless: a truncated result is written as a result", HL, "if (rec.status !== 'completed' || rec.completeness !== 'complete') {", "if (rec.status !== 'completed') {"),
+    ("headless: the active-run record is not written before the engine", HL, "writeFileSync(path.join(outDir, 'active-run.json'), JSON.stringify({ workId, workDir }, null, 2) + '\\n');", ""),
+    ("headless: cancel trusts a record that points elsewhere", HL, " || active.workDir !== expected) return fail('E_NOT_OWNED'", ") return fail('E_NOT_OWNED'"),
+    ("headless: cancel claims the engine stopped without checking", HL, "nativeStopped: !alive,", "nativeStopped: true,"),
+    ("headless: an existing result folder is overwritten", HL, "if (existsSync(finalDir)) return fail('E_EXISTS', 'the output folder already exists');", ""),
+    ("headless: an invalid model reaches the engine", HL, "if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);\n    let engine: EngineConfig;", "let engine: EngineConfig;"),
+    ("headless: model text is not labelled as app content", HL, "  source: 'app-content',\n", ""),
+    ("headless: SEED's schema code is not used", HL, "code: i.code === 'E_SCHEMA' ? 'E_SCHEMA_INVALID' : i.code,", "code: i.code,"),
+    ("headless: a run id with a path is accepted", HL, "if (!RUN_ID.test(runId))", "if (false as boolean)"),
+    ("headless: the timeout is not bounded", HL, "if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 10 || timeoutSeconds > 86400)", "if (false as boolean)"),
+    ("headless: an unexpected failure leaks its text", HL, "message: 'the runner failed unexpectedly'", "message: String(e)"),
+    ("headless: the cancel flag is ignored while running", HL, "if (existsSync(flag)) abort.abort();", ""),
+    ("seed oracle: the tolerance pin leaves out the expected value", SO, "sha256(canon({ expected, tolerance }))", "sha256(canon({ tolerance }))"),
+    ("seed oracle: approximation rows are exported", SO, "x.type === 'numerical' && x.method === 'exact'", "x.type === 'numerical'"),
+    ("engine: hasOwned never sees a live process", N, "return r.status === 0; // pgrep: 0 = at least one match, 1 = none", "return false;", PROCESS),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -294,6 +313,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[1] in web]
     if only == "compare":  # just the compare-runs mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:")) or m[0] == "editor: a failed comparison keeps showing the old one"]
+    if only == "seed":  # just the SEED-side mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned"))]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
