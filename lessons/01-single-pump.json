@@ -1,0 +1,62 @@
+{
+  "schema": { "id": "sneed.lesson", "version": 1 },
+  "id": "01-single-pump",
+  "title": "A single pump",
+  "goals": [
+    "Name a basic event and give it a probability between 0 and 1.",
+    "Make that event the top event and read the result."
+  ],
+  "assumptions": "The probability 0.1 is made up for teaching. It describes no real pump and says nothing about any plant.",
+  "start": null,
+  "steps": [
+    {
+      "id": "one-event",
+      "prompt": "Add one basic event called P for \"Pump P fails\".",
+      "hint": "Use Add event, then rename it P in the properties panel.",
+      "check": { "kind": "event-count", "count": 1 }
+    },
+    {
+      "id": "set-probability",
+      "prompt": "Give P a probability of 0.1. Write it as a fraction of 1, so 10 percent is 0.1.",
+      "hint": "Probabilities run from 0 to 1. 0.1 means one chance in ten.",
+      "check": { "kind": "has-probability", "value": 0.1 }
+    },
+    {
+      "id": "top-is-p",
+      "prompt": "Make P the top event \"No coolant flow\", then run the analysis.",
+      "hint": "With one pump and no other way to lose flow, the pump failing is the top event.",
+      "check": { "kind": "top-is-event" }
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "single",
+      "label": "One pump, p = 0.1",
+      "oracle": "pra-pump1",
+      "probability": 0.1,
+      "cut_sets": [["P"]],
+      "tolerance": { "absolute": 1e-12 }
+    }
+  ],
+  "mistakes": [
+    {
+      "id": "percent",
+      "message": "A probability of 10 is not allowed. Probabilities are between 0 and 1, so 10 percent is written 0.1.",
+      "detect": { "kind": "percent-probability" }
+    },
+    {
+      "id": "one-input-gate",
+      "message": "A gate with one input only repeats that input. Use the event itself as the top event.",
+      "detect": { "kind": "single-input-gate" }
+    },
+    {
+      "id": "unused-event",
+      "message": "An event that no gate uses and that is not the top event does not affect the result.",
+      "detect": { "kind": "unused-event" }
+    }
+  ],
+  "hand_calculation": [
+    "There is one way to lose flow: the pump fails.",
+    "Top event probability = P(P) = 0.1. The only cut set is {P}."
+  ]
+}
