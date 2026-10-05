@@ -31,12 +31,22 @@ RC = ROOT / "src/runtime/recipe.ts"
 RT = ROOT / "src/runtime/install.ts"
 SM = ROOT / "src/runtime/smoke.ts"
 RV = ROOT / "src/runtime/resolve.ts"
+WD = ROOT / "src/web/model/doc.ts"
+WV = ROOT / "src/web/model/visual.ts"
+WE = ROOT / "src/web/model/editor.ts"
+WC = ROOT / "src/web/ui/canvas.ts"
+WP = ROOT / "src/web/ui/properties.ts"
+WS = ROOT / "src/web/ui/shell.ts"
+WR = ROOT / "src/web/ui/results.ts"
+SA = ROOT / "src/server/app.ts"
+ST = ROOT / "src/server/storage.ts"
 
 # Test selection and time limit (seconds) per mutation. Engine suites need WSL and the pinned SCRAM build.
 UNIT = ("tests/unit", 180)
 PROCESS = ("tests/engine/process.test.ts", 420)
 HEADLESS = ("tests/engine/headless.test.ts", 1500)
 SMOKE = ("tests/engine/smoke.test.ts", 900)
+E2E = ("cmd:npm run e2e --silent", 600)  # builds the web app from the mutated source, then drives real Chrome
 
 MUTATIONS = [
     ("cycle detection off", V, "if (c === 1) {", "if (false as boolean) {"),
@@ -159,6 +169,41 @@ MUTATIONS = [
     ("result: sum above 1 not labelled", Rs, "if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');", "if (close(report.probability, 1)) void 0;"),
     ("result: any printed value accepted for a sum above 1", Rs, "if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');\n      else reasons.push('probability-inconsistent-with-cut-sets');", "caveats.push('approximation-exceeds-1');"),
     ("result: approximation value not recorded", Rs, "approximation_value: approximationValue,", "approximation_value: null,"),
+    # editor logic (unit) and server safety (unit)
+    ("web doc: delete leaves references to the deleted node", WD, "for (const g of d.gates) g.inputs = g.inputs.filter((x) => x !== id);", ""),
+    ("web doc: disconnect removes every occurrence", WD, "if (g && index >= 0 && index < g.inputs.length) g.inputs.splice(index, 1);", "if (g && index >= 0 && index < g.inputs.length) g.inputs = g.inputs.filter((x) => x !== g.inputs[index]);"),
+    ("web doc: ids are reused while still in use", WD, "if (!used.has(`${prefix}${n}`)) return `${prefix}${n}`;", "return `${prefix}${n}`;"),
+    ("web doc: a gate arrives with one event", WD, "const count = type === 'atleast' ? 3 : 2;", "const count = 1;"),
+    ("web doc: AND/OR keep a leftover threshold", WD, "else delete g.threshold;", ";"),
+    ("web doc: a broken file is silently repaired", WD, "if (!Array.isArray(d.events) || !Array.isArray(d.gates)) throw", "if (false as boolean) throw"),
+    ("web visual: a repeated id is drawn as a second node", WV, "} else if (placed.has(id)) {", "} else if (false as boolean) {"),
+    ("web visual: stored positions ignored", WV, "if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) {", "if (false as boolean) {"),
+    ("web visual: parents not centred over inputs", WV, "n.x = (first.x + last.x) / 2;", "n.x = first.x;"),
+    ("editor: a result never goes stale on a model change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method;", "return r.method !== this.method;"),
+    ("editor: a result never goes stale on a method change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method;", "return r.input_hashes.model_hash !== this.validation?.model_hash;"),
+    ("editor: run ignores problems", WE, "if (blocked) return this.setNotice('warning', `Run blocked: ${blocked}.`);", "if (false as boolean) return this.setNotice('warning', `Run blocked: ${blocked}.`);"),
+    ("editor: an edit keeps the redo stack", WE, "    this.redoStack = [];\n    this.doc = next;", "    this.doc = next;"),
+    ("editor: deleting a reference deletes the node it points at", WE, "if ((n.kind === 'reference' || n.kind === 'missing') && n.parent) {", "if (false as boolean) {"),
+    ("editor: an opened file counts as unsaved", WE, "this.savedText = this.text; // formatting differences are not unsaved work", "this.savedText = '';"),
+    ("editor: undo forgets to redraw", WE, "    this.undoStack.push({ doc: this.doc, label: s.label });\n    this.doc = s.doc;\n    this.afterChange();", "    this.undoStack.push({ doc: this.doc, label: s.label });\n    this.doc = s.doc;"),
+    ("server: Host header not checked", SA, "if (!allowedHosts().includes(hostHeader.toLowerCase()))", "if (false as boolean)"),
+    ("server: foreign Origin allowed", SA, "if (origin !== undefined && !allowedOrigins().includes(origin))", "if (false as boolean)"),
+    ("server: writes need no custom header", SA, "req.headers['x-sneed-request'] !== '1'", "false as boolean"),
+    ("server: static files outside the web folder", SA, "if (!file.startsWith(path.resolve(root) + path.sep))", "if (false as boolean)"),
+    ("server: internal errors leak their text", SA, "return send(res, 500, { error: { code: 'E_INTERNAL', message: 'internal error' } });", "return send(res, 500, { error: { code: 'E_INTERNAL', message: String((e as Error).message) } });"),
+    ("server: disconnect does not stop the engine", SA, "if (!res.writableEnded) job.abort.abort(); // the browser went away: stop the engine", ""),
+    ("server: a second run is allowed", SA, "if (running) throw new HttpError(409, 'E_BUSY', 'a run is already in progress');", ""),
+    ("storage: unsafe names accepted", ST, "if (!isValidModelName(name)) throw new StorageError('E_NAME'", "if (false as boolean) throw new StorageError('E_NAME'"),
+    # browser: builds the app from the mutated source and drives real Chrome
+    ("ui canvas: arrow keys do nothing", WC, "if (key && dirs[e.key]) {", "if (false as boolean) {", E2E),
+    ("ui canvas: a finished drag is not recorded", WC, "if (n) this.editor.moveNode(d.key!, n.x, n.y);", "", E2E),
+    ("ui canvas: drag-to-connect does nothing", WC, "if (node && target !== d.key) this.editor.connect(d.fromGate!, node.id);", "if (false as boolean) this.editor.connect(d.fromGate!, node.id);", E2E),
+    ("ui properties: an out-of-range probability is accepted", WP, "if (v < 0 || v > 1) return this.refuse(", "if (false as boolean) return this.refuse(", E2E),
+    ("ui shell: Ctrl+Enter does not run", WS, "} else if (mod && e.key === 'Enter') {", "} else if (false as boolean) {", E2E),
+    ("ui shell: Escape does not cancel a run", WS, "if (editor.running) void editor.cancel();", "", E2E),
+    ("ui shell: no guard against leaving with unsaved work", WS, "window.addEventListener('beforeunload', (e) => {\n    if (editor.dirty) {", "window.addEventListener('beforeunload', (e) => {\n    if (false as boolean) {", E2E),
+    ("ui results: no stale banner", WR, "if (ed.stale) {", "if (false as boolean) {", E2E),
+    ("ui results: a caveat is not shown", WR, "for (const c of rec.caveats)", "for (const c of [] as string[])", E2E),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -171,7 +216,8 @@ ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 def run_tests(suite: tuple[str, int] = UNIT) -> tuple[bool | None, str]:
     """Returns (passed, summary). passed is None when the run timed out and was killed."""
     target, limit = suite
-    proc = subprocess.Popen(f"npx vitest run {target}", cwd=ROOT, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
+    command = target[4:] if target.startswith("cmd:") else f"npx vitest run {target}"
+    proc = subprocess.Popen(command, cwd=ROOT, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
     try:
         out, _ = proc.communicate(timeout=limit)
     except subprocess.TimeoutExpired:
@@ -180,7 +226,10 @@ def run_tests(suite: tuple[str, int] = UNIT) -> tuple[bool | None, str]:
         return None, f"TIMEOUT after {limit}s"
     out = ANSI.sub("", out or "")
     m = re.search(r"^\s*Tests\s+(.*)$", out, re.MULTILINE)
-    return proc.returncode == 0, (m.group(1).strip() if m else "no test summary (crash)")
+    if not m:  # Playwright prints "N passed" / "N failed" lines instead
+        pw = re.findall(r"^\s*(\d+ (?:passed|failed|flaky)[^\n]*)$", out, re.MULTILINE)
+        return proc.returncode == 0, (" | ".join(pw) if pw else "no test summary (crash)")
+    return proc.returncode == 0, m.group(1).strip()
 
 
 def recover() -> None:
@@ -202,6 +251,9 @@ def main() -> int:
     only = sys.argv[1] if len(sys.argv) > 1 else "all"  # all | unit | engine | check
     recover()
     chosen = [m for m in MUTATIONS if only in ("all", "check") or (only == "unit") == (len(m) == 4) and only in ("unit", "engine")]
+    if only == "web":  # just the editor and server mutations
+        web = {WD, WV, WE, WC, WP, WS, WR, SA, ST}
+        chosen = [m for m in MUTATIONS if m[1] in web]
     if only == "check":
         bad = [m[0] for m in MUTATIONS if m[1].read_bytes().decode("utf-8").count(m[2]) != 1]
         print(f"{len(MUTATIONS) - len(bad)} of {len(MUTATIONS)} patterns occur exactly once", ("; fix: " + ", ".join(bad)) if bad else "")

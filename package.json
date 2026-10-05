@@ -13,7 +13,10 @@
     "server": "tsx src/server/main.ts",
     "dev:web": "vite",
     "build:web": "vite build",
-    "e2e": "playwright test -c e2e/playwright.config.ts"
+    "e2e": "vite build && playwright test -c e2e/playwright.config.ts",
+    "build": "tsc --noEmit && vite build",
+    "dev:server": "tsx src/server/main.ts --dev",
+    "start": "vite build && tsx src/server/main.ts"
   },
   "license": "MIT",
   "devDependencies": {

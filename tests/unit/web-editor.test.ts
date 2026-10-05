@@ -105,6 +105,34 @@ describe('history', () => {
     expect(ed.undo()).toBeNull();
   });
 
+  it('undo and redo tell subscribers and re-check the model, so the screen and the problems follow', async () => {
+    const { ed } = await ready();
+    ed.setProbability('E1', 2); // invalid
+    await ed.settle();
+    expect(ed.validation!.valid).toBe(false);
+    let notified = 0;
+    ed.subscribe(() => notified++);
+    ed.undo();
+    expect(notified).toBeGreaterThan(0);
+    await ed.settle();
+    expect(ed.validation!.valid).toBe(true); // the undo was validated, not just applied
+    const before = notified;
+    ed.redo();
+    expect(notified).toBeGreaterThan(before);
+    await ed.settle();
+    expect(ed.validation!.valid).toBe(false);
+  });
+
+  it('undo clears an explained cut set, because the drawing it pointed at has changed', async () => {
+    const { ed } = await ready();
+    await ed.run();
+    ed.setProbability('E1', 0.3);
+    ed.explainCutSet(0);
+    expect(ed.highlight).not.toEqual([]);
+    ed.undo();
+    expect(ed.highlight).toEqual([]);
+  });
+
   it('a new edit clears the redo stack', async () => {
     const { ed } = await ready();
     ed.setProbability('E1', 0.2);

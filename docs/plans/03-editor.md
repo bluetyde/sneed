@@ -1,5 +1,7 @@
 # Plan 03: Editor
 
+**Status 2026-10-05: built.** What exists, how to run and test it, and what is still open is in [../EDITOR.md](../EDITOR.md). The open questions at the end of this plan are answered there (custom SVG drawing; a single-pass tidy layout with repeated-reference markers); print and image export are not built.
+
 The visual fault-tree editor. Milestone P1. Follows the suite look (OpenMC Studio ribbon style, as NODAL adopted) unless P0 shows a reason not to.
 
 ## Prerequisite
