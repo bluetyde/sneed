@@ -7,7 +7,7 @@ import { engineIdentity, execInWsl, toWslPath, type EngineConfig } from './engin
 import { defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import { ExportError, exportOpenPsa, type VotingMode } from './export.js';
 import type { Method, NativeModel, Settings } from './model.js';
-import { assess, type EngineIdentity, type ResultRecord } from './result.js';
+import { assess, AssessAborted, type EngineIdentity, type ResultRecord } from './result.js';
 import { validateModelText, type Issue } from './validate.js';
 
 export interface AnalyzeOptions {
@@ -21,6 +21,8 @@ export interface AnalyzeOptions {
   /** How K-of-N gates are written for the engine; the default is chosen from evidence (docs/spike/README.md). */
   voting?: VotingMode;
   runId?: string;
+  /** Test seam: the clock the time limit is measured with (milliseconds). */
+  now?: () => number;
   /** Test seam: rewrites the exported XML before it is written, to provoke engine-side failures. */
   transformXml?: (xml: string) => string;
 }
@@ -95,8 +97,15 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(record, null, 2) + '\n');
     return { kind: 'ran', runDir, record };
   };
+  // the time limit covers the whole analysis, not only the engine: the checks on a large report poll this and stop
+  const now = opts.now ?? Date.now;
+  const deadline = now() + (opts.timeoutMs ?? 60000);
+  const check = (): void => {
+    if (opts.signal?.aborted) throw new AssessAborted('cancelled');
+    if (now() > deadline) throw new AssessAborted('timeout');
+  };
   const assessWith = (engine: EngineIdentity, outcome: Parameters<typeof assess>[0]['outcome'], reportText: string | null): AnalyzeOutcome =>
-    finish(assess({ model, settings, engine, expectedVersion: engineCfg.expectedVersion, outcome, reportText, hashes, exportedEvents: exported.mapping.events }));
+    finish(assess({ model, settings, engine, expectedVersion: engineCfg.expectedVersion, outcome, reportText, hashes, exportedEvents: exported.mapping.events, check }));
 
   let identity: EngineIdentity;
   try {

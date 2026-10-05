@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ORACLE_MODELS, mkDoc, AND } from '../oracle/models.js';
+import { ORACLE_MODELS, mkDoc, AND, OR } from '../oracle/models.js';
 import { enumerate } from '../oracle/enumerate.js';
 
 // (tests/engine/headless.test.ts is the older native-model-to-SCRAM acceptance test; this file tests the CLI runner in src/cli.)
@@ -176,3 +176,29 @@ describe('every SEED oracle entry, through the built runner and SCRAM', () => {
     }, 120_000);
   }
 });
+
+describe('a model too hard to verify (found by SEED: the time limit was not enforced)', () => {
+  it('17 pairs (131072 cut sets) ends in a bounded time with a named refusal, not a hang and not a result', () => {
+    const f = fixture();
+    try {
+      const events: Record<string, number> = {};
+      const gates = [AND('TOP', Array.from({ length: 17 }, (_, i) => `G${i}`))];
+      for (let i = 0; i < 17; i++) {
+        events[`A${i}`] = 0.1;
+        events[`B${i}`] = 0.1;
+        gates.push(OR(`G${i}`, [`A${i}`, `B${i}`]));
+      }
+      writeFileSync(f.model, JSON.stringify(mkDoc('TOP', events, gates)));
+      const t0 = Date.now();
+      const r = cli(['run', f.model, '--out', f.out, '--timeout-seconds', '60']);
+      expect(Date.now() - t0).toBeLessThan(110_000);
+      expect(r.code).toBe(0);
+      expect(r.json).toMatchObject({ ok: true, status: 'failed' });
+      expect(r.json.reason).toMatch(/too-many-cut-sets|timeout|result-too-large-to-verify/);
+      expect(existsSync(path.join(f.out, 'pra'))).toBe(false);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  }, 130_000);
+});
+
