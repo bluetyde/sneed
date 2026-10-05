@@ -1,0 +1,39 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "m1",
+    "name": "Fixture",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "declared-independent",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "P.1",
+      "probability": 0.1
+    },
+    {
+      "id": "B",
+      "probability": 0.2
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "and",
+      "inputs": [
+        "P.1",
+        "B"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "cmd": [
+    "wsl",
+    "-d",
+    "Ubuntu",
+    "--exec",
+    "env",
+    "LD_LIBRARY_PATH=/root/pra-scram/build/lib/scram:/root/pra-scram/env-old/lib",
+    "/root/pra-scram/build/bin/scram",
+    "--bdd",
+    "--probability",
+    "true",
+    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-and.xml",
+    "-o",
+    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-and/report.xml"
+  ],
+  "exit": 0,
+  "stdout": "",
+  "stderr": "",
+  "report_exists": true
+}

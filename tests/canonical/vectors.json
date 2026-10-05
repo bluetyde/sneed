@@ -1,0 +1,253 @@
+{
+ "serializer": "RFC 8785 (JCS) subset; IDs per canon.ID_PATTERN",
+ "projection": "plan 01 model identity",
+ "number_cases": [
+  {
+   "value": 0.1,
+   "canonical": "0.1"
+  },
+  {
+   "value": 0.1,
+   "canonical": "0.1"
+  },
+  {
+   "value": 1,
+   "canonical": "1"
+  },
+  {
+   "value": 0,
+   "canonical": "0"
+  },
+  {
+   "value": "neg-zero",
+   "canonical": "0"
+  },
+  {
+   "value": 0.5,
+   "canonical": "0.5"
+  },
+  {
+   "value": 0.021025,
+   "canonical": "0.021025"
+  },
+  {
+   "value": 0.0595,
+   "canonical": "0.0595"
+  },
+  {
+   "value": 0.029701,
+   "canonical": "0.029701"
+  },
+  {
+   "value": 1e-06,
+   "canonical": "0.000001"
+  },
+  {
+   "value": 1e-07,
+   "canonical": "1e-7"
+  },
+  {
+   "value": 4.76837e-07,
+   "canonical": "4.76837e-7"
+  },
+  {
+   "value": 1.5e-10,
+   "canonical": "1.5e-10"
+  },
+  {
+   "value": 5e-324,
+   "canonical": "5e-324"
+  },
+  {
+   "value": 0.30000000000000004,
+   "canonical": "0.30000000000000004"
+  },
+  {
+   "value": 1e+21,
+   "canonical": "1e+21"
+  },
+  {
+   "value": 1.2345678901234568e+20,
+   "canonical": "123456789012345680000"
+  }
+ ],
+ "model_cases": [
+  {
+   "id": "base",
+   "relation_to_base": null,
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "14206b985b3db5b62c47d515c0e516684b37793e02d7fbf6e43585d97a36d1e0",
+   "document_hash": "095e025262babef7dec0b97a6944b442b6beb7dc3083067e6d65709d2b5de670"
+  },
+  {
+   "id": "reordered-inputs",
+   "relation_to_base": "same",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"PUMPS\",\n        \"S\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P2\",\n        \"P1\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "14206b985b3db5b62c47d515c0e516684b37793e02d7fbf6e43585d97a36d1e0",
+   "document_hash": "5599a2933fb5e2bfd9ca5919d8eb9acee0665a9c76a740c4f151f5c46b48036b"
+  },
+  {
+   "id": "layout-name-unknown-field",
+   "relation_to_base": "same",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Renamed\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      99,\n      99\n    ]\n  },\n  \"x-unknown\": {\n    \"k\": 1\n  }\n}",
+   "model_hash": "14206b985b3db5b62c47d515c0e516684b37793e02d7fbf6e43585d97a36d1e0",
+   "document_hash": "badb9c284034fa177ece3e0a7bea385ede82ef4af695062dc945f84c7213665c"
+  },
+  {
+   "id": "probability-changed",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.06,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "6080bc2d4fd15d8ace6f4a0e46b48a6623a8531be16acdc699c8750e1d4ca222",
+   "document_hash": "56e664ff9c5326ac21036c3c7c7b5729f4e5e40b6e42a7f0875f21232485c2e0"
+  },
+  {
+   "id": "gate-type-swapped",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "d06286e939cf8ebb39675fa19d88fe058e621f4a373e5b4891150483f0151e3e",
+   "document_hash": "5f42929bd38cea271be502d8b0344fde83469967dc15a61747b89d5ec91facb4"
+  },
+  {
+   "id": "assumptions-changed",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"dependent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "ca7ec492f38231113d6514ad5dbb8efa701260d444f102e40544df049b594262",
+   "document_hash": "ce21c2a3955ce2a32b99180fbbde857abe66528fb4fc79f8560ac9454c2c795c"
+  },
+  {
+   "id": "top-changed",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"PUMPS\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "c421cc0bd72fc5633b61df4240b06750febfdb18d1d780c0cf43ed944353474b",
+   "document_hash": "208ed0cb51216d0bb3b931f105e1159e154af22a997c9d089063636e98e825f2"
+  },
+  {
+   "id": "unreachable-gate-added",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    },\n    {\n      \"id\": \"ORPHAN\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"S\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "b0ecedb8146eaabf5c4d49f00ffd14859e1c55add430a6f396ee9545d31b044d",
+   "document_hash": "253c709a69fa3604055f12b3effd164a86dd5b8f9fc7855565557e0a07ceac6e"
+  },
+  {
+   "id": "duplicate-input-retained",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "6aafcc2260eee423c87613277d73147ba98cedcf61b06b8ce6df2079e5b4750c",
+   "document_hash": "913c84d83389e45e47c192180b94aa1ac3a4a2544e6cfb17e59b8249638c1d9d"
+  },
+  {
+   "id": "schema-version-changed",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 2\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  }\n}",
+   "model_hash": "24990f0149a5f271239fb56cc67ba2876d480435538c8782ef7e5abbc304824d",
+   "document_hash": "ab6bedc6b2790a69f7bc0449d4dd254debfebf27401fec49ca5b0fac8f33ad72"
+  },
+  {
+   "id": "numeric-spelling-1e-1",
+   "relation_to_base": "same",
+   "document_json": "{\n \"schema\": {\n  \"id\": \"sneed.fault-tree\",\n  \"version\": 1\n },\n \"assumptions\": {\n  \"probability_model\": \"constant\",\n  \"independence\": \"declared-independent\",\n  \"coherence\": \"coherent\",\n  \"time\": \"none\"\n },\n \"top\": \"TOP\",\n \"events\": [\n  {\n   \"id\": \"P1\",\n   \"probability\": 1e-1,\n   \"name\": \"Pump 1\"\n  },\n  {\n   \"id\": \"P2\",\n   \"probability\": 1e-1,\n   \"name\": \"Pump 2\"\n  },\n  {\n   \"id\": \"S\",\n   \"probability\": 0.05,\n   \"name\": \"Power\"\n  }\n ],\n \"gates\": [\n  {\n   \"id\": \"TOP\",\n   \"type\": \"or\",\n   \"inputs\": [\n    \"S\",\n    \"PUMPS\"\n   ]\n  },\n  {\n   \"id\": \"PUMPS\",\n   \"type\": \"and\",\n   \"inputs\": [\n    \"P1\",\n    \"P2\"\n   ]\n  }\n ],\n \"layout\": {\n  \"TOP\": [\n   0,\n   0\n  ]\n }\n}",
+   "model_hash": "14206b985b3db5b62c47d515c0e516684b37793e02d7fbf6e43585d97a36d1e0",
+   "document_hash": "0156e71ecd0123f6b9b0576fcd0154c4a4e41b8e62dc6292830ff76cbfd56ff9"
+  },
+  {
+   "id": "single-basic-event-top",
+   "relation_to_base": "differs",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"P\", \"events\": [{\"id\": \"P\", \"probability\": 0.1}], \"gates\": []}",
+   "model_hash": "7881c2c1f9f6e2b9055e1b33655a1efc0e686936b4b856a665fe8ceb94442d41",
+   "document_hash": "79f046ffbe5362c905bae5e0af91d8600f5312d689b23cefc9772e2d845684b4"
+  },
+  {
+   "id": "voting-2-of-3",
+   "relation_to_base": "differs",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"V\", \"events\": [{\"id\": \"A\", \"probability\": 0.1}, {\"id\": \"B\", \"probability\": 0.1}, {\"id\": \"C\", \"probability\": 0.1}], \"gates\": [{\"id\": \"V\", \"type\": \"atleast\", \"threshold\": 2, \"inputs\": [\"C\", \"A\", \"B\"]}]}",
+   "model_hash": "9afbbeb79b8fed94458a361a774094d1ce532f7e4ce49484bfb88e49686f1621",
+   "document_hash": "bd7f89c4ec66c9ab622f5c5ad2a81059f13253b4db2234678ca3f0f60a7050e7"
+  },
+  {
+   "id": "voting-threshold-changed",
+   "relation_to_base": "differs",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"V\", \"events\": [{\"id\": \"A\", \"probability\": 0.1}, {\"id\": \"B\", \"probability\": 0.1}, {\"id\": \"C\", \"probability\": 0.1}], \"gates\": [{\"id\": \"V\", \"type\": \"atleast\", \"threshold\": 3, \"inputs\": [\"C\", \"A\", \"B\"]}]}",
+   "model_hash": "c676f6f96b7a3a5b4544871033d3f928268d4b6ebcf5e9672661b541190744da",
+   "document_hash": "2d9fadaf645cfc65f006c048486dd0ad0852a3eebf365d520792bef3fd3dac09"
+  }
+ ],
+ "refusal_cases": [
+  {
+   "id": "duplicate-event-id",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}, {\"id\": \"P1\", \"probability\": 0.2}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}}",
+   "error": "E_DUP_ID"
+  },
+  {
+   "id": "duplicate-gate-id",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}, {\"id\": \"PUMPS\", \"type\": \"or\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}}",
+   "error": "E_DUP_ID"
+  },
+  {
+   "id": "event-gate-namespace-clash",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}, {\"id\": \"S\", \"type\": \"or\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}}",
+   "error": "E_DUP_ID"
+  }
+ ],
+ "id_cases": [
+  {
+   "id": "A",
+   "valid": true
+  },
+  {
+   "id": "P1",
+   "valid": true
+  },
+  {
+   "id": "_P",
+   "valid": true
+  },
+  {
+   "id": "P_1",
+   "valid": true
+  },
+  {
+   "id": "P-1",
+   "valid": true
+  },
+  {
+   "id": "a",
+   "valid": true
+  },
+  {
+   "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "valid": true
+  },
+  {
+   "id": "1A",
+   "valid": false
+  },
+  {
+   "id": "-P",
+   "valid": false
+  },
+  {
+   "id": "P-",
+   "valid": false
+  },
+  {
+   "id": "P.1",
+   "valid": false
+  },
+  {
+   "id": "P 1",
+   "valid": false
+  },
+  {
+   "id": "",
+   "valid": false
+  },
+  {
+   "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "valid": false
+  },
+  {
+   "id": "Pump\u00e9",
+   "valid": false
+  }
+ ]
+}

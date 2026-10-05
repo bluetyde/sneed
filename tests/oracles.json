@@ -1,0 +1,311 @@
+[
+  {
+    "id": "pra-and",
+    "type": "numerical",
+    "model": "A=0.1, B=0.2; A AND B",
+    "expected_probability": 0.02,
+    "expected_cut_sets": [
+      [
+        "A",
+        "B"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "0.1 * 0.2",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-or",
+    "type": "numerical",
+    "model": "A=0.1, B=0.2; A OR B",
+    "expected_probability": 0.28,
+    "expected_cut_sets": [
+      [
+        "A"
+      ],
+      [
+        "B"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "1 - (1 - 0.1) * (1 - 0.2)",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-aa",
+    "type": "numerical",
+    "model": "A=0.1; A AND A",
+    "expected_probability": 0.1,
+    "expected_cut_sets": [
+      [
+        "A"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "repeated identity, not 0.01",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-oa",
+    "type": "numerical",
+    "model": "A=0.1; A OR A",
+    "expected_probability": 0.1,
+    "expected_cut_sets": [
+      [
+        "A"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "repeated identity, not 0.19",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-shared",
+    "type": "numerical",
+    "model": "A=0.1, B=0.2, C=0.3; (A AND B) OR (A AND C)",
+    "expected_probability": 0.044,
+    "expected_cut_sets": [
+      [
+        "A",
+        "B"
+      ],
+      [
+        "A",
+        "C"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "0.1 * (1 - (1 - 0.2) * (1 - 0.3))",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-pump1",
+    "type": "numerical",
+    "model": "P=0.1",
+    "expected_probability": 0.1,
+    "expected_cut_sets": [
+      [
+        "P"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "lesson 1",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-pump2-and",
+    "type": "numerical",
+    "model": "P1=0.1, P2=0.1; P1 AND P2",
+    "expected_probability": 0.01,
+    "expected_cut_sets": [
+      [
+        "P1",
+        "P2"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "lesson 2",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-pump2-or",
+    "type": "numerical",
+    "model": "P1=0.1, P2=0.1; P1 OR P2",
+    "expected_probability": 0.19,
+    "expected_cut_sets": [
+      [
+        "P1"
+      ],
+      [
+        "P2"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "lesson 2",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-pump3-shared",
+    "type": "numerical",
+    "model": "P1=0.1, P2=0.1, S=0.05; S OR (P1 AND P2)",
+    "expected_probability": 0.0595,
+    "expected_cut_sets": [
+      [
+        "P1",
+        "P2"
+      ],
+      [
+        "S"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "0.05 + 0.01 - 0.0005",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-pump3-separate",
+    "type": "numerical",
+    "model": "P1=0.1, P2=0.1, S1=0.05, S2=0.05; (P1 OR S1) AND (P2 OR S2)",
+    "expected_probability": 0.021025,
+    "expected_cut_sets": [
+      [
+        "P1",
+        "P2"
+      ],
+      [
+        "P1",
+        "S2"
+      ],
+      [
+        "P2",
+        "S1"
+      ],
+      [
+        "S1",
+        "S2"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "(1 - (1-0.1)*(1-0.05))^2",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-vote-exact",
+    "type": "numerical",
+    "model": "A=0.1, B=0.1, C=0.1; 2-of-3",
+    "expected_probability": 0.028,
+    "expected_cut_sets": [
+      [
+        "A",
+        "B"
+      ],
+      [
+        "A",
+        "C"
+      ],
+      [
+        "B",
+        "C"
+      ]
+    ],
+    "method": "exact",
+    "derivation": "3*(0.1^2) - 2*(0.1^3)",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-vote-rare",
+    "type": "numerical",
+    "model": "A=0.1, B=0.1, C=0.1; 2-of-3",
+    "expected_probability": 0.03,
+    "expected_cut_sets": [
+      [
+        "A",
+        "B"
+      ],
+      [
+        "A",
+        "C"
+      ],
+      [
+        "B",
+        "C"
+      ]
+    ],
+    "method": "rare-event",
+    "derivation": "3*(0.1^2)",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-vote-mcub",
+    "type": "numerical",
+    "model": "A=0.1, B=0.1, C=0.1; 2-of-3",
+    "expected_probability": 0.029701,
+    "expected_cut_sets": [
+      [
+        "A",
+        "B"
+      ],
+      [
+        "A",
+        "C"
+      ],
+      [
+        "B",
+        "C"
+      ]
+    ],
+    "method": "mcub",
+    "derivation": "1 - (1 - 0.1^2)^3",
+    "tolerance": {
+      "absolute": 1e-12,
+      "relative": 0
+    }
+  },
+  {
+    "id": "pra-bad-prob",
+    "type": "refusal",
+    "model": "probability 1.2",
+    "expected_error": "E_PROB_RANGE"
+  },
+  {
+    "id": "pra-cycle",
+    "type": "refusal",
+    "model": "gate referencing itself via another gate",
+    "expected_error": "E_CYCLE"
+  },
+  {
+    "id": "pra-missing",
+    "type": "refusal",
+    "model": "gate input ID not defined",
+    "expected_error": "E_MISSING_REF"
+  },
+  {
+    "id": "pra-unsupported",
+    "type": "refusal",
+    "model": "an Open-PSA construct outside the subset",
+    "expected_error": "E_UNSUPPORTED"
+  },
+  {
+    "id": "pra-trunc",
+    "type": "limit",
+    "model": "a model that hits a cut-set limit",
+    "expected_status": "truncated",
+    "expected_completeness": "truncated"
+  }
+]

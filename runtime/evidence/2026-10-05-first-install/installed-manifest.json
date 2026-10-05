@@ -1,0 +1,128 @@
+{
+  "schema": {
+    "id": "sneed.runtime-installed",
+    "version": 1
+  },
+  "install_id": "20261005T120010Z-5683c1",
+  "artifact": {
+    "id": "scram",
+    "version": "0.16.2",
+    "recipe_revision": 1
+  },
+  "recipe_sha256": "abc0c314b4a244db07e03953a4e23c41d33ca25dbcba6de14c05616babcda226",
+  "toolchain_lock_sha256": "85e78caf9ec937b7b1003c2ef7731c7f394cb8197646d055fb0dc35751d4cbf4",
+  "source_commit": "9c9a75ca0c5c2fbb5b4a7d32e29fd25bf90f7bab",
+  "prefix": "/root/sneed-runtime-test/scram/0.16.2-r1-20261005T120010Z-5683c1",
+  "distro": "Ubuntu",
+  "binary": {
+    "path": "/root/sneed-runtime-test/scram/0.16.2-r1-20261005T120010Z-5683c1/build/bin/scram",
+    "sha256": "b897ad0989ba75fda6aa5a39943555ec588b18fd9c3098b85eb0db9feadfcd64",
+    "version_text": "SCRAM 0.16.2 ()\n\nDependencies:\n   Boost       1_78\n   libxml2     2.10.4"
+  },
+  "library_dirs": [
+    "/root/sneed-runtime-test/scram/0.16.2-r1-20261005T120010Z-5683c1/build/lib/scram",
+    "/root/sneed-runtime-test/scram/0.16.2-r1-20261005T120010Z-5683c1/env/lib"
+  ],
+  "built_at": "2026-10-05T12:01:00.683Z",
+  "expanded_bytes": 1201043744,
+  "steps": [
+    {
+      "id": "toolchain",
+      "seconds": 6
+    },
+    {
+      "id": "source-init",
+      "seconds": 0.2
+    },
+    {
+      "id": "source-remote",
+      "seconds": 0.2
+    },
+    {
+      "id": "source-fetch",
+      "seconds": 1.1
+    },
+    {
+      "id": "source-checkout",
+      "seconds": 0.2
+    },
+    {
+      "id": "source-verify",
+      "seconds": 0.2
+    },
+    {
+      "id": "configure",
+      "seconds": 0.9
+    },
+    {
+      "id": "compile",
+      "seconds": 36.4
+    },
+    {
+      "id": "schemas-dir",
+      "seconds": 0.2
+    },
+    {
+      "id": "schemas",
+      "seconds": 0.2
+    },
+    {
+      "id": "binary-version",
+      "seconds": 0.2
+    }
+  ],
+  "smoke": {
+    "passed": true,
+    "cases": [
+      {
+        "id": "pra-and",
+        "passed": true,
+        "reason": null,
+        "probability": 0.02,
+        "status": "completed"
+      },
+      {
+        "id": "pra-pump1",
+        "passed": true,
+        "reason": null,
+        "probability": 0.1,
+        "status": "completed"
+      },
+      {
+        "id": "pra-pump3-shared",
+        "passed": true,
+        "reason": null,
+        "probability": 0.0595,
+        "status": "completed"
+      },
+      {
+        "id": "pra-pump3-separate",
+        "passed": true,
+        "reason": null,
+        "probability": 0.021025,
+        "status": "completed"
+      },
+      {
+        "id": "pra-vote-exact",
+        "passed": true,
+        "reason": null,
+        "probability": 0.028,
+        "status": "completed"
+      },
+      {
+        "id": "pra-vote-mcub",
+        "passed": true,
+        "reason": null,
+        "probability": 0.029701,
+        "status": "completed"
+      },
+      {
+        "id": "vote-over-gate-input",
+        "passed": true,
+        "reason": null,
+        "probability": 0.37,
+        "status": "completed"
+      }
+    ]
+  }
+}

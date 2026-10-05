@@ -1,0 +1,69 @@
+{
+  "schema": { "id": "sneed.runtime-recipe", "version": 1 },
+  "artifact": {
+    "id": "scram",
+    "version": "0.16.2",
+    "recipe_revision": 1,
+    "description": "SCRAM fault-tree engine 0.16.2, built from source inside WSL2 Ubuntu with a pinned conda-forge toolchain. Used by SNEED as a separate process; never bundled."
+  },
+  "platform": { "os": "linux", "arch": "x86_64", "host": "wsl2" },
+  "compatibility": {
+    "app": "sneed",
+    "native_model_schema": 1,
+    "exporter": "sneed-export-1",
+    "report_parser": "sneed-report-1",
+    "engine_version_regex": "^SCRAM 0\\.16\\.2"
+  },
+  "capabilities": ["cut-sets", "probability-exact", "probability-rare-event", "probability-mcub", "voting-gate-via-export-rewrite"],
+  "license": {
+    "spdx": "GPL-3.0-or-later",
+    "evidence": "LICENSE in the source tree is the GNU GPL v3 text; all 66 source files carry the 'version 3 ... or (at your option) any later version' header (checked 2026-10-05)",
+    "source_obligations": "SCRAM is only started as a separate process and is built on the user's machine from the pinned commit; the recipe and commit identify the corresponding source. If a built binary is ever shipped or cached for other people, the corresponding source and this recipe must accompany it. That case has not been reviewed by anyone qualified."
+  },
+  "trust": {
+    "source_url": "https://github.com/rakhimov/scram.git",
+    "source_commit": "9c9a75ca0c5c2fbb5b4a7d32e29fd25bf90f7bab",
+    "source_identity": "git commit id (content addressed); the checkout is verified against it",
+    "toolchain_channel": "https://conda.anaconda.org/conda-forge",
+    "toolchain_lock": "scram-toolchain.linux-64.lock",
+    "toolchain_lock_sha256": "85e78caf9ec937b7b1003c2ef7731c7f394cb8197646d055fb0dc35751d4cbf4",
+    "authenticity": "not established: hashes prove content identity only. The trust anchors are this reviewed recipe, the pinned commit and the conda-forge URLs in the lock; whoever publishes the recipe vouches for them."
+  },
+  "sizes": { "download_bytes": 202387794, "expanded_bytes": 1250000000, "required_free_bytes": 3000000000 },
+  "prerequisites": [
+    { "id": "wsl", "label": "WSL2 with a Linux distribution", "windows_probe": ["wsl.exe", "-e", "true"], "fix": "Install WSL: open a terminal as administrator and run `wsl --install`. This is a system change and is done by the user." },
+    { "id": "conda", "label": "conda (Miniconda or Miniforge) inside the distribution", "var": "CONDA", "candidates": ["/root/miniconda3/bin/conda", "/root/miniforge3/bin/conda", "/opt/conda/bin/conda", "/usr/local/bin/conda"], "probe_args": ["--version"], "fix": "Install Miniconda or Miniforge inside the WSL distribution." },
+    { "id": "git", "label": "git inside the distribution", "var": "GIT", "candidates": ["/usr/bin/git", "/usr/local/bin/git"], "probe_args": ["--version"], "fix": "Install git inside the WSL distribution (apt install git)." },
+    { "id": "network", "label": "network access to github.com and conda.anaconda.org", "fix": "The install downloads about 200 MB. Offline installation needs a cache that this recipe does not provide yet." }
+  ],
+  "steps": [
+    { "id": "toolchain", "phase": "toolchain", "argv": ["${CONDA}", "create", "--yes", "--quiet", "--prefix", "${PREFIX}/env", "--file", "${LOCK}"], "timeout_s": 3600 },
+    { "id": "source-init", "phase": "source", "argv": ["${GIT}", "init", "--quiet", "${PREFIX}/src"], "timeout_s": 60 },
+    { "id": "source-remote", "phase": "source", "argv": ["${GIT}", "-C", "${PREFIX}/src", "remote", "add", "origin", "${SOURCE_URL}"], "timeout_s": 60 },
+    { "id": "source-fetch", "phase": "source", "argv": ["${GIT}", "-C", "${PREFIX}/src", "fetch", "--quiet", "--depth", "1", "origin", "${SOURCE_COMMIT}"], "timeout_s": 900 },
+    { "id": "source-checkout", "phase": "source", "argv": ["${GIT}", "-C", "${PREFIX}/src", "checkout", "--quiet", "--detach", "FETCH_HEAD"], "timeout_s": 120 },
+    { "id": "source-verify", "phase": "source", "argv": ["${GIT}", "-C", "${PREFIX}/src", "rev-parse", "HEAD"], "timeout_s": 60, "expect_stdout_equals": "${SOURCE_COMMIT}" },
+    {
+      "id": "configure", "phase": "build",
+      "env": { "PATH": "${PREFIX}/env/bin:/usr/bin:/bin" },
+      "argv": [
+        "${PREFIX}/env/bin/cmake", "-G", "Ninja", "-S", "${PREFIX}/src", "-B", "${PREFIX}/build",
+        "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_GUI=OFF", "-DBUILD_TESTING=OFF", "-DWITH_TCMALLOC=OFF", "-DWITH_JEMALLOC=OFF",
+        "-DCMAKE_PREFIX_PATH=${PREFIX}/env",
+        "-DCMAKE_CXX_COMPILER=${PREFIX}/env/bin/x86_64-conda-linux-gnu-g++",
+        "-DCMAKE_CXX_FLAGS=-DBOOST_THROW_EXCEPTION_CURRENT_FUNCTION=BOOST_CURRENT_FUNCTION"
+      ],
+      "timeout_s": 600
+    },
+    { "id": "compile", "phase": "build", "env": { "PATH": "${PREFIX}/env/bin:/usr/bin:/bin" }, "argv": ["${PREFIX}/env/bin/cmake", "--build", "${PREFIX}/build", "--target", "scram-cli", "--parallel", "${JOBS}"], "timeout_s": 3600 },
+    { "id": "schemas-dir", "phase": "build", "argv": ["/usr/bin/mkdir", "-p", "${PREFIX}/build/share"], "timeout_s": 60 },
+    { "id": "schemas", "phase": "build", "argv": ["/usr/bin/cp", "-r", "${PREFIX}/src/share", "${PREFIX}/build/share/scram"], "timeout_s": 60 },
+    { "id": "binary-version", "phase": "verify", "argv": ["/usr/bin/env", "LD_LIBRARY_PATH=${PREFIX}/build/lib/scram:${PREFIX}/env/lib", "${PREFIX}/build/bin/scram", "--version"], "timeout_s": 60, "expect_stdout_regex": "^SCRAM 0\\.16\\.2" }
+  ],
+  "outputs": {
+    "binary": "build/bin/scram",
+    "library_dirs": ["build/lib/scram", "env/lib"],
+    "version_argv": ["--version"]
+  },
+  "smoke": { "cases_file": "scram-smoke.json" }
+}
