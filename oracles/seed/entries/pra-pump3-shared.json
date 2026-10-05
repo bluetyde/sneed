@@ -1,0 +1,37 @@
+{
+  "schema": "seed.oracle/0.1",
+  "oracleId": "pra-pump3-shared",
+  "entryVersion": 1,
+  "adapter": "pra",
+  "adapterVersions": [
+    "*"
+  ],
+  "tag": "good",
+  "inputs": [
+    {
+      "path": "models/pra-pump3-shared.json",
+      "sha256": "cb3accb49824842517b8d9ce23270a109a696ed66bc26eeb2a58bf5bf198d003"
+    }
+  ],
+  "expected": {
+    "quantity": "top_event_probability",
+    "value": 0.0595,
+    "unit": "1"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 0
+  },
+  "source": {
+    "kind": "hand",
+    "text": "P1=0.1, P2=0.1, S=0.05; S OR (P1 AND P2). Exact top-event probability by hand: 0.05 + 0.01 - 0.0005.",
+    "check": "Second method: exhaustive enumeration over every failure state of the reachable basic events with exact rational arithmetic (tests/oracle/enumerate.ts), which agrees with the hand derivation exactly; and the same model run through SCRAM in the engine tests."
+  },
+  "coverage": {
+    "quantities": [
+      "top_event_probability"
+    ],
+    "domain": "static fault tree with constant, independent basic-event probabilities, exact method: P1=0.1, P2=0.1, S=0.05; S OR (P1 AND P2)"
+  },
+  "toleranceHash": "ff27465a95d243a53745cbf56eee32fe8799877fd0bc031336ce3d8bccf05cb9"
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "seed.oracle/0.1",
+  "oracleId": "pra-bad-prob",
+  "entryVersion": 1,
+  "adapter": "pra",
+  "adapterVersions": [
+    "*"
+  ],
+  "tag": "bad-input",
+  "inputs": [
+    {
+      "path": "models/pra-bad-prob.json",
+      "sha256": "77f74c3bd5d0e7db6af09d4a09c0d228768118f26a37de9d8c291d8d836061f1"
+    }
+  ],
+  "expected": {
+    "refusalCode": "E_PROB_RANGE"
+  },
+  "source": {
+    "kind": "analytic",
+    "text": "probability 1.2: a model the schema and the cross-reference checks must refuse with E_PROB_RANGE, because the document itself breaks the rule (the vector is schema/vectors/bad/E_PROB_RANGE__above-one.json)."
+  },
+  "coverage": {
+    "quantities": [
+      "top_event_probability"
+    ],
+    "domain": "refusal of an invalid model: probability 1.2"
+  },
+  "toleranceHash": "ad998bea9bde6155eec92bcf49dd8081d48f7495ef591733125e3ac09a644fc2"
+}

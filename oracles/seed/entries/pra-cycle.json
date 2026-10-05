@@ -1,0 +1,30 @@
+{
+  "schema": "seed.oracle/0.1",
+  "oracleId": "pra-cycle",
+  "entryVersion": 1,
+  "adapter": "pra",
+  "adapterVersions": [
+    "*"
+  ],
+  "tag": "bad-input",
+  "inputs": [
+    {
+      "path": "models/pra-cycle.json",
+      "sha256": "dbfe2a75619ce5d4445e620052a44c0cbfd8fcd2d3e8d4b53e64b34b58d5ee5c"
+    }
+  ],
+  "expected": {
+    "refusalCode": "E_CYCLE"
+  },
+  "source": {
+    "kind": "analytic",
+    "text": "gate referencing itself via another gate: a model the schema and the cross-reference checks must refuse with E_CYCLE, because the document itself breaks the rule (the vector is schema/vectors/bad/E_CYCLE__two-gates.json)."
+  },
+  "coverage": {
+    "quantities": [
+      "top_event_probability"
+    ],
+    "domain": "refusal of an invalid model: gate referencing itself via another gate"
+  },
+  "toleranceHash": "7c439ccfd2454b7cfc5e737fff4b9189699c0926b33caf2d888193eb220656d3"
+}

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { execInWsl, killOwned, toWslPath, type ExecResult } from '../../src/core/engine.js';
+import { execInWsl, hasOwned, killOwned, toWslPath, type ExecResult } from '../../src/core/engine.js';
 import { defaultRuntimeEnv } from '../../src/runtime/resolve.js';
 
 // Real process handling in WSL. Needs the Ubuntu distro with python3 (used only as a harmless long-running stand-in).
@@ -135,4 +135,24 @@ describe('owned processes in WSL', () => {
     abort.abort();
     await expect(execInWsl(DISTRO, ['true'], { timeoutMs: 5000, signal: abort.signal, ownerTag: 'short' })).rejects.toThrow(/too short/);
   }, 30000);
+});
+
+describe('hasOwned (confirms a cancel)', () => {
+  it('is true while an owned process runs, false after killOwned, and false for a tag nothing carries', async () => {
+    const mine = unique('has-mine');
+    const unused = unique('has-unused');
+    leftovers.push(mine);
+    const abort = new AbortController();
+    const running = execInWsl(DISTRO, sleeperArgv(mine), { timeoutMs: 100000, signal: abort.signal, ownerTag: mine });
+    for (let i = 0; i < 20 && !hasOwned(DISTRO, mine); i++) await new Promise((r) => setTimeout(r, 500));
+    expect(hasOwned(DISTRO, mine)).toBe(true);
+    expect(hasOwned(DISTRO, unused)).toBe(false);
+    killOwned(DISTRO, mine);
+    await running;
+    expect(hasOwned(DISTRO, mine)).toBe(false);
+  }, 90000);
+
+  it('refuses a tag too short to be unique', () => {
+    expect(() => hasOwned(DISTRO, 'short')).toThrow();
+  });
 });

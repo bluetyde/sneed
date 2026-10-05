@@ -1,4 +1,6 @@
-# Plan 11: SEED adapter for SNEED (mapping, not built)
+# Plan 11: SEED adapter for SNEED (mapping; the SNEED side is built, the SEED side is not)
+
+**Status 2026-10-05:** the SNEED side exists: the headless runner and the SEED-format oracle entries, described in [HEADLESS.md](../HEADLESS.md). The `adapters/pra` code in SEED is not built and waits on the user's decisions below. Two findings from building it: the run-folder gap listed under "Known gaps" is closed (the runner writes its engine files under `<out>/work/`, so `analyze()` is unchanged), and only 11 of our 13 numerical oracle rows plus 3 refusal rows can be SEED entries, because `seed.oracle/0.1` has no field for run settings (the rare-event, min-cut-upper-bound and limit rows stay in `tests/oracles.json`).
 
 Written 2026-10-05 after reading SEED's contract **read-only** (nothing in the SEED repository was touched). This refines the "SEED adapter" section of [plan 06](06-suite-integration.md) now that SEED has real adapters to copy. Nothing here is built.
 

@@ -75,6 +75,13 @@ export function killOwned(distro: string, ownerTag: string): void {
   spawnSync('wsl.exe', ['-d', distro, '--exec', 'pkill', '-KILL', '-f', '--', pattern], { windowsHide: true });
 }
 
+/** True when a Linux process that carries the owner tag is still alive. Used to confirm a cancel. */
+export function hasOwned(distro: string, ownerTag: string): boolean {
+  if (ownerTag.length < 12) throw new Error('owner tag is too short to be unique');
+  const r = spawnSync('wsl.exe', ['-d', distro, '--exec', 'pgrep', '-f', '--', regexEscape(ownerTag)], { windowsHide: true });
+  return r.status === 0; // pgrep: 0 = at least one match, 1 = none
+}
+
 /**
  * Runs a command in WSL with an explicit argument list (never a shell string) and returns when it ends.
  * A Linux-side `timeout` is a backstop in case the Windows side is lost.
