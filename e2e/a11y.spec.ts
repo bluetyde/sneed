@@ -138,4 +138,23 @@ test.describe('accessibility', () => {
     await app.open();
     await expect(app.win).toHaveAttribute('data-valid', 'true');
   });
-});
+
+  test('the lesson tab (list, an active lesson with a mistake, a completed lesson with the hand calculation) has no axe violations', async ({ app, page }) => {
+    await app.open();
+    await app.tab('lesson');
+    await audit(page, 'lesson list');
+    await page.locator('[data-lesson="02-redundant-pumps"]').click();
+    await audit(page, 'lesson started, nothing built');
+    await app.action('add-or').click();
+    await app.setName('E1', 'P1');
+    await app.setName('E2', 'P2');
+    await app.setProbability('E1', '0.5'); // a wrong probability
+    await app.tab('lesson');
+    await audit(page, 'lesson in progress');
+    await app.setProbability('E1', '0.1');
+    await app.run();
+    await app.tab('lesson');
+    await expect(page.getByTestId('lesson-complete')).toBeVisible();
+    await page.getByTestId('show-calc').click();
+    await audit(page, 'lesson complete with hand calculation');
+  });});

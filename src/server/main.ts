@@ -17,7 +17,7 @@ if (process.argv.includes('--dev')) {
   allowedOrigins.push(`http://127.0.0.1:${web}`, `http://localhost:${web}`);
 }
 
-startServer({ projectDir, runsDir, staticDir: path.join(root, 'dist', 'web'), allowedOrigins }, port).then(
+startServer({ projectDir, runsDir, staticDir: path.join(root, 'dist', 'web'), allowedOrigins, lessonsDir: path.join(root, 'lessons'), oraclesFile: path.join(root, 'tests', 'oracles.json') }, port).then(
   (s) => {
     console.log(`SNEED server on ${s.url}  (models in ${projectDir}, runs in ${runsDir})`);
     const stop = (): void => void s.close().then(() => process.exit(0));

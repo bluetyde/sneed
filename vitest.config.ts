@@ -5,5 +5,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', 'e2e/**', 'dist/**'],
+    // the exhaustive export check enumerates every failure state and exceeds the 5 s default when the engine tests run beside it
+    testTimeout: 30_000,
   },
 });

@@ -14,8 +14,8 @@
   "steps": [
     {
       "id": "one-event",
-      "prompt": "Add one basic event called P for \"Pump P fails\".",
-      "hint": "Use Add event, then rename it P in the properties panel.",
+      "prompt": "Add one basic event and name it P, for \"Pump P fails\".",
+      "hint": "Use the Basic event button. Then select the event, open the Properties tab and type P in the Name field. The lesson finds your events by their names.",
       "check": {
         "kind": "event-count",
         "count": 1

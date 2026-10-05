@@ -14,8 +14,8 @@
   "steps": [
     {
       "id": "two-events",
-      "prompt": "Add two basic events, P1 and P2, each with probability 0.1.",
-      "hint": "Either pump alone can supply the flow, so both must fail to lose it.",
+      "prompt": "Add two basic events named P1 and P2, each with probability 0.1.",
+      "hint": "The AND gate button adds two events for you. Name each one in the Name field of the Properties tab. The lesson finds your events by their names.",
       "check": {
         "kind": "probabilities",
         "values": [
@@ -26,8 +26,8 @@
     },
     {
       "id": "and-top",
-      "prompt": "Add a gate \"No coolant flow\" that is true only when P1 AND P2 both fail. Make it the top event and run.",
-      "hint": "An AND gate fails only when every input fails.",
+      "prompt": "Make a gate for \"No coolant flow\" that is true only when P1 AND P2 both fail. It must be the top event. Then run.",
+      "hint": "An AND gate fails only when every input fails. The first gate you add becomes the top event.",
       "check": {
         "kind": "top-gate",
         "type": [

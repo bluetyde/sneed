@@ -2,6 +2,7 @@
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
 import { ApiError, type Api, type Issue, type Method, type ModelInfo, type RunResponse, type RuntimeInfo, type ValidateResponse } from '../api.js';
+import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
 import { buildVisual, type Visual } from './visual.js';
 
@@ -35,6 +36,11 @@ export class Editor {
   highlight: string[] = [];
   notice: Notice | null = null;
   models: ModelInfo[] = [];
+  /** The lessons the server offers, and the one being worked, if any. */
+  lessons: Lesson[] = [];
+  lesson: Lesson | null = null;
+  /** The hand calculation is shown only after the student has run the model (docs/plans/04-lessons.md). */
+  calcShown = false;
 
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
@@ -330,6 +336,85 @@ export class Editor {
     await this.api.cancel().catch(() => undefined);
   }
 
+  // ---- lessons ----
+  async loadLessons(): Promise<void> {
+    try {
+      this.lessons = await this.api.lessons();
+    } catch (e) {
+      this.lessons = [];
+      this.setNotice('warning', `Lessons are unavailable: ${(e as Error).message}`);
+    }
+    this.emit();
+  }
+  /** Starts a lesson from its starting model (an empty one when the lesson gives none). Replaces the current model. */
+  startLesson(id: string): boolean {
+    const lesson = this.lessons.find((l) => l.id === id);
+    if (!lesson) return false;
+    this.doc = lesson.start ? D.parseDoc(JSON.stringify(lesson.start)) : D.emptyModel(`Lesson: ${lesson.title}`, this.now());
+    this.undoStack = [];
+    this.redoStack = [];
+    this.selected = null;
+    this.fileName = null;
+    this.result = null;
+    this.runError = null;
+    this.savedText = this.text;
+    this.lesson = lesson;
+    this.calcShown = false;
+    this.afterChange();
+    return true;
+  }
+  leaveLesson(): void {
+    if (!this.lesson) return;
+    this.lesson = null;
+    this.calcShown = false;
+    this.emit();
+  }
+  showCalculation(): void {
+    if (this.lesson && this.hasTried) {
+      this.calcShown = true;
+      this.emit();
+    }
+  }
+  /** The student has run the model at least once in this lesson (so the hand calculation may be shown). */
+  get hasTried(): boolean {
+    return this.result?.kind === 'ran';
+  }
+  /**
+   * The model as the lesson checker reads it: each node is called by its display name when it has a unique one, because a
+   * student names their events P1, P2 or S, while the editor's own ids are E1, E2 (the lesson never depends on drawing position).
+   */
+  private nameOf(): (id: string) => string {
+    const counts = new Map<string, number>();
+    for (const n of [...this.doc.events, ...this.doc.gates]) {
+      const name = n.name?.trim();
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const label = new Map<string, string>();
+    for (const n of [...this.doc.events, ...this.doc.gates]) {
+      const name = n.name?.trim();
+      if (name && counts.get(name) === 1) label.set(n.id, name);
+    }
+    return (id) => label.get(id) ?? id;
+  }
+  get lessonDoc(): LessonDoc {
+    const nm = this.nameOf();
+    return {
+      top: nm(this.doc.top),
+      events: this.doc.events.map((e) => ({ id: nm(e.id), probability: e.probability })),
+      gates: this.doc.gates.map((g) => ({ id: nm(g.id), type: g.type, inputs: g.inputs.map(nm), ...(g.threshold !== undefined ? { threshold: g.threshold } : {}) })),
+    };
+  }
+  /** The shown result as the lesson compares it: only a current, completed and complete result counts. */
+  get lessonResult(): EngineResult | undefined {
+    if (this.result?.kind !== 'ran' || this.stale) return undefined;
+    const r = this.result.record;
+    if (r.status !== 'completed' || r.completeness !== 'complete' || r.top_event_probability === null) return undefined;
+    const nm = this.nameOf();
+    return { probability: r.top_event_probability, cutSets: r.minimal_cut_sets.map((c) => c.events.map(nm)) };
+  }
+  get lessonProgress(): LessonProgress | null {
+    return this.lesson ? checkLesson(this.lesson, this.lessonDoc, this.lessonResult) : null;
+  }
   // ---- files ----
   setNotice(kind: Notice['kind'] | null, text = ''): void {
     this.notice = kind ? { kind, text } : null;
@@ -337,6 +422,8 @@ export class Editor {
   }
   newModel(): void {
     this.doc = D.newModel(undefined, this.now());
+    this.lesson = null;
+    this.calcShown = false;
     this.undoStack = [];
     this.redoStack = [];
     this.selected = null;
@@ -358,6 +445,8 @@ export class Editor {
     try {
       const doc = D.parseDoc(await this.api.loadModel(name));
       this.doc = doc;
+      this.lesson = null;
+      this.calcShown = false;
       this.undoStack = [];
       this.redoStack = [];
       this.selected = null;

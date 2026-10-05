@@ -19,7 +19,7 @@ export interface ServerOpts {
 export async function newServer(opts: ServerOpts = {}): Promise<{ server: RunningServer; dir: string }> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sneed-e2e-'));
   const server = await startServer(
-    { projectDir: path.join(dir, 'models'), runsDir: path.join(dir, 'runs'), staticDir: path.join(ROOT, 'dist', 'web'), runtimeEnv: opts.runtimeEnv ?? defaultRuntimeEnv(), ...(opts.analyzeFn ? { analyzeFn: opts.analyzeFn } : {}) },
+    { projectDir: path.join(dir, 'models'), runsDir: path.join(dir, 'runs'), staticDir: path.join(ROOT, 'dist', 'web'), runtimeEnv: opts.runtimeEnv ?? defaultRuntimeEnv(), lessonsDir: path.join(ROOT, 'lessons'), oraclesFile: path.join(ROOT, 'tests', 'oracles.json'), ...(opts.analyzeFn ? { analyzeFn: opts.analyzeFn } : {}) },
     0,
   );
   return { server, dir };
@@ -66,15 +66,17 @@ export class App {
   }
   async setProbability(key: string, value: string): Promise<void> {
     await this.select(key);
+    await this.tab('properties');
     await this.field('probability').fill(value);
     await this.field('probability').press('Enter');
   }
   async setName(key: string, name: string): Promise<void> {
     await this.select(key);
+    await this.tab('properties');
     await this.field('name').fill(name);
     await this.field('name').press('Enter');
   }
-  async tab(name: 'properties' | 'problems' | 'results'): Promise<void> {
+  async tab(name: 'properties' | 'problems' | 'results' | 'lesson'): Promise<void> {
     await this.page.locator(`[data-tab="${name}"]`).click();
   }
   async run(): Promise<void> {
@@ -86,6 +88,15 @@ export class App {
   }
   async cutSets(): Promise<string[]> {
     return this.page.getByTestId('cut-set').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.events!).sort());
+  }
+  /** Keyboard-only switch of side tab: Tab to the selected tab (tabs are one roving Tab stop), then Right Arrow to the wanted one. */
+  async keyTab(name: 'properties' | 'problems' | 'results' | 'lesson'): Promise<void> {
+    const order = ['properties', 'problems', 'results', 'lesson'];
+    const cur = (await this.page.locator('[role=tab][aria-selected=true]').getAttribute('data-tab')) ?? 'properties';
+    await this.tabTo(this.page.locator(`[data-tab="${cur}"]`));
+    const n = (order.indexOf(name) - order.indexOf(cur) + order.length) % order.length;
+    for (let i = 0; i < n; i++) await this.page.keyboard.press('ArrowRight');
+    await expect(this.page.locator(`[data-tab="${name}"]`)).toHaveAttribute('aria-selected', 'true');
   }
   /** Presses Tab until the locator has focus (keyboard-only reach), failing after `max` presses. */
   async tabTo(target: Locator, max = 80): Promise<void> {
