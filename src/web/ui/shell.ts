@@ -8,13 +8,14 @@ import { confirmDiscard, openDialog, saveAsDialog } from './dialogs.js';
 import { h } from './dom.js';
 import { METHOD_TEXT } from './hints.js';
 import { icon } from './icons.js';
+import { ComparePanel } from './compare.js';
 import { LessonPanel } from './lesson.js';
 import { Outline } from './outline.js';
 import { ProblemsPanel } from './problems.js';
 import { Properties } from './properties.js';
 import { ResultsPanel } from './results.js';
 
-type Tab = 'properties' | 'problems' | 'results' | 'lesson';
+type Tab = 'properties' | 'problems' | 'results' | 'compare' | 'lesson';
 
 export function mountShell(root: HTMLElement, editor: Editor): void {
   let tab: Tab = 'properties';
@@ -23,6 +24,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   const properties = new Properties(editor);
   const problems = new ProblemsPanel(editor);
   const results = new ResultsPanel(editor);
+  const comparePanel = new ComparePanel(editor);
   const lessonPanel = new LessonPanel(editor);
   lessonPanel.confirmStart = () => confirmDiscard(editor);
   lessonPanel.onStart = () => {
@@ -103,11 +105,12 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     properties: h('button', { class: 'stab', role: 'tab', id: 'tab-properties', 'aria-controls': 'panel-properties', 'data-tab': 'properties', onclick: () => setTab('properties') }, 'Properties') as HTMLButtonElement,
     problems: h('button', { class: 'stab', role: 'tab', id: 'tab-problems', 'aria-controls': 'panel-problems', 'data-tab': 'problems', onclick: () => setTab('problems') }) as HTMLButtonElement,
     results: h('button', { class: 'stab', role: 'tab', id: 'tab-results', 'aria-controls': 'panel-results', 'data-tab': 'results', onclick: () => setTab('results') }) as HTMLButtonElement,
+    compare: h('button', { class: 'stab', role: 'tab', id: 'tab-compare', 'aria-controls': 'panel-compare', 'data-tab': 'compare', onclick: () => setTab('compare') }, 'Compare') as HTMLButtonElement,
     lesson: h('button', { class: 'stab', role: 'tab', id: 'tab-lesson', 'aria-controls': 'panel-lesson', 'data-tab': 'lesson', onclick: () => setTab('lesson') }, 'Lesson') as HTMLButtonElement,
   };
-  const tablist = h('div', { class: 'stabs', role: 'tablist', 'aria-label': 'Side panels' }, tabs.properties, tabs.problems, tabs.results, tabs.lesson);
+  const tablist = h('div', { class: 'stabs', role: 'tablist', 'aria-label': 'Side panels' }, tabs.properties, tabs.problems, tabs.results, tabs.compare, tabs.lesson);
   tablist.addEventListener('keydown', (e) => {
-    const order: Tab[] = ['properties', 'problems', 'results', 'lesson'];
+    const order: Tab[] = ['properties', 'problems', 'results', 'compare', 'lesson'];
     const i = order.indexOf(tab);
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -116,10 +119,11 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
       tabs[next].focus();
     }
   });
-  const panels: Record<Tab, HTMLElement> = { properties: properties.el, problems: problems.el, results: results.el, lesson: lessonPanel.el };
-  const side = h('aside', { class: 'side', 'aria-label': 'Details' }, tablist, properties.el, problems.el, results.el, lessonPanel.el);
+  const panels: Record<Tab, HTMLElement> = { properties: properties.el, problems: problems.el, results: results.el, compare: comparePanel.el, lesson: lessonPanel.el };
+  const side = h('aside', { class: 'side', 'aria-label': 'Details' }, tablist, properties.el, problems.el, results.el, comparePanel.el, lessonPanel.el);
 
   function setTab(next: Tab): void {
+    if (next === 'compare' && tab !== 'compare') void editor.refreshRuns();
     tab = next;
     syncTabs();
   }
@@ -206,6 +210,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     properties.render();
     problems.render();
     results.render();
+    comparePanel.render();
     lessonPanel.render();
     // status
     const hash = v?.model_hash ?? null;
@@ -257,4 +262,5 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   void editor.loadHealth();
   void editor.refreshModels();
   void editor.loadLessons();
+  void editor.refreshRuns();
 }

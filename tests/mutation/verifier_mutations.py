@@ -39,6 +39,9 @@ WP = ROOT / "src/web/ui/properties.ts"
 WS = ROOT / "src/web/ui/shell.ts"
 WR = ROOT / "src/web/ui/results.ts"
 WL = ROOT / "src/web/ui/lesson.ts"
+CM = ROOT / "src/core/compare.ts"
+SR = ROOT / "src/server/runs.ts"
+WK = ROOT / "src/web/ui/compare.ts"
 LS = ROOT / "src/core/lesson.ts"
 SL = ROOT / "src/server/lessons.ts"
 SA = ROOT / "src/server/app.ts"
@@ -222,7 +225,23 @@ MUTATIONS = [
     ("server lessons: an invalid lesson is skipped", SL, "      throw new LessonsUnavailable(`lesson file ${f} is refused (${why})`);", "      continue;"),
     ("server: lessons served without configuration", SA, "if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');", ""),
     ("ui lesson: hand calculation button always enabled", WL, "disabled: !ed.hasTried,", "disabled: false as boolean,", E2E),
-    ("ui lesson: completion shown when only the steps are done", WL, "if (p.complete) {", "if (allSteps) {", E2E),    # smoke checker (needs the engine)
+    ("ui lesson: completion shown when only the steps are done", WL, "if (p.complete) {", "if (allSteps) {", E2E),
+    # compare runs (plan 03): the pure diff, the read-only run store, the editor and the panel
+    ("compare: a changed gate type is not reported", CM, "const type = g.type !== h.type ? { from: g.type, to: h.type } : null;", "const type = null;"),
+    ("compare: input order counts as a difference", CM, "const inputs = !same([...g.inputs].sort(), [...h.inputs].sort())", "const inputs = !same(g.inputs, h.inputs)"),
+    ("compare: a probability change is not reported", CM, "const probability = e.probability !== f.probability ?", "const probability = false as boolean ?"),
+    ("compare: a name change makes the models differ", CM, "events.changed.filter((e) => e.probability).length;", "events.changed.length;"),
+    ("compare: cut-set identity depends on event order", CM, "const key = (events: string[]): string => JSON.stringify([...events].sort());", "const key = (events: string[]): string => JSON.stringify(events);"),
+    ("compare: a changed cut-set probability is not noticed", CM, "else if (w.probability !== v.probability) cut.changed.push(", "else if (false as boolean) cut.changed.push("),
+    ("compare: same inputs ignores the method", CM, "sameInputs: sameModel && method === null && engine === null,", "sameInputs: sameModel && engine === null,"),
+    ("compare: a ratio is given for a zero earlier value", CM, "ratio: pa !== null && pb !== null && pa !== 0 ? pb / pa : null", "ratio: pa !== null && pb !== null ? pb / pa : null"),
+    ("compare: hostile cut sets are accepted", CM, "if (isObj(c) && Array.isArray(c.events) && c.events.every(str) && num(c.probability))", "if (isObj(c))"),
+    # (no mutation for the dirname check in runs.ts runDir: RUN_ID and the ".." test already refuse every path, so removing it changes nothing; it stays as defence in depth)
+    ("runs: a damaged run is listed", SR, "if (!isObj(rec) || rec.schema_version !== 1) continue;", ""),
+    ("runs: listing is oldest first", SR, ".sort().reverse().slice(0, MAX_LISTED_RUNS * 2)", ".sort().slice(0, MAX_LISTED_RUNS * 2)"),
+    ("editor: a failed comparison keeps showing the old one", WE, "      this.comparison = null;\n      this.compareError = `Could not load the runs:", "      this.compareError = `Could not load the runs:"),
+    ("ui compare: the choice follows new runs after the student picked", WK, "if (!this.chosen || !ids.includes(this.a) || !ids.includes(this.b)) {", "if (!ids.includes(this.a) || !ids.includes(this.b)) {", E2E),
+    ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -271,8 +290,10 @@ def main() -> int:
     recover()
     chosen = [m for m in MUTATIONS if only in ("all", "check") or (only == "unit") == (len(m) == 4) and only in ("unit", "engine")]
     if only == "web":  # just the editor and server mutations
-        web = {WD, WV, WE, WC, WP, WS, WR, WL, SL, SA, ST}
+        web = {WD, WV, WE, WC, WP, WS, WR, WL, SL, SA, ST, CM, SR, WK}
         chosen = [m for m in MUTATIONS if m[1] in web]
+    if only == "compare":  # just the compare-runs mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:")) or m[0] == "editor: a failed comparison keeps showing the old one"]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

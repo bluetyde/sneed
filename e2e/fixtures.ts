@@ -76,7 +76,7 @@ export class App {
     await this.field('name').fill(name);
     await this.field('name').press('Enter');
   }
-  async tab(name: 'properties' | 'problems' | 'results' | 'lesson'): Promise<void> {
+  async tab(name: 'properties' | 'problems' | 'results' | 'compare' | 'lesson'): Promise<void> {
     await this.page.locator(`[data-tab="${name}"]`).click();
   }
   async run(): Promise<void> {
@@ -90,8 +90,8 @@ export class App {
     return this.page.getByTestId('cut-set').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.events!).sort());
   }
   /** Keyboard-only switch of side tab: Tab to the selected tab (tabs are one roving Tab stop), then Right Arrow to the wanted one. */
-  async keyTab(name: 'properties' | 'problems' | 'results' | 'lesson'): Promise<void> {
-    const order = ['properties', 'problems', 'results', 'lesson'];
+  async keyTab(name: 'properties' | 'problems' | 'results' | 'compare' | 'lesson'): Promise<void> {
+    const order = ['properties', 'problems', 'results', 'compare', 'lesson'];
     const cur = (await this.page.locator('[role=tab][aria-selected=true]').getAttribute('data-tab')) ?? 'properties';
     await this.tabTo(this.page.locator(`[data-tab="${cur}"]`));
     const n = (order.indexOf(name) - order.indexOf(cur) + order.length) % order.length;

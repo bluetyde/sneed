@@ -35,6 +35,23 @@ export interface ModelInfo {
   modified: string;
 }
 
+export interface RunInfo {
+  id: string;
+  modified: string;
+  status: string | null;
+  completeness: string | null;
+  method: string | null;
+  top_event_probability: number | null;
+  model_name: string | null;
+  model_hash: string | null;
+}
+
+export interface SavedRun {
+  id: string;
+  model_text: string;
+  record: unknown;
+}
+
 export type Method = 'exact' | 'rare-event' | 'mcub';
 
 /** What the editor needs from the server. The editor takes this interface so tests can supply a fake. */
@@ -47,6 +64,8 @@ export interface Api {
   loadModel(name: string): Promise<string>;
   saveModel(name: string, text: string): Promise<ModelInfo>;
   lessons(): Promise<Lesson[]>;
+  listRuns(): Promise<RunInfo[]>;
+  loadRun(id: string): Promise<SavedRun>;
 }
 
 export class ApiError extends Error {
@@ -75,6 +94,8 @@ export function httpApi(base = ''): Api {
     cancel: () => call('POST', '/api/run/cancel', {}),
     listModels: async () => (await call<{ models: ModelInfo[] }>('GET', '/api/models')).models,
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,
+    listRuns: async () => (await call<{ runs: RunInfo[] }>('GET', '/api/runs')).runs,
+    loadRun: (id) => call('GET', `/api/runs/${encodeURIComponent(id)}`),
     lessons: async () => (await call<{ lessons: Lesson[] }>('GET', '/api/lessons')).lessons,
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
   };

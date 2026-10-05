@@ -157,4 +157,19 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('lesson-complete')).toBeVisible();
     await page.getByTestId('show-calc').click();
     await audit(page, 'lesson complete with hand calculation');
-  });});
+  });
+
+  test('the compare tab (choosing runs, a comparison with model and cut-set changes) has no axe violations', async ({ app, page }) => {
+    await app.open();
+    await app.run();
+    await app.select('G1');
+    await app.tab('properties');
+    await app.field('type').selectOption('and');
+    await app.run();
+    await app.tab('compare');
+    await audit(page, 'compare, runs to choose');
+    await page.getByTestId('compare-go').click();
+    await expect(page.getByTestId('compare-probability')).toBeVisible();
+    await audit(page, 'compare, a comparison shown');
+  });
+});
