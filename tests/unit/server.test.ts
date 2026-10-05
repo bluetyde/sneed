@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AnalyzeOptions, AnalyzeOutcome } from '../../src/core/analyze.js';
 import { startServer, type RunningServer } from '../../src/server/app.js';
+import { readRun } from '../../src/server/runs.js';
 import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeModel, StorageError } from '../../src/server/storage.js';
 import { RuntimeNotInstalledError } from '../../src/runtime/resolve.js';
 import { ORACLE_MODELS } from '../oracle/models.js';
@@ -531,6 +532,47 @@ describe('saved runs over the API', () => {
       async (url) => {
         expect((await get(url + '/api/runs')).json.runs.map((x: { id: string }) => x.id)).toEqual(['real-run']);
         expect((await get(url + '/api/runs/alias-run')).status).toBe(422);
+      },
+    );
+  });
+
+
+  it('a folder swapped for a link between the check and the read is refused and the outside file is not served (Codex review)', async () => {
+    await withRuns(
+      (runs) => {
+        makeRun(runs, 'run-1', rec(0.1));
+        const outside = path.join(path.dirname(runs), 'outside-swap');
+        mkdirSync(outside, { recursive: true });
+        writeFileSync(path.join(outside, 'model.json'), '{"secret":"OUTSIDE"}');
+      },
+      async (_url, runs) => {
+        const outside = path.join(path.dirname(runs), 'outside-swap');
+        const swap = (): void => {
+          rmSync(path.join(runs, 'run-1', 'native'), { recursive: true, force: true });
+          symlinkSync(outside, path.join(runs, 'run-1', 'native'), 'junction');
+        };
+        expect(() => readRun(runs, 'run-1', swap)).toThrow();
+        try {
+          const r = readRun(runs, 'run-1');
+          expect(JSON.stringify(r)).not.toContain('OUTSIDE');
+        } catch {
+          /* refused: also fine */
+        }
+      },
+    );
+  });
+
+  it('a model file replaced by another file while it is being read is not served', async () => {
+    await withRuns(
+      (runs) => makeRun(runs, 'run-1', rec(0.1), '{"which":"original"}'),
+      async (_url, runs) => {
+        const file = path.join(runs, 'run-1', 'native', 'model.json');
+        const replace = (): void => {
+          rmSync(file);
+          writeFileSync(file, '{"which":"replacement"}');
+        };
+        expect(() => readRun(runs, 'run-1', undefined, replace)).toThrow();
+        expect(readRun(runs, 'run-1').model_text).toBe('{"which":"replacement"}'); // a fresh, undisturbed read is fine
       },
     );
   });

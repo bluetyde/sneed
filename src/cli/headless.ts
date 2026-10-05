@@ -45,6 +45,8 @@ export interface Deps {
   pollMs: number;
   /** Is a process with this id alive (the run process that wrote the record). */
   pidAlive: (pid: number) => boolean;
+  /** Test seam: called with the staging folder after its files are written and before it is checked and published. */
+  afterStage?: (staging: string) => void;
   /** How long cancel keeps killing and checking before it reports an engine process as still alive. */
   settleMs: number;
   sleep: (ms: number) => Promise<void>;
@@ -105,6 +107,9 @@ function writeAtomic(file: string, text: string): void {
   writeFileSync(tmp, text, { flag: 'wx' });
   renameSync(tmp, file);
 }
+
+/** Thrown when what is about to be published is no longer the plain folder this run made. Never cleaned up: it is not ours. */
+class Unsafe extends Error {}
 
 const sha256 = (b: Buffer | string): string => createHash('sha256').update(b).digest('hex');
 
@@ -233,9 +238,15 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
     const workId = deps.newWorkId();
     const workDir = path.join(workRoot, workId);
     try {
-      writeFileSync(activeFile, activeText({ workId, workDir, pid: process.pid, state: 'running' }), { flag: 'wx' });
+      mkdirSync(outDir, { recursive: true });
     } catch {
-      return fail(isLink(activeFile) ? 'E_PATH_TRAVERSAL' : 'E_EXISTS', 'this output folder already holds a run record');
+      return fail('E_APP_FAILED', 'the output folder cannot be created');
+    }
+    try {
+      writeFileSync(activeFile, activeText({ workId, workDir, pid: process.pid, state: 'running' }), { flag: 'wx' });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') return fail(isLink(activeFile) ? 'E_PATH_TRAVERSAL' : 'E_EXISTS', 'this output folder already holds a run record');
+      return fail('E_APP_FAILED', 'the run record could not be created');
     }
     let ended = 'failed';
     try {
@@ -272,8 +283,10 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
       }
       // publish atomically: build the result folder beside the destination, then rename it into place (never a half-written result)
       const staging = path.join(outDir, `.${runId}.tmp-${workId.slice(4)}`);
+      let stagingOwned = false; // only a folder this invocation created is ever deleted
       try {
         mkdirSync(staging);
+        stagingOwned = true;
         const files: Record<string, string | Buffer> = { 'model.json': bytes, 'results.json': JSON.stringify(rec, null, 2) + '\n' };
         for (const [name, content] of Object.entries(files)) writeFileSync(path.join(staging, name), content, { flag: 'wx' });
         const manifest = {
@@ -288,11 +301,22 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
           files: Object.keys(files).map((p) => ({ path: p, sha256: sha256(readFileSync(path.join(staging, p))) })),
         };
         writeFileSync(path.join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
+        deps.afterStage?.(staging);
+        // what is about to be published must still be the folder made above: not a link, inside the output folder, and every
+        // file really inside it. (A concurrent replacement between this check and the rename is a documented limit.)
+        if (isLink(staging) || !isInside(outDir, staging) || ['model.json', 'results.json', 'manifest.json'].some((f) => !isInside(staging, path.join(staging, f)))) throw new Unsafe();
         if (entryKind(finalDir) !== 'none') throw new Error('exists');
         renameSync(staging, finalDir);
-      } catch {
-        rmSync(staging, { recursive: true, force: true });
-        ended = 'failed';
+      } catch (e) {
+        ended = 'failed'; // decided before any cleanup, so a cleanup error cannot leave the record saying "completed"
+        if (stagingOwned && !(e instanceof Unsafe)) {
+          try {
+            rmSync(staging, { recursive: true, force: true });
+          } catch {
+            /* the folder stays; the reply below still says the result was not written */
+          }
+        }
+        if (e instanceof Unsafe) return fail('E_PATH_TRAVERSAL', 'the result folder was replaced while it was being written, so nothing was published');
         const taken = entryKind(finalDir) !== 'none';
         return fail(taken ? 'E_EXISTS' : 'E_APP_FAILED', taken ? 'the output folder already exists' : 'the result could not be written');
       }
@@ -354,7 +378,10 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
       }
       const retired = (() => {
         try {
-          return (JSON.parse(readFileSync(activeFile, 'utf8')) as { state?: unknown }).state === 'ended';
+          if (isLink(activeFile)) return false;
+          const r = JSON.parse(readFileSync(activeFile, 'utf8')) as Record<string, unknown>;
+          // only this run's own record, retired by this run, counts (another record in its place confirms nothing)
+          return r.state === 'ended' && r.workId === rec.workId && r.workDir === rec.workDir && r.pid === rec.pid;
         } catch {
           return false;
         }
