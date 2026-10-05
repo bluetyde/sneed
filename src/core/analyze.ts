@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from '
 import path from 'node:path';
 import { reachableEvents } from './bounds.js';
 import { documentHash, modelHash } from './canonical.js';
-import { DEFAULT_ENGINE, engineIdentity, execInWsl, toWslPath, type EngineConfig } from './engine.js';
+import { engineIdentity, execInWsl, toWslPath, type EngineConfig } from './engine.js';
+import { defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import { ExportError, exportOpenPsa, type VotingMode } from './export.js';
 import type { Method, NativeModel, Settings } from './model.js';
 import { assess, type EngineIdentity, type ResultRecord } from './result.js';
@@ -13,6 +14,7 @@ export interface AnalyzeOptions {
   /** Directory that holds one sub-directory per run (runs/<id>/{inputs,native,log,results.json}). */
   runsDir: string;
   settings?: Partial<Settings>;
+  /** Defaults to the installed runtime (see src/runtime/resolve.ts). */
   engine?: EngineConfig;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -74,7 +76,8 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   const xml = opts.transformXml ? opts.transformXml(exported.xml) : exported.xml;
   const hashes = { model_hash: modelHash(model), document_hash: documentHash(Buffer.from(documentText, 'utf8')), exported_input_hash: sha256(xml) };
 
-  const engineCfg = opts.engine ?? DEFAULT_ENGINE;
+  // no explicit engine: the installed runtime, or a typed E_SETUP_REQUIRED error; never an unmanaged binary
+  const engineCfg = opts.engine ?? resolveEngine(defaultRuntimeEnv());
   const runId = opts.runId ?? `${new Date().toISOString().replace(/[:.]/g, '-')}-${hashes.model_hash.slice(0, 8)}-${randomBytes(3).toString('hex')}`;
   if (!/^[A-Za-z0-9_-]{8,}$/.test(runId)) throw new RangeError('runId must be at least 8 characters of [A-Za-z0-9_-]');
   const runDir = path.resolve(opts.runsDir, runId);

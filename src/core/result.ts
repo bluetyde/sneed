@@ -31,8 +31,18 @@ export interface ResultRecord {
   input_hashes: { model_hash: string; document_hash: string; exported_input_hash: string };
   exporter_version: string;
   parser_version: string;
-  /** Only set for completed, and for truncated (diagnostic only, never indexed as an analysis). */
+  /**
+   * A probability, so never above 1. Only set for completed, and for truncated (diagnostic only, never indexed as
+   * an analysis). For an approximation whose own value exceeds 1 this is the bound 1 and `approximation_value` has the rest.
+   */
   top_event_probability: number | null;
+  /**
+   * The approximation method's own value, recomputed from the cut sets (rare-event: their sum; MCUB: 1 - prod(1 - p)).
+   * Null for the exact method. The rare-event sum can exceed 1; it is then not a probability, and `caveats` says so.
+   */
+  approximation_value: number | null;
+  /** Labels on a successful result that a reader must not miss. Empty means nothing to add. */
+  caveats: string[];
   minimal_cut_sets: { events: string[]; probability: number }[];
 }
 
@@ -96,6 +106,8 @@ export function assess(input: AssessInput): ResultRecord {
     exporter_version: EXPORTER_VERSION,
     parser_version: PARSER_VERSION,
     top_event_probability: null,
+    approximation_value: null,
+    caveats: [],
     minimal_cut_sets: [],
   };
   const fail = (...reasons: string[]): ResultRecord => ({ ...base, reasons });
@@ -148,18 +160,26 @@ export function assess(input: AssessInput): ResultRecord {
       }
     }
   }
-  // rare-event and MCUB values are pure functions of the cut sets: recompute them. SCRAM clamps a value above 1 to 1
-  // and only warns, so the clamp is a failure only when the true value really exceeds 1.
+  // rare-event and MCUB values are pure functions of the cut sets: recompute them. SCRAM clamps a value above 1 to 1 and
+  // only warns. That is not a failure: the record keeps the bound (1) as the probability, carries the method's own value
+  // and labels it. The printed value must still be exactly that clamp, anything else is inconsistent.
+  let approximationValue: number | null = null;
+  const caveats: string[] = [];
   if (reasons.length === 0 && settings.method !== 'exact') {
     const pc = report.products.map((prod) => prod.events.reduce((acc, e) => acc * p.get(e)!, 1));
     const raw = settings.method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : 1 - pc.reduce((a, x) => a * (1 - x), 1);
-    if (raw > 1 + 1e-9) reasons.push(adjusted ? 'probability-adjusted-by-engine' : 'probability-inconsistent-with-cut-sets');
-    else if (!close(report.probability, raw)) reasons.push('probability-inconsistent-with-cut-sets');
+    if (raw > 1 + 1e-9) {
+      if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');
+      else reasons.push('probability-inconsistent-with-cut-sets');
+    } else if (!close(report.probability, raw)) reasons.push('probability-inconsistent-with-cut-sets');
+    approximationValue = raw;
   }
   const warnings = report.warning ? [report.warning] : [];
   const parsed: Partial<ResultRecord> = {
     warnings,
     top_event_probability: report.probability,
+    approximation_value: approximationValue,
+    caveats,
     minimal_cut_sets: report.products.map((x) => ({ events: [...x.events].sort(), probability: x.probability })),
   };
   if (reasons.length) return { ...fail(...new Set(reasons)), warnings };

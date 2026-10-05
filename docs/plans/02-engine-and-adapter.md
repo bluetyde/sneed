@@ -53,7 +53,7 @@ Serialize cancellation and terminal publication: cancellation accepted first win
 
 ## Results record
 
-`results.json` is a local versioned record pending SEED E0; it will be mapped to the accepted SEED results index, not treated as an already compatible schema. Required content: quantity `top_event_probability` (dimensionless), `minimal_cut_sets` (each a list of event IDs with its probability), `method`, `assumptions`, `engine` (name, version, build), `warnings`, `input_hashes` (model, saved document and exported input), analysis settings, exporter/parser versions, `status`, `completeness`. Cut-set events must exist in the model; probabilities in [0, 1].
+`results.json` is a local versioned record pending SEED E0; it will be mapped to the accepted SEED results index, not treated as an already compatible schema. Required content: quantity `top_event_probability` (dimensionless), `minimal_cut_sets` (each a list of event IDs with its probability), `method`, `assumptions`, `engine` (name, version, build), `warnings`, `input_hashes` (model, saved document and exported input), analysis settings, exporter/parser versions, `status`, `completeness`. Cut-set events must exist in the model; probabilities in [0, 1]. Also recorded: `approximation_value` (rare-event and MCUB: the method's own value, recomputed from the cut sets; null for exact) and `caveats` (labels such as `approximation-exceeds-1`, set when a rare-event sum is above 1: then `top_event_probability` is the bound 1 and the sum is not a probability), and `engine.runtime` (the managed install that produced it, or null).
 
 ## Adapter verbs (P3)
 

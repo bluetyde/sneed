@@ -486,20 +486,4 @@ export async function rollback(env: RuntimeEnv, opts: RecoverOptions = {}): Prom
   return pointer;
 }
 
-/** The engine configuration for the active runtime, carrying the installed identity so a swapped binary is refused. */
-export function resolveEngine(env: RuntimeEnv): EngineConfig {
-  const dir = dirOf(env);
-  const active = readJson<ActivePointer>(path.join(dir, 'active.json'));
-  if (!active) throw new Error('no active SCRAM runtime: run the install first');
-  const manifestFile = path.join(dir, 'installed', `${active.install_id}.json`);
-  if (!existsSync(manifestFile) || sha256(readFileSync(manifestFile)) !== active.manifest_sha256) throw new Error('the active runtime manifest is missing or changed');
-  const m = readJson<InstalledManifest>(manifestFile)!;
-  return {
-    distro: m.distro,
-    binary: m.binary.path,
-    libs: m.library_dirs.join(':'),
-    expectedVersion: m.artifact.version,
-    expectedSha256: m.binary.sha256,
-    runtime: { install_id: m.install_id, recipe_revision: m.artifact.recipe_revision, manifest_sha256: active.manifest_sha256 },
-  };
-}
+export { resolveEngine, defaultRuntimeEnv, RuntimeNotInstalledError } from './resolve.js';
