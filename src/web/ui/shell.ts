@@ -86,7 +86,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   const runBtn = h('button', { class: 'run', type: 'button', 'data-testid': 'run', 'aria-describedby': 'run-pill', onclick: run }, icon('run'), 'Run') as HTMLButtonElement;
   const stopBtn = h('button', { class: 'stop', type: 'button', 'data-testid': 'cancel', onclick: () => void editor.cancel() }, icon('stop'), 'Cancel') as HTMLButtonElement;
   const pill = h('span', { class: 'run-pill', id: 'run-pill', role: 'status', 'data-testid': 'run-pill' });
-  const titlebar = h('div', { class: 'titlebar' }, h('div', { class: 'brand' }, 'SNEED', h('small', {}, 'fault-tree editor')), docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
+  const titlebar = h('div', { class: 'titlebar' }, h('h1', { class: 'brand' }, 'SNEED', h('small', {}, 'fault-tree editor')), docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
 
   // ---- notice ----
   const notice = h('div', { class: 'notice', role: 'status', hidden: true, 'data-testid': 'notice' });
@@ -124,10 +124,10 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   }
 
   // ---- status bar ----
-  const status = h('div', { class: 'status', 'data-testid': 'status' });
+  const status = h('footer', { class: 'status', 'data-testid': 'status' });
 
-  const center = h('div', { class: 'center' }, h('div', { class: 'canvas-bar' }, h('span', {}, 'Drag a node to move it. Drag from the dot under a gate to connect it. Arrow keys move between nodes; Enter edits.')), canvas.el);
-  const win = h('div', { class: 'win', 'data-testid': 'win' }, titlebar, ribbon, notice, h('div', { class: 'main' }, outline.el, center, side), status);
+  const center = h('main', { class: 'center', 'aria-label': 'Drawing area' }, h('div', { class: 'canvas-bar' }, h('span', {}, 'Drag a node to move it. Drag from the dot under a gate to connect it. Arrow keys move between nodes; Enter edits.')), canvas.el);
+  const win = h('div', { class: 'win', 'data-testid': 'win' }, h('header', { class: 'top' }, titlebar, ribbon, notice), h('div', { class: 'main' }, outline.el, center, side), status);
   root.replaceChildren(win);
   root.removeAttribute('class');
   root.classList.add('app');

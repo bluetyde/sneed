@@ -50,13 +50,13 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## P1: editor ([plan 03](docs/plans/03-editor.md))
 
-- [ ] Basic events, AND/OR gates and native voting gate, connect, move, delete, undo/redo.
-- [ ] Repeated-reference marker; selecting one highlights all references.
-- [ ] Properties panel, Problems list with selectable offenders, save/load, unsaved-work prompt.
-- [ ] Validation: cycles, missing references, out-of-range probabilities, unsupported imports refused.
-- [ ] Layout separate from the model hash; a layout move changes no revision.
-- [ ] Accessibility pass (keyboard, focus, contrast, screen-reader names, 200% zoom).
-- [ ] Browser e2e: draw, save, reload, same hash; keyboard-only run.
+- [x] 2026-10-05 Basic events, AND/OR gates and native voting gate, connect, move, delete, undo/redo. Evidence: 33 unit tests of the document operations, 36 of the editor core; e2e specs build the lesson models in real Chrome (0.0595, 0.021025, 0.028). See [docs/EDITOR.md](docs/EDITOR.md).
+- [x] 2026-10-05 Repeated-reference marker; selecting one highlights all references (e2e: A OR A is one event plus one marker and analyses to 0.1).
+- [x] 2026-10-05 Properties panel, Problems list with selectable offenders, save/load, unsaved-work prompt (e2e: save, reload, open with the same model hash; leaving with unsaved work is guarded).
+- [~] 2026-10-05 Validation: cycles, missing references, one-input gates and bad K are named in the Problems list and block Run; an out-of-range probability is refused at the field with the reason. **Open:** unsupported-import refusal needs the Open-PSA importer (P2).
+- [x] 2026-10-05 Layout separate from the model hash; a layout move changes no revision (e2e: drag a node, hash unchanged, result still current).
+- [~] 2026-10-05 Accessibility pass: automated. axe-core (WCAG 2.0/2.1 A and AA plus best practices) finds no violation in any editor state, including contrast; it found and we fixed missing landmarks, no h1 and one contrast failure. Every control has an accessible name; nodes announce what they are; colour is never the only signal; 200% zoom (a 700 px window) does not scroll sideways. **Open: no human screen-reader pass.**
+- [x] 2026-10-05 Browser e2e: draw, save, reload, same hash; keyboard-only run. `npm run e2e`: 35 tests in real Chrome with the real engine, including 5 keyboard-only tests that never use the mouse and 5 failure-path tests.
 - [ ] **[codex]** P1 exit review.
 
 ## P2: analysis ([plan 02](docs/plans/02-engine-and-adapter.md), [05](docs/plans/05-verification.md))

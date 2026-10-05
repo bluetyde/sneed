@@ -16,6 +16,9 @@ SNEED is MIT licensed (see [LICENSE](LICENSE)). It uses the software below. Lice
 | typescript | 5.9.3 | Apache-2.0 |
 | vitest | 5.0.3 | MIT |
 | tsx | 4.23.15 | MIT |
+| vite | 8.3.2 | MIT |
+| @playwright/test | 1.63.0 | Apache-2.0 |
+| axe-core | 4.13.0 | MPL-2.0 (used only to audit accessibility in the tests; not distributed with the app) |
 | @types/node | 24.19.1 | MIT |
 
 Their own dependencies carry their own licenses (see `package-lock.json`).
