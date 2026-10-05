@@ -134,3 +134,4 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 ## Done
 
 - [x] 2026-09-30: Planning skeleton, first plan and suite integration links (Codex).
+
