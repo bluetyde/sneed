@@ -203,3 +203,16 @@ ol.lessons h2 { margin: 0 0 4px; }
 .step.done { border-left-color: var(--ok); }
 .step-state { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .success { border: 1px solid color-mix(in srgb, var(--ok) 60%, var(--line)); background: color-mix(in srgb, var(--ok) 14%, var(--panel)); border-radius: 4px; padding: 6px 8px; margin: 8px 0; }
+/* printing: only the print sheet (built on beforeprint by exporter.ts); the editor is not printed */
+.print-sheet { display: none; }
+@media print {
+  body > *:not(#print-sheet) { display: none !important; }
+  html, body { background: #fff !important; color: #000 !important; }
+  .print-sheet { display: block; font: 11pt Arial, Helvetica, sans-serif; }
+  .print-sheet svg { display: block; width: 100%; height: auto; max-height: 24cm; page-break-inside: avoid; }
+  .print-sheet h2 { font-size: 13pt; margin: 14pt 0 6pt; }
+  .sheet-table { width: 100%; border-collapse: collapse; }
+  .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 2pt 5pt; text-align: left; }
+  .sheet-table tr { page-break-inside: avoid; }
+  .sheet-table thead { display: table-header-group; }
+}

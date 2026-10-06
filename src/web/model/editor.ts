@@ -5,6 +5,7 @@ import { ApiError, type Api, type Engine, type ImportResponse, type RanResponse,
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
+import { figureSvg } from './figure.js';
 import { buildVisual, type Visual } from './visual.js';
 
 export interface Notice {
@@ -36,6 +37,8 @@ export class Editor {
   selected: string | null = null;
   fileName: string | null = null;
   validation: ValidateResponse | null = null;
+  /** The text the current `validation` is for. While the text on screen differs, the shown result may be for another model. */
+  private validatedText: string | null = null;
   runtime: RuntimeInfo | null = null;
   method: Method = 'exact';
   /** Which engine Run uses. The built-in one is the default and needs no install. */
@@ -324,6 +327,7 @@ export class Editor {
       const v = await this.api.validate(text);
       if (mine === this.seq) {
         this.validation = v;
+        this.validatedText = text;
         this.emit();
       }
     } catch (e) {
@@ -575,6 +579,16 @@ export class Editor {
   get lessonProgress(): LessonProgress | null {
     return this.lesson ? checkLesson(this.lesson, this.lessonDoc, this.lessonResult) : null;
   }
+  // ---- figure ----
+  /** True when the figure must not show the result: it is out of date, or an edit has not been checked yet so it may be. */
+  get figureStale(): boolean {
+    return this.stale || this.validatedText !== this.text;
+  }
+  /** The drawing as a standalone SVG document, with the result if there is one (labelled when it is out of date or not complete). */
+  figureSvg(): string {
+    return figureSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.figureStale } : null }); // an edit not yet checked counts as out of date: the figure never pairs old numbers with a new drawing
+  }
+
   // ---- import ----
   /**
    * Imports an Open-PSA file under `name` (the server keeps the original beside the model) and opens the result. A refusal is returned
