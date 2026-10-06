@@ -159,6 +159,12 @@ describe('edge cases and limits', () => {
     const d = mkDoc('T', { A: 0.1, B: 0.2 }, [AND('T', ['A', 'B'])]);
     expect(() => imp(d, { maxWork: 1 })).toThrowError(SolveAborted);
     expect(imp(d, { maxWork: 1e9 }).rows).toHaveLength(2);
+    // the budget is events x diagram nodes: exactly that much is allowed, one less is not
+    const r = imp(d, { maxWork: 1e9 });
+    const work = r.rows.length * r.nodes;
+    expect(work).toBeGreaterThan(r.rows.length);
+    expect(imp(d, { maxWork: work }).rows).toHaveLength(2);
+    expect(() => imp(d, { maxWork: work - 1 })).toThrowError(SolveAborted);
   });
 
   it('the variable order never changes the answer', () => {
