@@ -35,6 +35,15 @@ describe('the built-in engine and SCRAM agree', () => {
     }, 120_000);
   }
 
+  it('a product-order limit below the longest cut set: both engines say truncated, and neither calls it complete', async () => {
+    const text = JSON.stringify(ORACLE_MODELS['pra-and']);
+    const s = await analyze(text, { runsDir: tmp, runId: id('scram'), settings: { limitOrder: 1 } });
+    const b = await analyzeBuiltin(text, { runsDir: tmp, runId: id('bdd'), settings: { limitOrder: 1 } });
+    if (s.kind !== 'ran' || b.kind !== 'ran') throw new Error('refused');
+    expect(s.record.status).toBe('truncated');
+    expect(b.record.status).toBe('truncated');
+  }, 120_000);
+
   it.each(['rare-event', 'mcub'] as const)('the %s approximation on the 2-of-3 model', async (method) => {
     const { s, b } = await both(ORACLE_MODELS['pra-vote-exact'], method);
     if (s.kind !== 'ran' || b.kind !== 'ran') throw new Error('refused');

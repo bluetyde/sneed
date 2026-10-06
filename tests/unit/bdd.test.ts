@@ -408,3 +408,38 @@ describe('second review of the engine (Codex)', () => {
   });
 });
 
+describe('a product-order limit is honoured like SCRAM honours it (found when SEED ran its adapter against the flipped default)', () => {
+  const run = (doc: Doc, limitOrder: number) => analyzeBuiltin(JSON.stringify(doc), { runsDir: tmp, runId: runId(), settings: { limitOrder } });
+
+  it('a limit below the order of a cut set is a truncated result, never a complete one', async () => {
+    const out = await run(ORACLE_MODELS['pra-and']!, 1);
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'truncated', completeness: 'truncated', reasons: ['product-order-limit-effective'] });
+    if (out.kind === 'ran') {
+      expect(out.record.top_event_probability).toBeCloseTo(0.02, 12); // diagnostic only, as for SCRAM
+      expect(out.record.minimal_cut_sets).toEqual([]); // the set {A, B} is above the limit and is not reported
+    }
+  });
+
+  it('a limit at or above the largest order is complete, and an OR needs only order 1', async () => {
+    const two = await run(ORACLE_MODELS['pra-and']!, 2);
+    expect(two.kind === 'ran' && two.record).toMatchObject({ status: 'completed', completeness: 'complete' });
+    const or = await run(ORACLE_MODELS['pra-or']!, 1);
+    expect(or.kind === 'ran' && or.record).toMatchObject({ status: 'completed', completeness: 'complete' });
+  });
+
+  it('on random trees a limit below the longest cut set is never a complete result (a limit below the structural bound with nothing demonstrably dropped is "unknown", as for SCRAM)', async () => {
+    let cut = 0;
+    for (let seed = 4001; seed <= 4060; seed++) {
+      const doc = randomDoc(seed);
+      const longest = Math.max(0, ...solve(model(doc)).cutSets.map((c) => c.events.length));
+      if (longest < 2) continue;
+      const out = await run(doc, longest - 1);
+      if (out.kind !== 'ran') continue;
+      cut++;
+      expect(out.record.status, `seed ${seed}`).not.toBe('completed');
+      expect(out.record.completeness, `seed ${seed}`).not.toBe('complete');
+    }
+    expect(cut).toBeGreaterThan(10); // the comparison really happened
+  }, 120_000);
+});
+

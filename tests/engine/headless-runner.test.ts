@@ -61,7 +61,7 @@ describe('built headless runner against the installed SCRAM runtime', () => {
     try {
       const doc = ORACLE_MODELS['pra-pump3-shared']!;
       writeFileSync(f.model, JSON.stringify(doc, null, 2) + '\n');
-      const r = cli(['run', f.model, '--out', f.out]);
+      const r = cli(['run', f.model, '--out', f.out, '--engine', 'scram']);
       expect(r.code).toBe(0);
       expect(r.json).toMatchObject({ ok: true, status: 'completed', runId: 'pra' });
       const dir = path.join(f.out, 'pra');
@@ -84,7 +84,7 @@ describe('built headless runner against the installed SCRAM runtime', () => {
     const f = fixture();
     try {
       writeFileSync(f.model, JSON.stringify(mkDoc('T', { A: 0.1, B: 0.1 }, [AND('T', ['A', 'B'])])));
-      const r = cli(['run', f.model, '--out', f.out, '--limit-order', '1']);
+      const r = cli(['run', f.model, '--out', f.out, '--engine', 'scram', '--limit-order', '1']);
       expect(r.code).toBe(0);
       expect(r.json.ok).toBe(true);
       expect(r.json.status).not.toBe('completed');
@@ -98,7 +98,7 @@ describe('built headless runner against the installed SCRAM runtime', () => {
     const f = fixture();
     try {
       writeFileSync(f.model, JSON.stringify(mkDoc('T', { A: 7 }, [AND('T', ['A', 'A'])])));
-      const r = cli(['run', f.model, '--out', f.out]);
+      const r = cli(['run', f.model, '--out', f.out, '--engine', 'scram']);
       expect(r.code).toBe(2);
       expect(existsSync(path.join(f.out, 'work'))).toBe(false);
       expect(existsSync(path.join(f.out, 'active-run.json'))).toBe(false);
@@ -120,7 +120,7 @@ describe('built headless runner against the installed SCRAM runtime', () => {
     const f = fixture();
     try {
       writeFileSync(f.model, JSON.stringify(ORACLE_MODELS['pra-pump3-shared']));
-      const child = spawn(process.execPath, [ENTRY, 'run', f.model, '--out', f.out], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(process.execPath, [ENTRY, 'run', f.model, '--out', f.out, '--engine', 'scram'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf8')));
       const done = new Promise<number | null>((resolve) => child.on('close', resolve));
@@ -152,7 +152,7 @@ describe('every SEED oracle entry, through the built runner and SCRAM', () => {
       try {
         const input = path.join(base, e.inputs[0].path);
         expect(sha(readFileSync(input))).toBe(e.inputs[0].sha256);
-        const r = cli(['run', input, '--out', f.out]);
+        const r = cli(['run', input, '--out', f.out, '--engine', 'scram']);
         expect(r.json).toMatchObject({ ok: true, status: 'completed' });
         const rec = JSON.parse(readFileSync(path.join(f.out, 'pra', 'results.json'), 'utf8'));
         expect(Math.abs(rec.top_event_probability - e.expected.value)).toBeLessThanOrEqual(e.tolerance.abs + e.tolerance.rel * Math.abs(e.expected.value));
@@ -166,7 +166,7 @@ describe('every SEED oracle entry, through the built runner and SCRAM', () => {
     it(`${e.oracleId}: run is refused with ${e.expected.refusalCode} and no engine is started`, () => {
       const f = fixture();
       try {
-        const r = cli(['run', path.join(base, e.inputs[0].path), '--out', f.out]);
+        const r = cli(['run', path.join(base, e.inputs[0].path), '--out', f.out, '--engine', 'scram']);
         expect(r.code).toBe(2);
         expect(r.json.errors.map((x: { code: string }) => x.code)).toContain(e.expected.refusalCode);
         expect(existsSync(path.join(f.out, 'work'))).toBe(false);
@@ -190,7 +190,7 @@ describe('a model too hard to verify (found by SEED: the time limit was not enfo
       }
       writeFileSync(f.model, JSON.stringify(mkDoc('TOP', events, gates)));
       const t0 = Date.now();
-      const r = cli(['run', f.model, '--out', f.out, '--timeout-seconds', '60']);
+      const r = cli(['run', f.model, '--out', f.out, '--engine', 'scram', '--timeout-seconds', '60']);
       expect(Date.now() - t0).toBeLessThan(110_000);
       expect(r.code).toBe(0);
       expect(r.json).toMatchObject({ ok: true, status: 'failed' });
@@ -275,5 +275,38 @@ describe('the built runner with --engine builtin (plan 10)', () => {
       rmSync(f.dir, { recursive: true, force: true });
     }
   }, 60_000);
+});
+
+describe('the default engine of the built runner (flipped to the built-in engine on 2026-10-06)', () => {
+  it('a run with no --engine uses the built-in engine and needs no SCRAM runtime', () => {
+    const f = fixture();
+    try {
+      writeFileSync(f.model, JSON.stringify(ORACLE_MODELS['pra-pump2-or']));
+      const r = cli(['run', f.model, '--out', f.out]);
+      expect(r.json).toMatchObject({ ok: true, status: 'completed' });
+      expect(JSON.parse(readFileSync(path.join(f.out, 'pra', 'manifest.json'), 'utf8')).engine).toMatchObject({ name: 'sneed-bdd', runtime: null });
+      expect(cli(['describe']).json.engines.default).toBe('builtin');
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it('SNEED_ENGINE=scram restores the old default for a caller that has not been updated; --engine still wins', () => {
+    const f = fixture();
+    const f2 = fixture();
+    try {
+      writeFileSync(f.model, JSON.stringify(ORACLE_MODELS['pra-pump2-or']));
+      const env = { ...process.env, SNEED_ENGINE: 'scram' };
+      const run = (args: string[]) => JSON.parse(spawnSync(process.execPath, [ENTRY, ...args], { cwd: ROOT, encoding: 'utf8', env, timeout: 110_000 }).stdout);
+      expect(run(['describe']).engines.default).toBe('scram');
+      expect(run(['run', f.model, '--out', f.out])).toMatchObject({ ok: true, status: 'completed' });
+      expect(JSON.parse(readFileSync(path.join(f.out, 'pra', 'manifest.json'), 'utf8')).engine.name).toBe('SCRAM');
+      expect(run(['run', f.model, '--out', f2.out, '--engine', 'builtin'])).toMatchObject({ ok: true, status: 'completed' });
+      expect(JSON.parse(readFileSync(path.join(f2.out, 'pra', 'manifest.json'), 'utf8')).engine.name).toBe('sneed-bdd');
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+      rmSync(f2.dir, { recursive: true, force: true });
+    }
+  }, 180_000);
 });
 

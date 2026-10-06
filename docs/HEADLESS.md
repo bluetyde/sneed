@@ -10,7 +10,7 @@ npm run build:cli      # builds dist/node/cli/headless.js (and copies schema/ to
 node dist/node/cli/headless.js describe
 node dist/node/cli/headless.js validate <model.json>
 node dist/node/cli/headless.js run <model.json> --out <absDir> [--run-id pra] [--method exact|rare-event|mcub]
-                                   [--engine scram|builtin] [--limit-order N] [--timeout-seconds 60]
+                                   [--engine builtin|scram] [--limit-order N] [--timeout-seconds 60]
 node dist/node/cli/headless.js cancel --out <absDir>
 ```
 
@@ -27,7 +27,7 @@ One JSON object on stdout, nothing else. Exit codes: **0** a reply was produced,
 
 ## Engine choice
 
-`--engine scram` (the default, kept for the SEED adapter) needs the installed SCRAM runtime and answers `E_SETUP_REQUIRED` without it. `--engine builtin` runs the decision-diagram engine inside the process: no runtime, no WSL2, same files, and the manifest names `sneed-bdd` with `runtime: null`. `describe` lists both under `engines` and says which is the default. See [ENGINES.md](ENGINES.md). A SEED adapter that wants SCRAM to be an optional install can pass `--engine builtin`; the default will change only together with the adapter.
+**The default is the built-in engine** (changed 2026-10-06 at the user's request; it was SCRAM). It runs the decision-diagram engine inside the process: no runtime, no WSL2, same files, and the manifest names `sneed-bdd` with `runtime: null`. `--engine scram` needs the installed SCRAM runtime and answers `E_SETUP_REQUIRED` without it. An explicit `--engine` always wins. A caller that has not been updated can keep the old default without a code change by setting the environment variable `SNEED_ENGINE=scram`. `describe` lists both engines under `engines` and says which is the default. **A caller must read the engine from the results** (`manifest.json` and `results.json` name it); it must not assume SCRAM. See [ENGINES.md](ENGINES.md).
 
 ## SEED oracle entries (`oracles/seed/`)
 
