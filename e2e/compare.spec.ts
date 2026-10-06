@@ -41,7 +41,7 @@ test.describe('compare saved runs', () => {
   test('two runs of the same model: unchanged, and the models are said to be the same', async ({ app, page }) => {
     await app.open();
     await app.run();
-    await page.getByTestId('run').click();
+    await app.run(); // the saved first run is offered; "Run again" makes the second run folder
     await expect(page.getByTestId('run-pill')).toHaveText('Result is current');
     // the second run is a new run folder; wait until the list has it
     await app.tab('compare');

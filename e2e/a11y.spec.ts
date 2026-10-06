@@ -193,4 +193,14 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('import-results')).toContainText('Not imported');
     await audit(page, 'import dialog, a refusal listed');
   });
+
+  test('the offer of a saved identical run, and a reused result, have no axe violations', async ({ app, page }) => {
+    await app.open();
+    await app.run();
+    await app.runOffer();
+    await audit(page, 'a saved identical run is offered');
+    await page.getByTestId('use-saved').click();
+    await expect(page.getByTestId('reused')).toBeVisible();
+    await audit(page, 'a reused saved result is shown');
+  });
 });

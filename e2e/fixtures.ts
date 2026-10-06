@@ -79,9 +79,34 @@ export class App {
   async tab(name: 'properties' | 'problems' | 'results' | 'compare' | 'lesson'): Promise<void> {
     await this.page.locator(`[data-tab="${name}"]`).click();
   }
+  /**
+   * Presses Run and waits for a new result. A saved identical run is offered instead of running (the server keeps every run), so this
+   * chooses "Run again" when that offer appears: tests that want the offer use `runOffer`.
+   */
   async run(): Promise<void> {
+    const pill = this.page.getByTestId('run-pill');
+    const before = (await pill.textContent()) ?? '';
     await this.page.getByTestId('run').click();
+    const offer = this.page.getByTestId('reuse-offer');
+    const patience = before === 'Result is current' ? 2500 : 0; // an identical re-run is answered by the offer, which takes a moment to appear
+    const t0 = Date.now();
+    for (;;) {
+      if (await offer.isVisible()) {
+        await this.page.getByTestId('run-fresh').click();
+        break;
+      }
+      const now = (await pill.textContent()) ?? '';
+      if (now === 'Result is current' && before !== 'Result is current') return void (await expect(this.page.getByTestId('result-status')).toBeVisible());
+      if (Date.now() - t0 > patience && now === 'Result is current') break;
+      if (Date.now() - t0 > 90_000) break;
+      await this.page.waitForTimeout(50);
+    }
     await expect(this.page.getByTestId('result-status')).toBeVisible({ timeout: 90_000 });
+  }
+  /** Presses Run and waits for the offer of a saved identical run. */
+  async runOffer(): Promise<void> {
+    await this.page.getByTestId('run').click();
+    await expect(this.page.getByTestId('reuse-offer')).toBeVisible({ timeout: 30_000 });
   }
   async topProbability(): Promise<number> {
     return Number(await this.page.getByTestId('top-probability').getAttribute('data-value'));

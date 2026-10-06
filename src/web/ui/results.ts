@@ -18,7 +18,7 @@ export class ResultsPanel {
 
   render(): void {
     const ed = this.editor;
-    const sig = JSON.stringify([ed.result, ed.stale, ed.highlight, ed.running, ed.runError, ed.method, ed.runBlockedReason, ed.text.length]);
+    const sig = JSON.stringify([ed.result, ed.stale, ed.highlight, ed.running, ed.queueAhead, ed.reuseOffer?.run_id ?? null, ed.reused, ed.runError, ed.method, ed.runBlockedReason, ed.text.length]);
     if (sig === this.signature) return;
     this.signature = sig;
     rerender(this.el, () => this.content());
@@ -37,9 +37,27 @@ export class ResultsPanel {
       h('ul', {}, ...c.differences.map((d) => h('li', {}, d))));
   }
 
+  /** A saved result for exactly this run exists: say so, and let the student choose. */
+  private offer(): Child[] {
+    const o = this.editor.reuseOffer;
+    if (!o) return [];
+    const p = o.result.record.top_event_probability;
+    return [
+      h('div', { class: 'stale-banner', role: 'status', 'data-testid': 'reuse-offer' },
+        h('strong', {}, 'This exact run is already saved. '),
+        `Same model, method and engine; run ${o.run_id}, saved ${new Date(o.saved_at).toLocaleString()}${typeof p === 'number' ? `, probability ${p.toPrecision(6)}` : ''}. `,
+        h('button', { class: 'btn primary', type: 'button', 'data-testid': 'use-saved', onclick: () => this.editor.useSaved() }, 'Show the saved result'), ' ',
+        h('button', { class: 'btn', type: 'button', 'data-testid': 'run-fresh', onclick: () => void this.editor.run({ fresh: true }) }, 'Run again')),
+    ];
+  }
+
   private content(): Child[] {
+    return [...this.offer(), ...this.body()];
+  }
+
+  private body(): Child[] {
     const ed = this.editor;
-    if (ed.running) return [h('p', { class: 'empty-state', role: 'status' }, 'Running the engine…')];
+    if (ed.running) return [h('p', { class: 'empty-state', role: 'status', 'data-testid': 'running' }, ed.queueAhead > 0 ? `Waiting for ${ed.queueAhead} other run${ed.queueAhead === 1 ? '' : 's'} to finish before this one starts…` : 'Running the engine…')];
     if (ed.runError) return [h('div', { class: 'notice error', role: 'alert' }, ed.runError)];
     const r = ed.result;
     if (!r) {
@@ -55,8 +73,10 @@ export class ResultsPanel {
         h('ul', { class: 'problems' }, ...r.errors.map((e) => h('li', { class: 'problem error' }, h('div', { class: 'code' }, e.code), h('div', { class: 'msg' }, e.message), PROBLEM_HINTS[e.code] ? h('div', { class: 'why' }, PROBLEM_HINTS[e.code]) : null))),
       ];
     }
+    if (r.kind === 'dequeued') return [];
     const rec = r.record;
     const out: Child[] = [];
+    if (ed.reused) out.push(h('div', { class: 'hint', 'data-testid': 'reused' }, `This is a saved result (run ${ed.reused.run_id}, ${new Date(ed.reused.saved_at).toLocaleString()}); nothing was run now.`));
     const ok = rec.status === 'completed' && rec.completeness === 'complete';
     out.push(h('div', { class: 'btn-row' }, h('span', { class: `pill ${ok ? 'ok' : rec.status === 'truncated' || rec.status === 'cancelled' ? 'warn' : 'bad'}`, 'data-testid': 'result-status' }, icon(ok ? 'check' : 'warn'), ` ${rec.status} / ${rec.completeness}`), h('span', { class: 'hint' }, METHOD_TEXT[rec.method] ?? rec.method)));
     if (ed.stale) {
