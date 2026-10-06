@@ -390,13 +390,15 @@ export function importOpenPsa(text: string, opts: { now?: string } = {}): Import
   const generatedIds = new Set<string>();
   const notes: ImportNote[] = [];
   const freshId = (base: string): string => {
-    for (let k = 1; ; k++) {
-      const id = `${base}_${k}`.slice(0, 64);
+    for (let k = 1; k <= MAX_ELEMENTS + 1; k++) {
+      const suffix = `_${k}`;
+      const id = `${base.slice(0, 64 - suffix.length)}${suffix}`; // the suffix is what makes the name new, so it is never cut off
       if (!defined.has(id) && !generatedIds.has(id)) {
         generatedIds.add(id);
         return id;
       }
     }
+    throw new Fail({ code: 'E_IMPORT_LIMIT', line: 0, column: 0, message: `no free name was found for a gate nested in ${base}` });
   };
   const refOf = (el: El): Ref | null => {
     for (const a of el.attrs.keys()) if (a !== 'name') unsupported(`attribute ${a}`, el, `on <${el.name}>`);
@@ -454,18 +456,21 @@ export function importOpenPsa(text: string, opts: { now?: string } = {}): Import
   const lineOf = (id: string): number => defined.get(id)?.line ?? pending.find((p) => p.id === id)?.line ?? 0;
   const kindOf = (id: string): 'event' | 'gate' | null => {
     if (events.has(id)) return 'event';
-    if (gateDefs.has(id) || generatedIds.has(id)) return 'gate';
+    if (gateDefs.has(id)) return 'gate'; // a generated gate is never named in the file, so a reference to one is a missing name
     return null;
   };
-  const resolve = (r: Ref, seen: Set<string> = new Set()): string | null => {
-    if (seen.has(r.name)) {
-      err({ code: 'E_CYCLE', line: r.line, column: r.column, message: `pass-through gates refer to each other in a loop through ${r.name}` });
-      return null;
-    }
-    const al = aliases.get(r.name);
-    if (al) {
+  const resolve = (start: Ref): string | null => {
+    // follow pass-through gates one by one (a chain can be long, so no recursion), each reference checked as written
+    const seen = new Set<string>();
+    let r = start;
+    for (let al = aliases.get(r.name); al; al = aliases.get(r.name)) {
+      if (r.kind === 'basic-event') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate, but it is referred to as a basic event` });
+      if (seen.has(r.name)) {
+        err({ code: 'E_CYCLE', line: r.line, column: r.column, message: `pass-through gates refer to each other in a loop through ${r.name}` });
+        return null;
+      }
       seen.add(r.name);
-      return resolve(al, seen);
+      r = al;
     }
     const k = kindOf(r.name);
     if (k === null) {
@@ -500,6 +505,7 @@ export function importOpenPsa(text: string, opts: { now?: string } = {}): Import
   for (const [nm, a] of aliases) {
     referencedNames.add(a.name);
     if (!defined.has(a.name)) err({ code: 'E_MISSING_REF', line: a.line, column: a.column, message: `${JSON.stringify(a.name)} (the target of the pass-through gate ${nm}) is not defined` });
+    else resolve({ name: nm, kind: 'gate', line: lineOf(nm), column: 1 });
   }
   if (errors.length) return { ok: false, errors };
 

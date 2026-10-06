@@ -467,3 +467,51 @@ describe('more gaps closed by mutation checks', () => {
     expect(lines).toEqual([...lines].sort((a, b) => a - b));
   });
 });
+
+describe('Codex review of the importer: found by reading, each reproduced', () => {
+  const A = be('A', '0.1');
+  const nested = (g: string): string => file([A, `    <define-gate name="${g}"><or><and><basic-event name="A"/><basic-event name="A"/></and><basic-event name="A"/></or></define-gate>`].join('\n'));
+
+  it('a gate with a 63- or 64-character name and a nested connective is imported, not looped on', () => {
+    for (const len of [62, 63, 64]) {
+      const g = 'G'.repeat(len);
+      const r = ok(nested(g));
+      const ids = (r.doc as { gates: { id: string }[] }).gates.map((x) => x.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const id of ids) expect(id.length).toBeLessThanOrEqual(64);
+    }
+  });
+
+  it('two nested connectives under a 63-character name get two different names', () => {
+    const g = 'G'.repeat(63);
+    const xml = file([A, `    <define-gate name="${g}"><or><and><basic-event name="A"/><basic-event name="A"/></and><and><basic-event name="A"/><basic-event name="A"/></and></or></define-gate>`].join('\n'));
+    const ids = (ok(xml).doc as { gates: { id: string }[] }).gates.map((x) => x.id);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('a reference to a name that only the importer would generate is a missing name', () => {
+    const xml = file([be('A', '0.1'), be('B', '0.2'), '    <define-gate name="TOP"><or><and><basic-event name="A"/><basic-event name="B"/></and><gate name="TOP_1"/></or></define-gate>'].join('\n'));
+    const e = first(xml);
+    expect(e.code).toBe('E_MISSING_REF');
+    expect(e.message).toMatch(/TOP_1/);
+  });
+
+  it('pass-through gates in a loop away from the top are refused, not dropped', () => {
+    const xml = file([be('A', '0.1'), be('B', '0.2'), '    <define-gate name="TOP"><or><basic-event name="A"/><basic-event name="B"/></or></define-gate>', '    <define-gate name="X"><gate name="Y"/></define-gate>', '    <define-gate name="Y"><gate name="X"/></define-gate>'].join('\n'));
+    expect(bad(xml).errors.some((e) => e.code === 'E_CYCLE')).toBe(true);
+  });
+
+  it('a pass-through gate referred to as a basic event is refused', () => {
+    const xml = file([be('A', '0.1'), be('B', '0.2'), '    <define-gate name="X"><basic-event name="A"/></define-gate>', '    <define-gate name="TOP"><or><basic-event name="X"/><basic-event name="B"/></or></define-gate>'].join('\n'));
+    expect(first(xml).message).toMatch(/is a gate, but it is referred to as a basic event/);
+  });
+
+  it('a very long chain of pass-through gates is resolved without overflowing the stack', () => {
+    const n = 15_000;
+    const gates = Array.from({ length: n }, (_, i) => `<define-gate name="G${i}"><gate name="G${i + 1}"/></define-gate>`);
+    gates.push(`<define-gate name="G${n}"><basic-event name="A"/></define-gate>`);
+    const xml = `<opsa-mef><define-fault-tree name="F">${A}<define-gate name="TOP"><or><gate name="G0"/><basic-event name="B"/></or></define-gate>${be('B', '0.2')}${gates.join('')}</define-fault-tree></opsa-mef>`;
+    const r = imp(xml);
+    expect(r.ok, JSON.stringify(!r.ok && r.errors.slice(0, 2))).toBe(true);
+  });
+});

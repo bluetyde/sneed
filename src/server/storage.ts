@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync, existsSync, unlinkSync, linkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
@@ -69,20 +69,25 @@ export function writeImport(dir: string, name: string, files: { modelText: strin
   }
   mkdirSync(dir, { recursive: true });
   const written: string[] = [];
+  // Publishing is a hard link, which fails when the name exists: another import of the same name (even in another process) is
+  // never overwritten, and `written` holds only what THIS call created, so a rollback never removes anything that is not ours.
   const put = (file: string, text: string): void => {
-    if (existsSync(file)) throw new StorageError('E_EXISTS', `${path.basename(file)} already exists; choose another name`);
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     try {
       writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });
-      renameSync(tmp, file);
+      try {
+        linkSync(tmp, file);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === 'EEXIST') throw new StorageError('E_EXISTS', `${path.basename(file)} already exists; choose another name`);
+        throw e;
+      }
       written.push(file);
-    } catch (e) {
+    } finally {
       try {
         unlinkSync(tmp);
       } catch {
         /* nothing to clean */
       }
-      throw e;
     }
   };
   try {
@@ -90,13 +95,17 @@ export function writeImport(dir: string, name: string, files: { modelText: strin
     put(path.resolve(dir, `${name}.opsa-import.log`), files.report);
     put(model, files.modelText);
   } catch (e) {
+    const left: string[] = [];
     for (const f of written) {
       try {
         unlinkSync(f);
-      } catch {
-        /* best effort */
+      } catch (u) {
+        if ((u as NodeJS.ErrnoException).code !== 'ENOENT') left.push(path.basename(f));
       }
     }
+    // say what could not be removed: it would block the next import of this name
+    if (left.length && e instanceof StorageError) throw new StorageError(e.code, `${e.message}; these files of the failed import could not be removed: ${left.join(', ')}`);
+    if (left.length) throw new Error(`${(e as Error).message}; these files of the failed import could not be removed: ${left.join(', ')}`);
     throw e;
   }
   const st = statSync(model);
