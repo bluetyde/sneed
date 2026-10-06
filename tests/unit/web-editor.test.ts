@@ -1068,5 +1068,36 @@ describe('the importance table in the editor', () => {
     expect(ed.importance).toBeNull(); // the answer was for the text before the edit
     expect(ed.importanceBusy).toBe(false);
   });
+
+  it('can be cancelled by its request id while it is computing; the answer of a cancelled table changes nothing', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let id = '';
+    const cancelled: (string | undefined)[] = [];
+    const api = fakeApi({
+      importance: async (_t, requestId) => {
+        id = requestId!;
+        await gate;
+        return { kind: 'failed', why: 'cancelled', message: 'The importance table was cancelled.' };
+      },
+      cancel: async (rid) => {
+        cancelled.push(rid);
+        release();
+        return { cancelled: true };
+      },
+    });
+    const { ed } = await ready(api);
+    await ed.cancelImportance(); // nothing is running: no request
+    expect(cancelled).toEqual([]);
+    const p = ed.computeImportance();
+    for (let i = 0; i < 100 && !id; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+    await ed.cancelImportance();
+    await p;
+    expect(cancelled).toEqual([id]);
+    expect(ed.importance).toBeNull();
+    expect(ed.importanceBusy).toBe(false);
+    expect(ed.notice?.text).toMatch(/cancelled/);
+  });
 });
 

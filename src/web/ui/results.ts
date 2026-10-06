@@ -60,7 +60,7 @@ export class ResultsPanel {
     const ed = this.editor;
     const imp = ed.importance;
     const out: Child[] = [h('h2', {}, 'Importance measures')];
-    out.push(h('p', { class: 'hint' }, 'Which basic events matter most to the top probability, by four exact measures. ', h('button', { class: 'btn', type: 'button', 'data-testid': 'compute-importance', disabled: !ed.canComputeImportance, onclick: () => void ed.computeImportance() }, ed.importanceBusy ? 'Computing…' : imp ? 'Compute again' : 'Compute importance')));
+    out.push(h('p', { class: 'hint' }, 'Which basic events matter most to the top probability, by four exact measures. ', h('button', { class: 'btn', type: 'button', 'data-testid': 'compute-importance', disabled: !ed.canComputeImportance, onclick: () => void ed.computeImportance() }, ed.importanceBusy ? 'Computing…' : imp ? 'Compute again' : 'Compute importance'), ed.importanceBusy ? ' ' : null, ed.importanceBusy ? h('button', { class: 'btn', type: 'button', 'data-testid': 'cancel-importance', onclick: () => void ed.cancelImportance() }, 'Cancel') : null));
     if (!imp) return out;
     if (imp.kind === 'refused') return [...out, h('div', { class: 'notice error', role: 'alert', 'data-testid': 'importance-refused' }, 'The model is not valid, so there is no table: ', imp.errors.map((e) => e.message).join('; '))];
     if (imp.kind === 'failed') return [...out, h('div', { class: 'caveat', role: 'status', 'data-testid': 'importance-failed' }, h('strong', {}, 'No table. '), imp.message)];
@@ -72,7 +72,7 @@ export class ResultsPanel {
         h('td', { class: 'num' }, fmtImp(e.probability)),
         h('td', { class: 'num' }, fmtImp(e.birnbaum)),
         h('td', { class: 'num' }, dash(e.raw)),
-        h('td', { class: 'num', title: e.rrwInfinite ? 'The event is in every cut set: removing its failures would remove the top event.' : '' }, e.rrwInfinite ? '∞' : dash(e.rrw)),
+        h('td', { class: 'num', title: e.rrwInfinite ? 'With this event\'s probability set to zero, the top probability is zero under the current probabilities.' : '' }, e.rrwInfinite ? '∞' : dash(e.rrw)),
         h('td', { class: 'num' }, dash(e.fv)))))));
     out.push(h('p', { class: 'hint' }, `Sorted by Birnbaum importance. Top probability ${fmtImp(imp.top)}, engine ${imp.engine.name} ${imp.engine.version}. "—" means not defined (the top probability is 0).`));
     out.push(h('details', { class: 'defs' }, h('summary', {}, 'What these measures mean'), h('dl', { class: 'kv' }, ...IMPORTANCE_DEFINITIONS.flatMap((d) => [h('dt', {}, d.name), h('dd', {}, d.meaning)])), h('p', { class: 'hint' }, imp.assumptions || IMPORTANCE_ASSUMPTIONS)));

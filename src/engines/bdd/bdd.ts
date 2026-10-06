@@ -9,7 +9,7 @@ export const FALSE = 0;
 export const TRUE = 1;
 
 export class SolveAborted extends Error {
-  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events' | 'too-much-memory') {
+  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events' | 'too-much-memory' | 'numeric-range') {
     super(`solve stopped: ${why}`);
   }
 }
@@ -148,6 +148,26 @@ export class Bdd {
     const go = (n: number): number => {
       if (n === FALSE) return 0;
       if (n === TRUE) return 1;
+      const hit = memo.get(n);
+      if (hit !== undefined) return hit;
+      this.charge();
+      const q = p[this.v[n]!]!;
+      const r = q * go(this.hi[n]!) + (1 - q) * go(this.lo[n]!);
+      memo.set(n, r);
+      return r;
+    };
+    return go(root);
+  }
+
+  /**
+   * Probability that the function is false, computed on its own and not as 1 - probability(): when the function is almost certain,
+   * the subtraction would round to 0 and lose every digit that matters (an OR of twenty events at 0.9 is false with probability 1e-20).
+   */
+  complement(root: number, p: number[]): number {
+    const memo = new Map<number, number>();
+    const go = (n: number): number => {
+      if (n === FALSE) return 1;
+      if (n === TRUE) return 0;
       const hit = memo.get(n);
       if (hit !== undefined) return hit;
       this.charge();

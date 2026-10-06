@@ -49,6 +49,7 @@ export class Editor {
   importanceBusy = false;
   private importanceData: { text: string; model_hash: string | null; response: Exclude<ImportanceResponse, { kind: 'dequeued' }> } | null = null;
   private importanceSeq = 0;
+  private importanceRequestId: string | null = null;
   /** How often, in milliseconds, a run in progress asks the server where it is in the queue. */
   static queuePollMs = 700;
   running = false;
@@ -590,6 +591,11 @@ export class Editor {
     if (!d || d.text !== this.text) return null; // any change to the document hides it until it is asked for again
     return d.response;
   }
+  /** Stops the importance table, whether it is waiting its turn or being computed. */
+  async cancelImportance(): Promise<void> {
+    if (!this.importanceBusy || !this.importanceRequestId) return;
+    await this.api.cancel(this.importanceRequestId).catch(() => undefined);
+  }
   get canComputeImportance(): boolean {
     return !this.importanceBusy && this.validation?.valid === true && this.validatedText === this.text;
   }
@@ -599,6 +605,8 @@ export class Editor {
     this.importanceBusy = true; // before the first await, so a second press while the model is being checked is ignored
     this.emit();
     const mine = ++this.importanceSeq;
+    const requestId = `i${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    this.importanceRequestId = requestId;
     await this.settle();
     if (this.validation?.valid !== true) {
       this.importanceBusy = false;
@@ -608,12 +616,16 @@ export class Editor {
     const text = this.text;
     const model_hash = this.validation.model_hash;
     try {
-      const r = await this.api.importance(text);
-      if (mine === this.importanceSeq && r.kind !== 'dequeued') this.importanceData = { text, model_hash, response: r };
+      const r = await this.api.importance(text, requestId);
+      if (r.kind === 'dequeued' || (r.kind === 'failed' && r.why === 'cancelled')) this.setNotice('info', 'The importance table was cancelled. Nothing was changed.');
+      else if (mine === this.importanceSeq) this.importanceData = { text, model_hash, response: r };
     } catch (e) {
       if (mine === this.importanceSeq) this.importanceData = { text, model_hash, response: { kind: 'failed', why: 'internal', message: `Could not compute the importance table: ${(e as Error).message}` } };
     } finally {
-      if (mine === this.importanceSeq) this.importanceBusy = false;
+      if (mine === this.importanceSeq) {
+        this.importanceBusy = false;
+        this.importanceRequestId = null;
+      }
       this.emit();
     }
   }
