@@ -2,9 +2,11 @@
 // run files: no absolute path of the project, the run folder or a home folder, and no account name. Pure text in, text out; used when
 // the app writes run files (analyze.ts) and by `scripts/scrub.ts` for folders that already exist and for the guard test.
 //
-// Placeholders: <run> the run folder, <repo> the project folder, <user> an account name.
-
+// Placeholders: <run> the run folder, <runs> the folder of runs, <repo> the project folder, <home> a home folder, <user> an account name.
 import { userInfo } from 'node:os';
+
+/** Accounts every machine has: they identify nobody, and `root` is also the name of a folder in every WSL path. Never taken as "the account". */
+const SYSTEM_NAMES = new Set(['root', 'administrator', 'system', 'runner', 'runneradmin', 'nobody', 'daemon', 'default', 'defaultuser0', 'wsl', 'ubuntu']);
 
 /** The names of the account running this process, as the operating system and the environment give them. */
 export function accountNames(): string[] {
@@ -15,23 +17,28 @@ export function accountNames(): string[] {
     /* no account information: the environment may still have it */
   }
   for (const n of [process.env.USERNAME, process.env.USER, process.env.LOGNAME]) if (n) names.add(n);
-  return [...names];
+  return [...names].filter((n) => !SYSTEM_NAMES.has(n.toLowerCase()));
 }
 
-/** Account names that are examples, not people: never reported, never replaced. */
+/** Account names in a path that are examples, not people: a path naming one is neither reported nor changed (an explicitly given name always is). */
 const EXAMPLE_NAMES = new Set(['student', 'user', 'you', 'name', 'username', '<user>', 'alice', 'bob', 'example', 'x']);
 
-const NAME = '[^\\\\/\\s"\'<>:*?|%$(){}\\[\\],;`]+'; // an account name in a path: no separators, spaces, markup or code punctuation
-// drive-letter user folder in its several spellings (C:\Users\x, C:/Users/x, JSON-escaped C:\\Users\\x), and the WSL spelling
-const WIN_USERS = new RegExp(`([A-Za-z]:(?:\\\\{1,2}|/)Users(?:\\\\{1,2}|/))(${NAME})`, 'g');
-const MNT_USERS = new RegExp(`(/mnt/[a-z]/Users/)(${NAME})`, 'g');
-const MAC_USERS = new RegExp(`(^|[\\s"'=(:])(/Users/)(${NAME})`, 'gm');
-const HOME = new RegExp(`(^|[\\s"'=(:])(/home/)(${NAME})`, 'gm');
+// A name in a path. It may hold spaces and %20 when a separator follows (Windows account names can: "Zed Smith"), and stops at the first
+// space otherwise, so that prose after a bare home folder is left alone. Never code punctuation or markup.
+const CH = '[^\\\\/\\s"\'<>:*?|%$(){}\\[\\],;`]';
+const WORD = `(?:${CH}|%20)+`;
+const NAME_SP = `${WORD}(?:(?: |%20)${WORD}){1,2}(?=[\\\\/])`; // up to three words, only when a separator follows
+const NAME = `(?:${NAME_SP}|${WORD})`;
+// drive-letter user folder in its several spellings (C:\Users\x, C:/Users/x, JSON-escaped C:\\Users\\x, file:///C:/Users/x), and WSL's
+const WIN_USERS = new RegExp(`([A-Za-z]:(?:\\\\{1,2}|/)Users(?:\\\\{1,2}|/))(${NAME})`, 'gi');
+const MNT_USERS = new RegExp(`(/mnt/[a-z]/Users/)(${NAME})`, 'gi');
+const MAC_USERS = new RegExp(`(^|[\\s"'=(:]|file://)(/Users/)(${NAME})`, 'gm');
+const HOME = new RegExp(`(^|[\\s"'=(:]|file://)(/home/)(${NAME})`, 'gm');
 
 export interface ScrubOptions {
   /** Exact folders to replace, each with its placeholder, in every spelling a tool might have written (/, \, \\ and %20 for spaces). */
   prefixes?: [folder: string, placeholder: string][];
-  /** Account names to remove wherever they appear (case-insensitive, whole word). */
+  /** Account names to remove wherever they appear (case-insensitive, whole word, also with %20 for spaces), whatever they are. */
   usernames?: string[];
 }
 
@@ -47,21 +54,24 @@ function spellings(folder: string): string[] {
   return [...out].filter((s) => s.length > 3).sort((a, b) => b.length - a.length); // longest first
 }
 
+/** A name as a pattern that also matches its %20 spelling, whole word only. */
+function namePattern(u: string): RegExp {
+  return new RegExp(`(?<![A-Za-z0-9])${escapeRe(u).replace(/ /g, '(?: |%20)')}(?![A-Za-z0-9])`, 'gi');
+}
+
 export function scrubText(text: string, opts: ScrubOptions = {}): string {
   let out = text;
   for (const [folder, placeholder] of opts.prefixes ?? []) {
     if (!folder) continue;
     for (const s of spellings(folder)) out = out.replace(new RegExp(escapeRe(s), 'gi'), placeholder);
   }
+  // the account names first: a name with a space is whole here, before a path pattern could take a part of it
+  for (const u of opts.usernames ?? []) if (u) out = out.replace(namePattern(u), '<user>');
   const keep = (name: string): boolean => EXAMPLE_NAMES.has(name.toLowerCase());
   out = out.replace(WIN_USERS, (m, a: string, n: string) => (keep(n) ? m : `${a}<user>`));
   out = out.replace(MNT_USERS, (m, a: string, n: string) => (keep(n) ? m : `${a}<user>`));
   out = out.replace(MAC_USERS, (m, pre: string, a: string, n: string) => (keep(n) ? m : `${pre}${a}<user>`));
   out = out.replace(HOME, (m, pre: string, a: string, n: string) => (keep(n) ? m : `${pre}${a}<user>`));
-  for (const u of opts.usernames ?? []) {
-    if (u.length < 3 || keep(u)) continue; // a one- or two-letter name would be removed from ordinary words
-    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'gi'), '<user>');
-  }
   return out;
 }
 
@@ -82,8 +92,8 @@ export function findLeaks(text: string, opts: Pick<ScrubOptions, 'usernames'> = 
     }
   }
   for (const u of opts.usernames ?? []) {
-    if (u.length < 3 || keep(u)) continue;
-    for (const m of text.matchAll(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'gi'))) leaks.push({ kind: 'username', match: m[0], index: m.index ?? 0 });
+    if (!u) continue;
+    for (const m of text.matchAll(namePattern(u))) leaks.push({ kind: 'username', match: m[0], index: m.index ?? 0 });
   }
   return leaks.sort((a, b) => a.index - b.index);
 }

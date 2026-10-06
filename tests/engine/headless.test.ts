@@ -148,7 +148,8 @@ describe('refusals happen before any run exists', () => {
 /** No text file in the run folder names the run folder's real location, the account, or a home folder. */
 function expectNoMachineDetails(runDir: string): void {
   const names = accountNames();
-  const real = [runDir, toWslPath(runDir), toWslPath(runDir).replace(/ /g, '%20')];
+  const cwd = process.cwd();
+  const real = [runDir, toWslPath(runDir), toWslPath(runDir).replace(/ /g, '%20'), cwd, toWslPath(cwd)]; // the run folder and the project folder, as written either way
   const walk = (dir: string): void => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const f = path.join(dir, e.name);
