@@ -639,7 +639,7 @@ MUTATIONS += [
     em("the runner does not show the build", "version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 } },", "version: BDD_ENGINE_VERSION } },", HL),
 ]
 
-# Event tree (plan 13, stage S1) mutations.
+# Event tree (plan 13, stage S1) mutations. One mutant was removed as equivalent: with at most 12 headings there are at most 4096 paths, so the cap inside enumeratePaths (a second guard) cannot fire.
 ET = ROOT / "src/core/event-tree.ts"
 ET_SUITE = ("tests/unit/event-tree.test.ts tests/unit/server.test.ts", 200)
 
@@ -653,7 +653,6 @@ MUTATIONS += [
     tm("a condition on a heading that was not asked is satisfied", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier === undefined || earlier.branch === h.asked_only_if.branch;"),
     tm("a condition ignores the branch taken", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier !== undefined;"),
     tm("only the works branch is walked", "    walk(i + 1, [...path, { heading: h.id, branch: 'fails' }]);\n", ""),
-    tm("the path count is not capped", "    if (out.length > MAX_SEQUENCES) return;\n", ""),
     tm("too many headings are enumerated", "  if (headings.length > MAX_HEADINGS) return out;\n", ""),
     tm("the heading limit is off by one", "export const MAX_HEADINGS = 12;", "export const MAX_HEADINGS = 13;"),
     tm("the sequence limit is off by one", "export const MAX_SEQUENCES = 4096;", "export const MAX_SEQUENCES = 4097;"),

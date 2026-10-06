@@ -156,6 +156,22 @@ describe('each rule, broken on its own, is refused with its code and its place',
     });
   }
 
+  it('a path that names a heading that does not exist, and one with its steps in the wrong order, each say which', () => {
+    const a = sharedDoc();
+    a.sequences[0].path[0].heading = 'Z';
+    expect(validateEventTree(a, CTX).errors.find((e) => e.code === 'E_PATH_INCOMPLETE')!.message).toContain('"Z", which is not a heading');
+    const b = sharedDoc();
+    b.sequences[1].path.reverse();
+    expect(validateEventTree(b, CTX).errors.find((e) => e.code === 'E_PATH_INCOMPLETE')!.message).toContain('not in the order of the headings');
+  });
+
+  it('a document with a bad structure gets its structural errors only: the rules that read its fields do not run on it', () => {
+    const d = sharedDoc();
+    delete d.initiating_event.frequency;
+    d.headings[1].id = 'A'; // a repeated heading id would be a second error if the rules ran
+    expect(codes(d)).toEqual(['E_NO_FREQUENCY']);
+  });
+
   it('the missing-sequences message counts them and shows examples', () => {
     const d = sharedDoc();
     d.sequences = d.sequences.slice(0, 1);
