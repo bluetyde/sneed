@@ -134,7 +134,7 @@ describe('edge cases and limits', () => {
   });
 
   it('is sorted by Birnbaum importance, largest first, ties by id', () => {
-    const d = mkDoc('T', { C: 0.1, A: 0.1, B: 0.5 }, [OR('T', ['A', 'B', 'C'])]);
+    const d = mkDoc('T', { C: 0.1, A: 0.1, B: 0.5 }, [OR('T', ['C', 'A', 'B'])]); // C is met before A, so only the id breaks the tie
     // IB_A = IB_C = 0.45, IB_B = 0.81
     expect(imp(d).rows.map((r) => r.id)).toEqual(['B', 'A', 'C']);
   });
