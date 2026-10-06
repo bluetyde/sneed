@@ -130,8 +130,7 @@ describe('reading the sources of a project', () => {
   it('does not read a file outside the project through a ../ import, and ignores an import of something that does not exist', () => {
     const d = tree({
       'outside.ts': 'export const o = 1;', // next to the project folder, reachable by ../../../outside.js from the engine folder
-      'project/src/engines/bdd/x.ts': "import { o } from '../../../outside.js';
-import { n } from './nothing.js';",
+      'project/src/engines/bdd/x.ts': "import { o } from '../../../outside.js';\nimport { n } from './nothing.js';",
       'project/schema/model.schema.json': '{}',
     });
     expect(existsSync(path.join(d, 'outside.ts'))).toBe(true);
