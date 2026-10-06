@@ -350,12 +350,12 @@ describe('gaps closed by mutation checks: exact limits and each refusal for its 
   it('the element limit: exactly the limit is read, one more is refused', () => {
     const make = (count: number): string => {
       // root + tree + 1 gate + 1 or + count references: count + 4 elements
-      const refs = Array.from({ length: count }, () => '<basic-event name="A"/>').join('');
+      const refs = Array.from({ length: count }, () => '<a/>').join('');
       return `<opsa-mef><define-fault-tree name="F"><define-gate name="T"><or>${refs}</or></define-gate>${A}</define-fault-tree></opsa-mef>`;
     };
     // elements: opsa-mef, define-fault-tree, define-gate, or, define-basic-event, float = 6, plus the references
     expect(first(make(100_000 - 6 + 1)).code).toBe('E_IMPORT_LIMIT');
-    const atLimit = imp(make(100_000 - 6));
+    const atLimit = imp(make(100_000 - 6)); // 4 bytes each: under the size limit, so only the element count can refuse it
     expect(atLimit.ok || atLimit.errors.every((e) => e.code !== 'E_IMPORT_LIMIT')).toBe(true);
   });
 
