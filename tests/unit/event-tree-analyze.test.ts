@@ -33,6 +33,18 @@ function treeDoc(model: ReturnType<typeof mkDoc>, name: string, headings: Record
 }
 const SHARED_HEADS = [{ id: 'A', name: 'Function A', event: 'X' }, { id: 'B', name: 'Function B', event: 'Y' }];
 
+/** n pairs (Ai, Bi): F = OR of the ANDs, with two earlier headings that put all the A variables before all the B variables: an exponential diagram. */
+function heavyModel(n: number): ReturnType<typeof mkDoc> {
+  const events: Record<string, number> = {};
+  for (let i = 0; i < n; i++) {
+    events[`A${i}`] = 0.1;
+    events[`B${i}`] = 0.1;
+  }
+  const pairs = Array.from({ length: n }, (_, i) => AND(`P${i}`, [`A${i}`, `B${i}`]));
+  return mkDoc('TOP', events, [OR('TOP', ['PA', 'PB', 'F']), OR('PA', Array.from({ length: n }, (_, i) => `A${i}`)), OR('PB', Array.from({ length: n }, (_, i) => `B${i}`)), OR('F', pairs.map((g) => g.id)), ...pairs]);
+}
+const HEAVY_HEADS = [{ id: 'H1', name: 'A side', event: 'PA' }, { id: 'H2', name: 'B side', event: 'PB' }, { id: 'H3', name: 'Pairs', event: 'F' }];
+
 const dirs: string[] = [];
 const temp = (): string => {
   const d = mkdtempSync(path.join(tmpdir(), 'sneed-etrun-'));
@@ -147,6 +159,18 @@ describe('failures are records with a reason and no numbers', () => {
     let t = 0;
     const late = await analyzeEventTreeBuiltin(tree, model(SHARED), { runsDir: temp(), timeoutMs: 1000, now: () => (t += 600) }); // 600 at the start, 1200 after the engine: past the deadline
     expect(ran(late).record).toMatchObject({ status: 'failed', reasons: ['timeout'], sequences: [] });
+  }, 30000);
+
+  it('a cancel while a slow model is being evaluated stops it: a cancelled record, long before the model would have finished', async () => {
+    const m = heavyModel(20); // the headings put the pair variables in a bad order: about 2 million nodes, seconds of work
+    const tree = JSON.stringify(treeDoc(m, 'heavy', HEAVY_HEADS));
+    const ctl = new AbortController();
+    const started = Date.now();
+    const p = analyzeEventTreeBuiltin(tree, model(m), { runsDir: temp(), signal: ctl.signal });
+    setTimeout(() => ctl.abort(), 300);
+    const o = ran(await p);
+    expect(o.record).toMatchObject({ status: 'cancelled', completeness: 'unknown', reasons: ['cancelled'], sequences: [] });
+    expect(Date.now() - started).toBeLessThan(3000);
   }, 30000);
 
   it('a cancel while the worker computes is heard', async () => {
