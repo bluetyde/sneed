@@ -227,7 +227,7 @@ describe('model files over the API', () => {
 describe('runs', () => {
   it('passes the model and method to the engine and returns the record with a run id (never a path)', async () => {
     analyzeCalls = [];
-    const r = await post('/api/run', { text: text('pra-and'), method: 'mcub' });
+    const r = await post('/api/run', { text: text('pra-and'), method: 'mcub', engine: 'scram' });
     expect(r.status).toBe(200);
     expect(r.json).toMatchObject({ kind: 'ran', run_id: 'run-1', record: fakeRecord });
     expect(r.body).not.toContain(tmp);
@@ -238,16 +238,16 @@ describe('runs', () => {
 
   it('defaults to the exact method and refuses an unknown one', async () => {
     analyzeCalls = [];
-    await post('/api/run', { text: text('pra-and') });
+    await post('/api/run', { text: text('pra-and'), engine: 'scram' });
     expect(analyzeCalls[0]!.opts.settings).toEqual({ method: 'exact' });
-    const bad = await post('/api/run', { text: text('pra-and'), method: 'magic' });
+    const bad = await post('/api/run', { text: text('pra-and'), method: 'magic', engine: 'scram' });
     expect(bad.status).toBe(400);
     expect(analyzeCalls).toHaveLength(1);
   });
 
   it('returns a refusal with the typed errors and no run', async () => {
     analyzeImpl = async () => ({ kind: 'refused', errors: [{ code: 'E_CYCLE', path: '/gates/0', message: 'gate cycle', ids: ['A', 'B'] }], warnings: [] });
-    const r = await post('/api/run', { text: text('pra-and') });
+    const r = await post('/api/run', { text: text('pra-and'), engine: 'scram' });
     expect(r.json).toMatchObject({ kind: 'refused', errors: [{ code: 'E_CYCLE', ids: ['A', 'B'] }] });
   });
 
@@ -255,7 +255,7 @@ describe('runs', () => {
     analyzeImpl = async () => {
       throw new RuntimeNotInstalledError('x');
     };
-    const r = await post('/api/run', { text: text('pra-and') });
+    const r = await post('/api/run', { text: text('pra-and'), engine: 'scram' });
     expect(r.status).toBe(503);
     expect(r.json.error.code).toBe('E_SETUP_REQUIRED');
   });
@@ -264,7 +264,7 @@ describe('runs', () => {
     analyzeImpl = async () => {
       throw new Error('secret path C:\\Users\\x failed');
     };
-    const r = await post('/api/run', { text: text('pra-and') });
+    const r = await post('/api/run', { text: text('pra-and'), engine: 'scram' });
     expect(r.status).toBe(500);
     expect(r.body).not.toContain('secret');
   });
@@ -279,9 +279,9 @@ describe('runs', () => {
         started();
         opts.signal?.addEventListener('abort', () => resolve({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-cancelled'), record: { status: 'cancelled' } as never }), { once: true });
       });
-    const first = post('/api/run', { text: text('pra-and') });
+    const first = post('/api/run', { text: text('pra-and'), engine: 'scram' });
     await hasStarted;
-    const second = await post('/api/run', { text: text('pra-and') });
+    const second = await post('/api/run', { text: text('pra-and'), engine: 'scram' });
     expect(second.status).toBe(409);
     expect(second.json.error.code).toBe('E_BUSY');
     expect(signal!.aborted).toBe(false);
@@ -291,7 +291,7 @@ describe('runs', () => {
     expect(signal!.aborted).toBe(true);
     expect((await post('/api/run/cancel', {})).json).toEqual({ cancelled: false }); // nothing running now
     analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
-    expect((await post('/api/run', { text: text('pra-and') })).status).toBe(200); // free again
+    expect((await post('/api/run', { text: text('pra-and'), engine: 'scram' })).status).toBe(200); // free again
   });
 
   it('a browser that disconnects mid-run aborts the engine', async () => {
@@ -307,7 +307,7 @@ describe('runs', () => {
     const u = new URL('/api/run', server.url);
     const req = http.request({ method: 'POST', hostname: u.hostname, port: u.port, path: u.pathname, headers: JSON_HEADERS });
     req.on('error', () => undefined);
-    req.end(JSON.stringify({ text: text('pra-and') }));
+    req.end(JSON.stringify({ text: text('pra-and'), engine: 'scram' }));
     await hasStarted;
     req.destroy();
     for (let i = 0; i < 50 && !signal!.aborted; i++) await new Promise((r) => setTimeout(r, 20));
@@ -608,3 +608,50 @@ describe('saved runs over the API', () => {
     );
   });
 });
+
+describe('engine choice over the API (plan 10)', () => {
+  const doc = (): string => text('pra-or');
+  const post2 = (body: unknown): Promise<Reply> => post('/api/run', body);
+
+  it('the built-in engine is the default: no SCRAM call is made, and it works with no runtime installed', async () => {
+    const before = analyzeCalls.length;
+    const r = await post2({ text: doc() });
+    expect(r.status).toBe(200);
+    expect(r.json.kind).toBe('ran');
+    expect(r.json.record).toMatchObject({ status: 'completed', completeness: 'complete', engine: { name: 'sneed-bdd', runtime: null } });
+    expect(r.json.record.top_event_probability).toBeCloseTo(0.28, 12);
+    expect(analyzeCalls.length).toBe(before); // the stand-in SCRAM was not asked
+    expect(r.json.cross).toBeUndefined();
+    expect(JSON.stringify(r.json)).not.toContain(tmp); // never a path
+  });
+
+  it('health lists both engines', async () => {
+    const r = await request('GET', '/api/health');
+    expect(r.json.engines.builtin).toMatchObject({ available: true, name: 'sneed-bdd' });
+    expect(r.json.engines.scram).toMatchObject({ installed: false });
+    expect(r.json.runtime).toEqual(r.json.engines.scram); // the old field is kept
+  });
+
+  it('an unknown engine is refused', async () => {
+    const r = await post2({ text: doc(), engine: 'quantum' });
+    expect(r.status).toBe(400);
+    expect(r.json.error.code).toBe('E_FIELD');
+  });
+
+  it('"both" without a SCRAM runtime still answers with the built-in result and says there is no second opinion', async () => {
+    const r = await post2({ text: doc(), engine: 'both' });
+    expect(r.status).toBe(200);
+    expect(r.json.record.engine.name).toBe('sneed-bdd');
+    expect(r.json.cross).toMatchObject({ unavailable: true });
+    expect(typeof r.json.cross.reason).toBe('string');
+  });
+
+  it('a refused model is refused by the built-in engine with the validator codes', async () => {
+    const bad = JSON.parse(text('pra-and'));
+    bad.events[0].probability = 7;
+    const r = await post2({ text: JSON.stringify(bad) });
+    expect(r.json.kind).toBe('refused');
+    expect(r.json.errors.some((e: { code: string }) => e.code === 'E_PROB_RANGE')).toBe(true);
+  });
+});
+

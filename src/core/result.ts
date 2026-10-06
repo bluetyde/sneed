@@ -71,6 +71,15 @@ export interface AssessInput {
   check?: () => void;
   /** The caller found the report file larger than MAX_REPORT_BYTES and did not read it. */
   reportTooLarge?: boolean;
+  /**
+   * An engine that does not write an XML report (the built-in one) hands over its answer already in report form. Every check
+   * below then applies to it unchanged; the outcome and reportText checks do not apply.
+   */
+  parsed?: ParsedReport;
+  /** The engine name the report must carry. Default SCRAM. */
+  expectedName?: string;
+  /** The engine stopped for a reason of its own (a size limit): the record is a failure with exactly these reasons. */
+  forceFail?: string[];
 }
 
 /** Thrown by the `check` callback (or by a check that gives up) to stop assessing. assess() turns it into a record. */
@@ -191,26 +200,30 @@ export function assess(input: AssessInput): ResultRecord {
     }
   };
 
-  if (input.outcome.cancelled) return { ...base, status: 'cancelled', reasons: ['cancelled'] };
-  if (input.outcome.timedOut) return fail('timeout');
-  if (input.outcome.exit !== 0) {
-    const cls = /scram::[A-Za-z:]+/.exec(input.outcome.stderr)?.[0];
-    return fail(`engine-exit-${input.outcome.exit}`, ...(cls ? [`engine-error:${cls}`] : []));
-  }
-  if (input.reportTooLarge) return fail('result-too-large-to-verify');
-  if (input.reportText === null) return fail('no-report');
-  if (input.reportText.length > MAX_REPORT_BYTES) return fail('result-too-large-to-verify');
-
+  if (input.forceFail) return fail(...input.forceFail);
   let report: ParsedReport;
-  try {
-    report = parseReport(input.reportText);
-  } catch (e) {
-    if (e instanceof ReportError) return fail(`report-${e.code}`);
-    throw e;
+  if (input.parsed) {
+    report = input.parsed;
+  } else {
+    if (input.outcome.cancelled) return { ...base, status: 'cancelled', reasons: ['cancelled'] };
+    if (input.outcome.timedOut) return fail('timeout');
+    if (input.outcome.exit !== 0) {
+      const cls = /scram::[A-Za-z:]+/.exec(input.outcome.stderr)?.[0];
+      return fail(`engine-exit-${input.outcome.exit}`, ...(cls ? [`engine-error:${cls}`] : []));
+    }
+    if (input.reportTooLarge) return fail('result-too-large-to-verify');
+    if (input.reportText === null) return fail('no-report');
+    if (input.reportText.length > MAX_REPORT_BYTES) return fail('result-too-large-to-verify');
+    try {
+      report = parseReport(input.reportText);
+    } catch (e) {
+      if (e instanceof ReportError) return fail(`report-${e.code}`);
+      throw e;
+    }
   }
 
   const reasons: string[] = [];
-  if (report.software.name !== 'SCRAM' || report.software.version !== input.expectedVersion) reasons.push('engine-version-mismatch');
+  if (report.software.name !== (input.expectedName ?? 'SCRAM') || report.software.version !== input.expectedVersion) reasons.push('engine-version-mismatch');
   if (report.approximation !== APPROXIMATION[settings.method]) reasons.push('method-mismatch');
   if (!(report.probability >= 0 && report.probability <= 1)) reasons.push('probability-out-of-range');
   const adjusted = report.warning !== null && /adjusted/i.test(report.warning);

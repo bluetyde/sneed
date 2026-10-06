@@ -10,7 +10,7 @@ npm run build:cli      # builds dist/node/cli/headless.js (and copies schema/ to
 node dist/node/cli/headless.js describe
 node dist/node/cli/headless.js validate <model.json>
 node dist/node/cli/headless.js run <model.json> --out <absDir> [--run-id pra] [--method exact|rare-event|mcub]
-                                   [--limit-order N] [--timeout-seconds 60]
+                                   [--engine scram|builtin] [--limit-order N] [--timeout-seconds 60]
 node dist/node/cli/headless.js cancel --out <absDir>
 ```
 
@@ -24,6 +24,10 @@ One JSON object on stdout, nothing else. Exit codes: **0** a reply was produced,
 | `cancel` | Writes `<out>/cancel.requested` containing this run's work id (the running process polls it, and a request naming a different run is ignored), then kills any Linux process carrying the run's owner tag and checks again, repeating for up to 5 seconds because the run process may start its engine just after a kill. `cancelled: true`; `nativeStopped` is true only when no tagged process remains **and** the run process has retired its record or is gone. A failed process query is never read as "nothing running": it gives `nativeStopped: false`. A record that is missing fields, unreadable, not JSON or not a run of this folder is `E_NOT_OWNED` and nothing is killed. A run that already ended: `cancelled: false`. No record at all: `cancelled: false`. |
 
 `run` owns its output folder for one run. It writes `<out>/active-run.json` (work id, folder, process id, state `running`) **exclusively and before the engine can start**, so a cancel from another process can always find the run; keep that order if the runner is edited. A second run in the same folder, a result folder, work folder or cancel request that is already there, or any of these being a link, is refused (`E_EXISTS` or `E_PATH_TRAVERSAL`) before anything is written; nothing existing is followed or replaced. The result is built in a staging folder and renamed into place, so a half-written result never appears. When the run ends the record is rewritten with state `ended` and the final status.
+
+## Engine choice
+
+`--engine scram` (the default, kept for the SEED adapter) needs the installed SCRAM runtime and answers `E_SETUP_REQUIRED` without it. `--engine builtin` runs the decision-diagram engine inside the process: no runtime, no WSL2, same files, and the manifest names `sneed-bdd` with `runtime: null`. `describe` lists both under `engines` and says which is the default. See [ENGINES.md](ENGINES.md). A SEED adapter that wants SCRAM to be an optional install can pass `--engine builtin`; the default will change only together with the adapter.
 
 ## SEED oracle entries (`oracles/seed/`)
 

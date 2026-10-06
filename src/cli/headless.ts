@@ -4,7 +4,7 @@
 //   node dist/node/cli/headless.js describe
 //   node dist/node/cli/headless.js validate <model.json>
 //   node dist/node/cli/headless.js run <model.json> --out <absDir> [--run-id pra] [--method exact|rare-event|mcub]
-//                                      [--limit-order N] [--timeout-seconds 60]
+//                                      [--engine scram|builtin] [--limit-order N] [--timeout-seconds 60]
 //   node dist/node/cli/headless.js cancel --out <absDir>
 //
 // Exit codes: 0 a reply was produced (a run that ended truncated, failed or cancelled is exit 0 with that status and a
@@ -18,6 +18,8 @@ import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, w
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
+import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
+import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
 import { hasOwned as realHasOwned, killOwned as realKillOwned, toWslPath, type EngineConfig } from '../core/engine.js';
 import type { Method } from '../core/model.js';
 import { validateModelText, type Issue } from '../core/validate.js';
@@ -35,6 +37,8 @@ const WORK_ID = /^pra-[0-9a-f]{12}$/;
 /** What the runner needs from the outside, replaceable in tests. */
 export interface Deps {
   analyze: (text: string, opts: AnalyzeOptions) => Promise<AnalyzeOutcome>;
+  /** The built-in decision-diagram engine (`--engine builtin`). */
+  analyzeBuiltin: (text: string, opts: BuiltinOptions) => Promise<AnalyzeOutcome>;
   resolveEngine: () => EngineConfig;
   distro: () => string;
   killOwned: (distro: string, tag: string) => void;
@@ -54,6 +58,7 @@ export interface Deps {
 
 export const realDeps = (): Deps => ({
   analyze: realAnalyze,
+  analyzeBuiltin: realBuiltin,
   resolveEngine: () => realResolveEngine(defaultRuntimeEnv()),
   distro: () => defaultRuntimeEnv().distro,
   killOwned: realKillOwned,
@@ -178,6 +183,8 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
       {
         ok: true,
         engine: { name: 'sneed-headless', version: HEADLESS_VERSION, backend: 'SCRAM' },
+        // `--engine scram` (the default of this runner, kept for the SEED adapter) needs the installed runtime; `--engine builtin` needs nothing
+        engines: { default: 'scram', scram: runtimeState(), builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION } },
         scram: runtimeState(),
         modelFormat: { format: 'sneed.fault-tree', version: '1' },
         methods: METHODS,
@@ -208,6 +215,8 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
     if (!RUN_ID.test(runId)) return fail('E_PATH_INVALID', '--run-id is not a plain id', '', 2);
     const method = (option(args, '--method') ?? 'exact') as Method;
     if (!METHODS.includes(method)) return fail('E_UNSUPPORTED', `--method must be one of ${METHODS.join(', ')}`, '', 2);
+    const engineChoice = option(args, '--engine') ?? 'scram';
+    if (engineChoice !== 'scram' && engineChoice !== 'builtin') return fail('E_UNSUPPORTED', '--engine must be scram or builtin', '', 2);
     const limitRaw = option(args, '--limit-order');
     const limitOrder = limitRaw === undefined ? undefined : Number(limitRaw);
     if (limitOrder !== undefined && (!Number.isInteger(limitOrder) || limitOrder < 1 || limitOrder > 1000)) return fail('E_BOUNDS_EXCEEDED', '--limit-order must be an integer from 1 to 1000', '', 2);
@@ -216,11 +225,13 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
 
     const v = validateModelText(text);
     if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);
-    let engine: EngineConfig;
-    try {
-      engine = deps.resolveEngine();
-    } catch (e) {
-      return fail(e instanceof RuntimeNotInstalledError ? e.code : 'E_SETUP_REQUIRED', (e as Error).message);
+    let engine: EngineConfig | null = null;
+    if (engineChoice === 'scram') {
+      try {
+        engine = deps.resolveEngine();
+      } catch (e) {
+        return fail(e instanceof RuntimeNotInstalledError ? e.code : 'E_SETUP_REQUIRED', (e as Error).message);
+      }
     }
 
     // The folder belongs to this one run. Nothing already in it is reused, followed or replaced: a result folder, a cancel
@@ -263,7 +274,8 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
       }, deps.pollMs);
       let outcome: AnalyzeOutcome;
       try {
-        outcome = await deps.analyze(text, { runsDir: workRoot, runId: workId, settings: { method, ...(limitOrder !== undefined ? { limitOrder } : {}) }, timeoutMs: timeoutSeconds * 1000, signal: abort.signal, engine });
+        const common = { runsDir: workRoot, runId: workId, settings: { method, ...(limitOrder !== undefined ? { limitOrder } : {}) }, timeoutMs: timeoutSeconds * 1000, signal: abort.signal };
+        outcome = engine === null ? await deps.analyzeBuiltin(text, common) : await deps.analyze(text, { ...common, engine });
       } catch (e) {
         if (e instanceof RangeError) return fail('E_BOUNDS_EXCEEDED', e.message, '', 2);
         return fail('E_APP_FAILED', `the analysis failed: ${(e as Error).message}`);

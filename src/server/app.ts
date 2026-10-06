@@ -5,6 +5,9 @@ import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
 import { listRuns, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
+import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
+import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
+import { crossCheck, type CrossCheck, type CrossCheckUnavailable } from '../engines/crosscheck.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
 import { validateModelText } from '../core/validate.js';
@@ -15,6 +18,9 @@ import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeModel } from
 export const SERVER_NAME = 'sneed';
 const MAX_BODY = MAX_MODEL_BYTES + 64 * 1024;
 const METHODS: Method[] = ['exact', 'rare-event', 'mcub'];
+/** builtin: the decision-diagram engine inside the app (the default, no install). scram: the installed SCRAM runtime. both: run both and report whether they agree. */
+const ENGINES = ['builtin', 'scram', 'both'] as const;
+type EngineChoice = (typeof ENGINES)[number];
 
 export interface ServerOptions {
   /** Folder that holds the saved models (one JSON file each). */
@@ -29,7 +35,9 @@ export interface ServerOptions {
   /** Lesson files and the oracle file they are checked against. Without both, /api/lessons answers 503. */
   lessonsDir?: string;
   oraclesFile?: string;
-  /** Replaced in tests. */
+  /** Replaced in tests: the built-in engine. */
+  builtinFn?: (text: string, opts: BuiltinOptions) => Promise<AnalyzeOutcome>;
+  /** Replaced in tests: the SCRAM engine. */
   analyzeFn?: (text: string, opts: AnalyzeOptions) => Promise<AnalyzeOutcome>;
 }
 
@@ -133,6 +141,7 @@ function validateWithHashes(text: string): Record<string, unknown> {
 export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0.1'): Promise<RunningServer> {
   const env = opts.runtimeEnv ?? defaultRuntimeEnv();
   const analyzeFn = opts.analyzeFn ?? realAnalyze;
+  const builtinFn = opts.builtinFn ?? realBuiltin;
   let running: { id: number; abort: AbortController } | null = null;
   let nextRun = 1;
   let ownPort = 0;
@@ -154,7 +163,10 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     const p = url.pathname;
     if (method !== 'GET' && method !== 'HEAD' && req.headers['x-sneed-request'] !== '1') throw new HttpError(403, 'E_CSRF', 'missing the X-SNEED-Request header');
 
-    if (p === '/api/health' && method === 'GET') return send(res, 200, { name: SERVER_NAME, runtime: runtimeInfo() });
+    if (p === '/api/health' && method === 'GET') {
+      const scram = runtimeInfo();
+      return send(res, 200, { name: SERVER_NAME, runtime: scram, engines: { builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, scram } });
+    }
 
     if (p === '/api/validate' && method === 'POST') return send(res, 200, validateWithHashes(needText(await readJson(req))));
 
@@ -183,6 +195,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const text = needText(body);
       const chosen = (body.method ?? 'exact') as Method;
       if (!METHODS.includes(chosen)) throw new HttpError(400, 'E_FIELD', `the method must be one of ${METHODS.join(', ')}`);
+      const engine = (body.engine ?? 'builtin') as EngineChoice;
+      if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);
       if (running) throw new HttpError(409, 'E_BUSY', 'a run is already in progress');
       const job = { id: nextRun++, abort: new AbortController() };
       running = job;
@@ -190,9 +204,20 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         if (!res.writableEnded) job.abort.abort(); // the browser went away: stop the engine
       });
       try {
-        const out = await analyzeFn(text, { runsDir: opts.runsDir, settings: { method: chosen }, signal: job.abort.signal });
+        const common = { runsDir: opts.runsDir, settings: { method: chosen }, signal: job.abort.signal };
+        const out = engine === 'scram' ? await analyzeFn(text, common) : await builtinFn(text, common);
         if (out.kind === 'refused') return send(res, 200, { kind: 'refused', errors: out.errors, warnings: out.warnings });
-        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });
+        let cross: CrossCheck | CrossCheckUnavailable | undefined;
+        if (engine === 'both') {
+          // the second opinion is SCRAM's. Without the runtime there is no second opinion, and the reply says so instead of failing.
+          const rt = runtimeInfo();
+          if (rt.installed !== true) cross = { unavailable: true, reason: String(rt.message ?? 'the SCRAM runtime is not installed') };
+          else {
+            const other = await analyzeFn(text, common);
+            cross = other.kind === 'ran' ? crossCheck(out.record, other.record) : { unavailable: true, reason: 'SCRAM refused the model' };
+          }
+        }
+        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record, ...(cross ? { cross } : {}) });
       } finally {
         if (running === job) running = null;
       }

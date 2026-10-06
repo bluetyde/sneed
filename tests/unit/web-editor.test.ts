@@ -324,11 +324,27 @@ describe('running', () => {
     expect(ed.notice!.text).toContain('1 problem to fix first');
   });
 
-  it('is blocked when no runtime is installed and says how to fix it', async () => {
+  it('with SCRAM chosen and no runtime installed it is blocked and says how to fix it; the built-in engine is not blocked', async () => {
     const api = fakeApi({ health: async () => ({ name: 'sneed', runtime: { installed: false, code: 'E_SETUP_REQUIRED', message: 'x' } }) });
     const { ed } = await ready(api);
+    expect(ed.engine).toBe('builtin'); // the default engine needs no install
+    expect(ed.canRun).toBe(true);
+    ed.setEngine('scram');
     expect(ed.canRun).toBe(false);
     expect(ed.runBlockedReason).toContain('npm run runtime -- install');
+    ed.setEngine('both'); // the built-in engine still answers
+    expect(ed.canRun).toBe(true);
+  });
+
+  it('the engine choice goes to the server, and a result from another engine is out of date', async () => {
+    const { ed, api } = await ready();
+    await ed.run();
+    expect(api.calls).toContain('run:exact');
+    expect(ed.stale).toBe(false);
+    ed.setEngine('scram');
+    expect(ed.stale).toBe(true); // the shown result was made with the built-in engine
+    await ed.run();
+    expect(ed.stale).toBe(false);
   });
 
   it('a server refusal is kept as the result and shown, with no record', async () => {

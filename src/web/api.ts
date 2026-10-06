@@ -27,7 +27,12 @@ export interface RuntimeInfo {
   message?: string;
 }
 
-export type RunResponse = { kind: 'ran'; run_id: string; record: ResultRecord } | { kind: 'refused'; errors: Issue[]; warnings: Issue[] };
+export type Engine = 'builtin' | 'scram' | 'both';
+
+/** The second engine's answer when both were asked for, or why there is none. */
+export type CrossCheckInfo = { engine: { name: string; version: string }; status: string; agree: boolean; differences: string[] } | { unavailable: true; reason: string };
+
+export type RunResponse = { kind: 'ran'; run_id: string; record: ResultRecord; cross?: CrossCheckInfo } | { kind: 'refused'; errors: Issue[]; warnings: Issue[] };
 
 export interface ModelInfo {
   name: string;
@@ -56,9 +61,9 @@ export type Method = 'exact' | 'rare-event' | 'mcub';
 
 /** What the editor needs from the server. The editor takes this interface so tests can supply a fake. */
 export interface Api {
-  health(): Promise<{ name: string; runtime: RuntimeInfo }>;
+  health(): Promise<{ name: string; runtime: RuntimeInfo; engines?: { builtin: { available: boolean; name: string; version: string }; scram: RuntimeInfo } }>;
   validate(text: string): Promise<ValidateResponse>;
-  run(text: string, method: Method): Promise<RunResponse>;
+  run(text: string, method: Method, engine?: Engine): Promise<RunResponse>;
   cancel(): Promise<{ cancelled: boolean }>;
   listModels(): Promise<ModelInfo[]>;
   loadModel(name: string): Promise<string>;
@@ -90,7 +95,7 @@ export function httpApi(base = ''): Api {
   return {
     health: () => call('GET', '/api/health'),
     validate: (text) => call('POST', '/api/validate', { text }),
-    run: (text, method) => call('POST', '/api/run', { text, method }),
+    run: (text, method, engine = 'builtin') => call('POST', '/api/run', { text, method, engine }),
     cancel: () => call('POST', '/api/run/cancel', {}),
     listModels: async () => (await call<{ models: ModelInfo[] }>('GET', '/api/models')).models,
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,

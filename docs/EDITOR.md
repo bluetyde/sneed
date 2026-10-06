@@ -46,6 +46,10 @@ The browser runs no core code. Validation, hashing and analysis all happen on th
 - Browser coverage is Chrome only.
 - The Codex P1 exit review in the TODO has not been run.
 
+## Engines (plan 10, built 2026-10-06)
+
+The title bar has an **Engine** list: Built-in (default, needs no install), SCRAM, or Both. Run needs only a valid model unless SCRAM alone is chosen and its runtime is missing. A result is out of date when the engine choice changed after it. With Both, the Results tab shows a card: *the two engines agree*, *the two engines differ* (with each difference in words) or *no second opinion* (SCRAM not installed). Details and verification: [ENGINES.md](ENGINES.md).
+
 ## Lessons (plan 04, built 2026-10-05)
 
 - **Files.** `lessons/*.json` (schema in `src/core/lesson.ts`). Each lesson has steps, expected outcomes, "check this" detectors and a hand calculation. An outcome names an entry in `tests/oracles.json` and must equal it; the loader refuses anything else, and the server (`GET /api/lessons`) serves no lesson at all if one file or the oracle file is bad (503 `E_LESSONS_UNAVAILABLE`). The server reads the oracle file from the source tree, so lessons need the repository layout.
