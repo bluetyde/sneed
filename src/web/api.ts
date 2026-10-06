@@ -48,6 +48,9 @@ export type Engine = 'builtin' | 'scram' | 'both';
 /** The second engine's answer when both were asked for, or why there is none. */
 export type CrossCheckInfo = { engine: { name: string; version: string }; status: string; agree: boolean; differences: string[] } | { unavailable: true; reason: string };
 
+import type { ImportanceResponse } from '../core/importance.js';
+export type { ImportanceResponse };
+
 export type RanResponse = { kind: 'ran'; run_id: string; record: ResultRecord; cross?: CrossCheckInfo };
 export type RunResponse = RanResponse | { kind: 'refused'; errors: Issue[]; warnings: Issue[] } | { kind: 'dequeued' };
 
@@ -91,6 +94,7 @@ export interface Api {
   cancel(requestId?: string): Promise<{ cancelled: boolean }>;
   lookupRun(text: string, method: Method, engine: Engine): Promise<RunLookup>;
   runStatus(): Promise<RunStatus>;
+  importance(text: string, requestId?: string): Promise<ImportanceResponse>;
   listModels(): Promise<ModelInfo[]>;
   loadModel(name: string): Promise<string>;
   saveModel(name: string, text: string): Promise<ModelInfo>;
@@ -126,6 +130,7 @@ export function httpApi(base = ''): Api {
     cancel: (requestId) => call('POST', '/api/run/cancel', requestId ? { request_id: requestId } : {}),
     lookupRun: (text, method, engine) => call('POST', '/api/run/lookup', { text, method, engine }),
     runStatus: () => call('GET', '/api/run/status'),
+    importance: (text, requestId) => call('POST', '/api/importance', { text, ...(requestId ? { request_id: requestId } : {}) }),
     listModels: async () => (await call<{ models: ModelInfo[] }>('GET', '/api/models')).models,
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,
     listRuns: async () => (await call<{ runs: RunInfo[] }>('GET', '/api/runs')).runs,

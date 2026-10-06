@@ -7,6 +7,8 @@ import { listRuns, MAX_LOOKUP_RUNS, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
+import { importanceIsolated } from '../engines/bdd/isolate.js';
+import { IMPORTANCE_ASSUMPTIONS, importanceFailureText, type ImportanceResponse } from '../core/importance.js';
 import { crossCheck, type CrossCheck, type CrossCheckUnavailable } from '../engines/crosscheck.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
@@ -282,6 +284,36 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
           }
         }
         return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record, ...(cross ? { cross } : {}) });
+      } finally {
+        release(job);
+      }
+    }
+    if (p === '/api/importance' && method === 'POST') {
+      // Importance measures of the model on screen: exact, built-in engine, nothing written. It takes its turn like a run (one analysis
+      // at a time) and is cancelled the same way (by request_id, or by the client going away).
+      const body = await readJson(req);
+      const text = needText(body);
+      const requestId = optRequestId(body.request_id);
+      const validation = validateModelText(text);
+      if (!validation.valid) return send(res, 200, { kind: 'refused', errors: validation.errors } satisfies ImportanceResponse);
+      const model = JSON.parse(text) as NativeModel;
+      if (queue.length >= MAX_QUEUE) throw new HttpError(409, 'E_BUSY', `${MAX_QUEUE} runs are already waiting; try again when one has finished`);
+      const job: Job = { id: nextRun++, requestId, abort: new AbortController(), dropped: false, start: () => undefined };
+      res.on('close', () => {
+        if (res.writableEnded) return;
+        if (!dequeue(job)) job.abort.abort();
+      });
+      await acquire(job);
+      if (job.dropped) {
+        if (!res.writableEnded && !res.destroyed) return send(res, 200, { kind: 'dequeued' } satisfies ImportanceResponse);
+        return;
+      }
+      try {
+        const answer = await importanceIsolated(model, { timeoutMs: 15_000, signal: job.abort.signal });
+        if (!answer.ok) return send(res, 200, { kind: 'failed', why: answer.why, message: importanceFailureText(answer.why) } satisfies ImportanceResponse);
+        const names = new Map<string, string | undefined>([...model.events, ...model.gates].map((n) => [n.id, (n as { name?: string }).name]));
+        const events = answer.result.rows.map((r) => ({ ...r, ...(names.get(r.id) ? { name: names.get(r.id)! } : {}) }));
+        return send(res, 200, { kind: 'ok', model_hash: modelHash(model), engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, top: answer.result.top, events, assumptions: IMPORTANCE_ASSUMPTIONS } satisfies ImportanceResponse);
       } finally {
         release(job);
       }

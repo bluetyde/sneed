@@ -203,4 +203,14 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('reused')).toBeVisible();
     await audit(page, 'a reused saved result is shown');
   });
+
+  test('the importance table and its definitions have no axe violations', async ({ app, page }) => {
+    await app.open();
+    await app.run();
+    await page.getByTestId('compute-importance').click();
+    await expect(page.getByTestId('importance-table')).toBeVisible();
+    await audit(page, 'importance table');
+    await page.getByText('What these measures mean').click();
+    await audit(page, 'importance definitions open');
+  });
 });

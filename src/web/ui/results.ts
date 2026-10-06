@@ -2,6 +2,7 @@ import type { Editor } from '../model/editor.js';
 import { h, rerender, type Child } from './dom.js';
 import { icon } from './icons.js';
 import { CAVEAT_TEXT, METHOD_TEXT, PROBLEM_HINTS, reasonText } from './hints.js';
+import { IMPORTANCE_DEFINITIONS, IMPORTANCE_ASSUMPTIONS } from '../../core/importance.js';
 
 /** Six significant digits, plain notation where that reads well, exponent otherwise. */
 export function fmt(p: number | null | undefined): string {
@@ -11,6 +12,9 @@ export function fmt(p: number | null | undefined): string {
   return a >= 1e-3 && a < 1e6 ? String(Number(p.toPrecision(6))) : p.toExponential(3);
 }
 
+/** Four significant digits, exponent form for very small or large numbers. */
+const fmtImp = (x: number): string => (x === 0 ? '0' : Math.abs(x) < 1e-3 || Math.abs(x) >= 1e5 ? x.toExponential(3) : String(Number(x.toPrecision(4))));
+
 export class ResultsPanel {
   readonly el = h('div', { class: 'spanel', id: 'panel-results', role: 'tabpanel', 'aria-labelledby': 'tab-results', 'data-testid': 'results' });
   private signature = '';
@@ -18,7 +22,7 @@ export class ResultsPanel {
 
   render(): void {
     const ed = this.editor;
-    const sig = JSON.stringify([ed.result, ed.stale, ed.highlight, ed.running, ed.queueAhead, ed.reuseOffer?.run_id ?? null, ed.reused, ed.runError, ed.method, ed.runBlockedReason, ed.text.length]);
+    const sig = JSON.stringify([ed.result, ed.stale, ed.highlight, ed.running, ed.queueAhead, ed.reuseOffer?.run_id ?? null, ed.reused, ed.importance, ed.importanceBusy, ed.canComputeImportance, ed.runError, ed.method, ed.runBlockedReason, ed.text.length]);
     if (sig === this.signature) return;
     this.signature = sig;
     rerender(this.el, () => this.content());
@@ -51,8 +55,32 @@ export class ResultsPanel {
     ];
   }
 
+  /** The importance measures: asked for, never automatic, and tied to the model on screen. */
+  private importanceSection(): Child[] {
+    const ed = this.editor;
+    const imp = ed.importance;
+    const out: Child[] = [h('h2', {}, 'Importance measures')];
+    out.push(h('p', { class: 'hint' }, 'Which basic events matter most to the top probability, by four exact measures. ', h('button', { class: 'btn', type: 'button', 'data-testid': 'compute-importance', disabled: !ed.canComputeImportance, onclick: () => void ed.computeImportance() }, ed.importanceBusy ? 'Computing…' : imp ? 'Compute again' : 'Compute importance')));
+    if (!imp) return out;
+    if (imp.kind === 'refused') return [...out, h('div', { class: 'notice error', role: 'alert', 'data-testid': 'importance-refused' }, 'The model is not valid, so there is no table: ', imp.errors.map((e) => e.message).join('; '))];
+    if (imp.kind === 'failed') return [...out, h('div', { class: 'caveat', role: 'status', 'data-testid': 'importance-failed' }, h('strong', {}, 'No table. '), imp.message)];
+    const dash = (x: number | null): string => (x === null ? '—' : fmtImp(x));
+    out.push(h('table', { class: 'cutsets importance', 'aria-label': 'Importance measures of the basic events', 'data-testid': 'importance-table' },
+      h('thead', {}, h('tr', {}, ...['Event', 'Probability', 'Birnbaum', 'RAW', 'RRW', 'Fussell-Vesely'].map((c) => h('th', { scope: 'col' }, c)))),
+      h('tbody', {}, ...imp.events.map((e) => h('tr', { 'data-event': e.id },
+        h('th', { scope: 'row' }, e.id, e.name ? h('span', { class: 'hint' }, ` ${e.name}`) : null),
+        h('td', { class: 'num' }, fmtImp(e.probability)),
+        h('td', { class: 'num' }, fmtImp(e.birnbaum)),
+        h('td', { class: 'num' }, dash(e.raw)),
+        h('td', { class: 'num', title: e.rrwInfinite ? 'The event is in every cut set: removing its failures would remove the top event.' : '' }, e.rrwInfinite ? '∞' : dash(e.rrw)),
+        h('td', { class: 'num' }, dash(e.fv)))))));
+    out.push(h('p', { class: 'hint' }, `Sorted by Birnbaum importance. Top probability ${fmtImp(imp.top)}, engine ${imp.engine.name} ${imp.engine.version}. "—" means not defined (the top probability is 0).`));
+    out.push(h('details', { class: 'defs' }, h('summary', {}, 'What these measures mean'), h('dl', { class: 'kv' }, ...IMPORTANCE_DEFINITIONS.flatMap((d) => [h('dt', {}, d.name), h('dd', {}, d.meaning)])), h('p', { class: 'hint' }, imp.assumptions || IMPORTANCE_ASSUMPTIONS)));
+    return out;
+  }
+
   private content(): Child[] {
-    return [...this.offer(), ...this.body()];
+    return [...this.offer(), ...this.body(), ...this.importanceSection()];
   }
 
   private body(): Child[] {

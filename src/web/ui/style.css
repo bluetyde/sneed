@@ -171,6 +171,7 @@ table.cutsets { width: 100%; border-collapse: collapse; margin: 6px 0; }
 table.cutsets th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--line2); }
 table.cutsets td { padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.cutsets td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+table.cutsets th[scope=row] { text-align: left; font-weight: 600; color: var(--text, inherit); font-size: inherit; padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.cutsets tr.sel td { background: var(--sel); }
 table.cutsets button.row-btn { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--text); }
 .explain { margin: 6px 0; padding: 6px 8px; border-left: 3px solid var(--hl); background: var(--ground); }

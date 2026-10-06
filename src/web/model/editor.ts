@@ -1,7 +1,7 @@
 // The editor's state and commands, with no DOM: what is selected, the undo history, validation, runs and what is stale.
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
-import { ApiError, type Api, type Engine, type ImportResponse, type RanResponse, type RunStatus, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
+import { ApiError, type Api, type Engine, type ImportanceResponse, type ImportResponse, type RanResponse, type RunStatus, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
@@ -45,6 +45,10 @@ export class Editor {
   engine: Engine = 'builtin';
   /** The engine choice the shown result was made with. */
   private resultEngine: Engine = 'builtin';
+  /** The importance table: `busy` while it is being made, and what came back for which model. Shown only while it describes the model on screen. */
+  importanceBusy = false;
+  private importanceData: { text: string; model_hash: string | null; response: Exclude<ImportanceResponse, { kind: 'dequeued' }> } | null = null;
+  private importanceSeq = 0;
   /** How often, in milliseconds, a run in progress asks the server where it is in the queue. */
   static queuePollMs = 700;
   running = false;
@@ -579,6 +583,41 @@ export class Editor {
   get lessonProgress(): LessonProgress | null {
     return this.lesson ? checkLesson(this.lesson, this.lessonDoc, this.lessonResult) : null;
   }
+  // ---- importance ----
+  /** The importance table or the reason there is none, for the model on screen now; null when there is none or it is for another model. */
+  get importance(): Exclude<ImportanceResponse, { kind: 'dequeued' }> | null {
+    const d = this.importanceData;
+    if (!d || d.text !== this.text) return null; // any change to the document hides it until it is asked for again
+    return d.response;
+  }
+  get canComputeImportance(): boolean {
+    return !this.importanceBusy && this.validation?.valid === true && this.validatedText === this.text;
+  }
+  /** Asks the server for the importance measures of the model on screen. The newest request wins; a table never outlives an edit. */
+  async computeImportance(): Promise<void> {
+    if (this.importanceBusy) return;
+    this.importanceBusy = true; // before the first await, so a second press while the model is being checked is ignored
+    this.emit();
+    const mine = ++this.importanceSeq;
+    await this.settle();
+    if (this.validation?.valid !== true) {
+      this.importanceBusy = false;
+      this.emit();
+      return this.setNotice('warning', `Importance needs a valid model: ${this.errorCount} problem${this.errorCount === 1 ? '' : 's'} to fix first.`);
+    }
+    const text = this.text;
+    const model_hash = this.validation.model_hash;
+    try {
+      const r = await this.api.importance(text);
+      if (mine === this.importanceSeq && r.kind !== 'dequeued') this.importanceData = { text, model_hash, response: r };
+    } catch (e) {
+      if (mine === this.importanceSeq) this.importanceData = { text, model_hash, response: { kind: 'failed', why: 'internal', message: `Could not compute the importance table: ${(e as Error).message}` } };
+    } finally {
+      if (mine === this.importanceSeq) this.importanceBusy = false;
+      this.emit();
+    }
+  }
+
   // ---- figure ----
   /** True when the figure must not show the result: it is out of date, or an edit has not been checked yet so it may be. */
   get figureStale(): boolean {
