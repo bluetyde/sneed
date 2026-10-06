@@ -8,7 +8,7 @@ export { SolveAborted } from './bdd.js';
 export const BDD_ENGINE_NAME = 'sneed-bdd';
 export const BDD_ENGINE_VERSION = '0.1.0';
 
-export const DEFAULT_LIMITS: BddLimits = { maxNodes: 2_000_000, maxCutSets: 50_000 };
+export const DEFAULT_LIMITS: BddLimits = { maxNodes: 2_000_000, maxCutSets: 50_000, maxCached: 20_000_000 };
 /** Deeper than this and the recursive diagram operations could exhaust the stack. */
 export const MAX_EVENTS = 2000;
 

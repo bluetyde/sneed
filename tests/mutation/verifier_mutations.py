@@ -47,6 +47,7 @@ LS = ROOT / "src/core/lesson.ts"
 SL = ROOT / "src/server/lessons.ts"
 HL = ROOT / "src/cli/headless.ts"
 SO = ROOT / "scripts/lib/seed-oracles.ts"
+BI = ROOT / "src/engines/bdd/isolate.ts"
 BD = ROOT / "src/engines/bdd/bdd.ts"
 BV = ROOT / "src/engines/bdd/solve.ts"
 BA = ROOT / "src/engines/bdd/analyze.ts"
@@ -309,15 +310,15 @@ MUTATIONS = [
     ("analyze: the engine is started with no time left", AN, "if (remaining <= 0 || opts.signal?.aborted) {", "if (false as boolean) {", TIMEOUT),
     ("bdd: nodes are not reduced", BD, "if (low === high) return low;", ""),
     ("bdd: the probability formula swaps the branches", BD, "const r = q * go(this.hi[n]!) + (1 - q) * go(this.lo[n]!);", "const r = (1 - q) * go(this.hi[n]!) + q * go(this.lo[n]!);"),
-    ("bdd: K-of-N counts the wrong remainder", BD, "this.and(fs[i]!, go(i + 1, j - 1))", "this.and(fs[i]!, go(i + 1, j))"),
+    ("bdd: K-of-N counts the wrong remainder", BD, "next[j] = this.or(row[j]!, this.and(fs[i]!, row[j - 1]!));", "next[j] = this.or(row[j]!, this.and(fs[i]!, row[j]!));"),
     # (no mutation for AND with FALSE or OR with TRUE: the general recursion gives the same node, only slower; and no subset test exists, see bdd.ts minimalCutSets)
     ("bdd: equal cut sets are not recognised as covered", BD, "return !lowKeys.has(s.join(','));", "return true;"),
     ("bdd: the cut-set cap is off", BD, "if (result.length > this.limits.maxCutSets) throw new SolveAborted('too-many-cut-sets');", ""),
     ("bdd: the node limit is off", BD, "if (this.v.length >= this.limits.maxNodes) throw new SolveAborted('too-many-nodes');", ""),
     ("bdd: the event cap is off", BV, "if (reachable.length > MAX_EVENTS) throw new SolveAborted('too-many-events');", ""),
     ("bdd: a K-of-N gate uses K = N", BV, "node = bdd.atLeast(g.threshold ?? ins.length, ins);", "node = bdd.atLeast(ins.length, ins);"),
-    ("bdd: a cancel is ignored", BA, "if (opts.signal?.aborted) throw new SolveAborted('cancelled');", ""),
-    ("bdd: the time limit is ignored", BA, "if (now() > deadline) throw new SolveAborted('timeout');", ""),
+    ("bdd: a cancel is ignored", BA, "if (opts.signal?.aborted) throw new AssessAborted('cancelled');", ""),
+    ("bdd: the time limit is ignored", BA, "if (now() > deadline) throw new AssessAborted('timeout');", ""),
     ("bdd: the product-order limit is reported as zero", BA, "productOrderLimit: sol.events.length,", "productOrderLimit: 0,"),
     ("bdd: an approximation above 1 is not clamped", BA, "probability: Math.min(1, raw),", "probability: raw,"),
     ("bdd: the rare-event sum is a product", BA, "method === 'rare-event' ? pc.reduce((a, x) => a + x, 0)", "method === 'rare-event' ? pc.reduce((a, x) => a * x, 1)"),
@@ -331,6 +332,15 @@ MUTATIONS = [
     ("engine choice: a result of another engine stays current", WE, " || this.resultEngine !== this.engine;", ";"),
     ("engine choice: both is blocked without SCRAM", WE, "return this.engine === 'scram' && this.runtime !== null && !this.runtime.installed;", "return this.engine !== 'builtin' && this.runtime !== null && !this.runtime.installed;"),
     ("engine choice: the runner ignores --engine builtin", HL, "outcome = engine === null ? await deps.analyzeBuiltin(text, common) : await deps.analyze(text, { ...common, engine });", "outcome = await deps.analyze(text, { ...common, engine: engine! });"),
+    # (no mutation for the k > n shortcut in atLeast, which gives the same FALSE by the rows; none for the parent's hard terminate after the grace period, which only matters for a solver that stops ticking: the cooperative check ends every run in the tests first)
+    ("bdd: the cache budget is off", BD, "if (cached > this.limits.maxCached) throw new SolveAborted('too-much-memory');", ""),
+    ("bdd: a cancel is not heard while the solver computes", BI, "const onAbort = (): void => finish({ ok: false, why: 'cancelled' });", "const onAbort = (): void => undefined;"),
+    ("bdd: a worker out of memory is called an internal error", BI, "e.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'too-much-memory' : 'internal'", "'internal'"),
+    ("bdd: the checks after the solver ignore the deadline", BA, "if (now() > deadline) throw new AssessAborted('timeout');", "if (false as boolean) throw new AssessAborted('timeout');"),
+    ("bdd: MCUB loses a small probability to cancellation", BA, ": -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0));", ": 1 - pc.reduce((a, x) => a * (1 - x), 1);"),
+    ("result: MCUB loses a small probability to cancellation", Rs, ": -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0));", ": 1 - pc.reduce((a, x) => a * (1 - x), 1);"),
+    ("result: zero and a tiny probability are equal", Rs, "const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= REL_TOL * Math.max(Math.abs(a), Math.abs(b));", "const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= Math.max(1e-12, REL_TOL * Math.max(Math.abs(a), Math.abs(b)));"),
+    ("crosscheck: zero and a tiny probability agree", XC, "const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= REL_TOL * Math.max(Math.abs(a), Math.abs(b));", "const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= Math.max(1e-12, REL_TOL * Math.max(Math.abs(a), Math.abs(b)));"),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -384,7 +394,7 @@ def main() -> int:
     if only == "compare":  # just the compare-runs mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:", "editor: a failed comparison", "editor: a slow older", "editor: clearing does not", "editor: a listing failure"))]
     if only == "engines":  # just the built-in engine and engine-choice mutations
-        chosen = [m for m in MUTATIONS if m[0].startswith(("bdd:", "crosscheck:", "engine choice:"))]
+        chosen = [m for m in MUTATIONS if m[0].startswith(("bdd:", "crosscheck:", "engine choice:", "result: MCUB", "result: zero"))]
     if only == "timeout":  # just the time-limit and report-size mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("analyze:", "result: a result is accepted", "result: an unread", "result: the report size", "result: an over-long", "result: too many", "result: the minimality", "result: sets of", "result: a subset", "result: a timeout", "result: non-minimal", "analyze: report read"))]
     if only == "seed":  # just the SEED-side mutations

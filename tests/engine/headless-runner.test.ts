@@ -202,3 +202,78 @@ describe('a model too hard to verify (found by SEED: the time limit was not enfo
   }, 130_000);
 });
 
+describe('the built runner with --engine builtin (plan 10)', () => {
+  // 1000 mandatory events times 12 pairs: allowed by every size limit, but it keeps the solver busy for many seconds before the cache budget stops it
+  const hardDoc = () => {
+    const events: Record<string, number> = {};
+    const ps = Array.from({ length: 1000 }, (_, i) => `P${i}`);
+    for (const p of ps) events[p] = 0.99;
+    const gates = [];
+    const pairs = [];
+    for (let i = 0; i < 12; i++) {
+      events[`E${2 * i}`] = 0.1;
+      events[`E${2 * i + 1}`] = 0.1;
+      gates.push(OR(`G${i}`, [`E${2 * i}`, `E${2 * i + 1}`]));
+      pairs.push(`G${i}`);
+    }
+    return mkDoc('TOP', events, [AND('TOP', [...ps, ...pairs]), ...gates]);
+  };
+
+  it('runs without SCRAM, names the built-in engine, and equals the independent oracle', () => {
+    const f = fixture();
+    try {
+      const doc = ORACLE_MODELS['pra-pump3-shared']!;
+      writeFileSync(f.model, JSON.stringify(doc));
+      const r = cli(['run', f.model, '--out', f.out, '--engine', 'builtin']);
+      expect(r.json).toMatchObject({ ok: true, status: 'completed' });
+      const dir = path.join(f.out, 'pra');
+      const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+      expect(manifest.engine).toMatchObject({ name: 'sneed-bdd', runtime: null });
+      for (const file of manifest.files) expect(file.sha256).toBe(sha(readFileSync(path.join(dir, file.path))));
+      const rec = JSON.parse(readFileSync(path.join(dir, 'results.json'), 'utf8'));
+      const o = enumerate(doc);
+      expect(Math.abs(rec.top_event_probability - o.probability.toNumber())).toBeLessThanOrEqual(1e-12);
+      expect(rec.minimal_cut_sets.map((c: { events: string[] }) => [...c.events].sort()).sort()).toEqual(o.cutSets.map((c) => [...c].sort()).sort());
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it('every SEED oracle entry also passes through the built-in engine', () => {
+    const base = path.join(ROOT, 'oracles', 'seed');
+    for (const name of readdirSync(path.join(base, 'entries')).sort()) {
+      const e = JSON.parse(readFileSync(path.join(base, 'entries', name), 'utf8')) as any;
+      if (e.tag !== 'good') continue;
+      const f = fixture();
+      try {
+        const r = cli(['run', path.join(base, e.inputs[0].path), '--out', f.out, '--engine', 'builtin']);
+        expect(r.json, e.oracleId).toMatchObject({ ok: true, status: 'completed' });
+        const rec = JSON.parse(readFileSync(path.join(f.out, 'pra', 'results.json'), 'utf8'));
+        expect(Math.abs(rec.top_event_probability - e.expected.value), e.oracleId).toBeLessThanOrEqual(e.tolerance.abs);
+      } finally {
+        rmSync(f.dir, { recursive: true, force: true });
+      }
+    }
+  }, 300_000);
+
+  it('cancel while the built-in engine is computing: the run ends cancelled with no result, quickly', async () => {
+    const f = fixture();
+    try {
+      writeFileSync(f.model, JSON.stringify(hardDoc()));
+      const child = spawn(process.execPath, [ENTRY, 'run', f.model, '--out', f.out, '--engine', 'builtin'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf8')));
+      const done = new Promise<number | null>((resolve) => child.on('close', resolve));
+      for (let i = 0; i < 100 && !existsSync(path.join(f.out, 'active-run.json')); i++) await new Promise((r) => setTimeout(r, 50));
+      const t0 = Date.now();
+      expect(cli(['cancel', '--out', f.out]).json).toMatchObject({ ok: true, cancelled: true });
+      expect(await done).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({ ok: true, status: 'cancelled' });
+      expect(existsSync(path.join(f.out, 'pra'))).toBe(false);
+      expect(Date.now() - t0).toBeLessThan(15_000);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+

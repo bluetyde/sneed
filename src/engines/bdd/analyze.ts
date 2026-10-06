@@ -7,10 +7,11 @@ import type { AnalyzeOutcome } from '../../core/analyze.js';
 import { documentHash, modelHash } from '../../core/canonical.js';
 import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
-import { assess, type ResultRecord } from '../../core/result.js';
+import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
 import { validateModelText } from '../../core/validate.js';
-import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, SolveAborted, solve, type Solution } from './solve.js';
+import { solveIsolated } from './isolate.js';
+import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
 import type { BddLimits } from './bdd.js';
 
 export interface BuiltinOptions {
@@ -24,6 +25,8 @@ export interface BuiltinOptions {
   now?: () => number;
   order?: string[];
   limits?: Partial<BddLimits>;
+  /** Old-generation heap limit of the solver thread in megabytes (default 1024). */
+  memoryMb?: number;
 }
 
 const METHODS: Method[] = ['exact', 'rare-event', 'mcub'];
@@ -38,7 +41,7 @@ function writeAtomic(file: string, text: string): void {
 /** The solution in the form the shared result checks read. The approximations are recomputed here from the cut sets. */
 function asReport(sol: Solution, method: Method): ParsedReport {
   const pc = sol.cutSets.map((c) => c.probability);
-  const raw = method === 'exact' ? sol.probability : method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : 1 - pc.reduce((a, x) => a * (1 - x), 1);
+  const raw = method === 'exact' ? sol.probability : method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0)); // 1 - prod(1 - p), without the cancellation that loses a small p
   return {
     software: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION },
     probability: Math.min(1, raw),
@@ -72,9 +75,10 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   for (const d of ['inputs', 'native', 'log']) mkdirSync(path.join(runDir, d), { recursive: true });
   writeFileSync(path.join(runDir, 'native', 'model.json'), documentText, { encoding: 'utf8' }); // byte for byte as submitted
 
+  // the checks after the solver (assess) poll this; it throws what assess understands
   const check = (): void => {
-    if (opts.signal?.aborted) throw new SolveAborted('cancelled');
-    if (now() > deadline) throw new SolveAborted('timeout');
+    if (opts.signal?.aborted) throw new AssessAborted('cancelled');
+    if (now() > deadline) throw new AssessAborted('timeout');
   };
   const engine = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null };
   const base = { model, settings, engine, expectedVersion: BDD_ENGINE_VERSION, expectedName: BDD_ENGINE_NAME, hashes, exportedEvents: events, check };
@@ -86,16 +90,18 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
     return { kind: 'ran', runDir, record: final };
   };
 
+  // the solver runs in its own thread: the time limit, the memory limit and a cancel all work while it computes
+  const remaining = Math.floor(deadline - now());
   let sol: Solution;
-  try {
-    check();
-    sol = solve(model, { ...(opts.order ? { order: opts.order } : {}), ...(opts.limits ? { limits: opts.limits } : {}), tick: check });
-  } catch (e) {
-    if (!(e instanceof SolveAborted)) throw e;
-    if (e.why === 'cancelled') return finish(assess({ ...base, outcome: { ...idle, cancelled: true }, reportText: null }));
-    if (e.why === 'timeout') return finish(assess({ ...base, outcome: { ...idle, timedOut: true }, reportText: null }));
-    return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [e.why] }));
+  if (opts.signal?.aborted) return finish(assess({ ...base, outcome: { ...idle, cancelled: true }, reportText: null }));
+  if (remaining <= 0) return finish(assess({ ...base, outcome: { ...idle, timedOut: true }, reportText: null }));
+  const answer = await solveIsolated(model, { timeoutMs: remaining, ...(opts.signal ? { signal: opts.signal } : {}), ...(opts.order ? { order: opts.order } : {}), ...(opts.limits ? { limits: opts.limits } : {}), ...(opts.memoryMb ? { memoryMb: opts.memoryMb } : {}) });
+  if (!answer.ok) {
+    if (answer.why === 'cancelled') return finish(assess({ ...base, outcome: { ...idle, cancelled: true }, reportText: null }));
+    if (answer.why === 'timeout') return finish(assess({ ...base, outcome: { ...idle, timedOut: true }, reportText: null }));
+    return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [answer.why === 'internal' ? 'engine-error' : answer.why] }));
   }
+  sol = answer.solution;
   const record = assess({ ...base, outcome: idle, reportText: null, parsed: asReport(sol, settings.method) });
   return finish(record, { order: sol.events, nodes: sol.nodes, cut_sets: sol.cutSets.length });
 }

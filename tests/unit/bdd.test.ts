@@ -132,7 +132,7 @@ describe('the answer never depends on the variable order', () => {
 
 describe('the decision diagram itself', () => {
   it('is reduced and shared: the same function is the same node', () => {
-    const b = new Bdd({ maxNodes: 1000, maxCutSets: 1000 });
+    const b = new Bdd({ maxNodes: 1000, maxCutSets: 1000, maxCached: 1e6 });
     const x = b.variable(0);
     const y = b.variable(1);
     expect(b.and(x, y)).toBe(b.and(y, x));
@@ -145,7 +145,7 @@ describe('the decision diagram itself', () => {
   });
 
   it('atLeast: all, any, and the middle, against counting', () => {
-    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000 });
+    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000, maxCached: 1e6 });
     const vars = [0, 1, 2, 3].map((i) => b.variable(i));
     const p = [0.5, 0.5, 0.5, 0.5];
     expect(b.probability(b.atLeast(4, vars), p)).toBeCloseTo(1 / 16, 15);
@@ -156,14 +156,14 @@ describe('the decision diagram itself', () => {
   });
 
   it('sets of different sizes across the branches: the low branch keeps its short sets, the high branch adds longer ones (found by the mutation run: no subset test is needed)', () => {
-    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000 });
+    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000, maxCached: 1e6 });
     const [x, y, z, w, u] = [0, 1, 2, 3, 4].map((i) => b.variable(i)) as [number, number, number, number, number];
     const f = b.or(b.or(u, b.and(x, b.and(y, z))), b.and(x, w)); // u | x.y.z | x.w
     expect(b.minimalCutSets(f).map((s) => s.join(',')).sort()).toEqual(['0,1,2', '0,3', '4']);
   });
 
   it('minimal cut sets are minimal and complete on a family with absorption', () => {
-    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000 });
+    const b = new Bdd({ maxNodes: 10_000, maxCutSets: 1000, maxCached: 1e6 });
     const [a, c, d] = [0, 1, 2].map((i) => b.variable(i)) as [number, number, number];
     const f = b.or(a, b.and(a, b.or(c, d))); // equals a
     expect(b.minimalCutSets(f)).toEqual([[0]]);
@@ -222,12 +222,20 @@ describe('limits end as a named failure, never as a result', () => {
     const events: Record<string, number> = { E0: 0.5 };
     const gates = [];
     for (let i = 1; i <= 1500; i++) {
-      events[`E${i}`] = 0.5;
-      gates.push(i % 2 ? OR(`G${i}`, [`E${i}`, i === 1 ? 'E0' : `G${i - 1}`]) : AND(`G${i}`, [`E${i}`, `G${i - 1}`]));
+      events[`E${i}`] = 0.001;
+      gates.push(OR(`G${i}`, [`E${i}`, i === 1 ? 'E0' : `G${i - 1}`]));
     }
     const s = solve(model(mkDoc('G1500', events, gates)));
-    expect(s.probability).toBeGreaterThan(0);
-    expect(s.cutSets.length).toBeGreaterThan(100);
+    expect(s.cutSets).toHaveLength(1501);
+    expect(s.probability).toBeCloseTo(1 - 0.5 * 0.999 ** 1500, 12);
+  });
+
+  it('a gate with thousands of inputs and a K-of-N over thousands of gates that all use one event do not overflow the stack (found by Codex)', () => {
+    const gates = Array.from({ length: 12000 }, (_, i) => OR(`G${i}`, ['E', 'E']));
+    const doc = mkDoc('TOP', { E: 0.1 }, [VOTE('TOP', gates.map((g) => g.id), 2), ...gates]);
+    const s = solve(model(doc));
+    expect(s.probability).toBeCloseTo(0.1, 12); // every gate is "E fails", so 2-of-12000 is "E fails"
+    expect(s.cutSets.map((c) => c.events)).toEqual([['E']]);
   });
 
   it('the same kind of chain, 200 levels, goes through the whole analysis and completes', async () => {
@@ -290,3 +298,113 @@ describe('the engine refuses what it cannot be right about', () => {
     expect(new SolveAborted('timeout').why).toBe('timeout');
   });
 });
+
+describe('second review of the engine (Codex)', () => {
+  const hard = (pairs: number): Doc => {
+    const events: Record<string, number> = {};
+    const gates = [AND('TOP', Array.from({ length: pairs }, (_, i) => `G${i}`))];
+    for (let i = 0; i < pairs; i++) {
+      events[`A${i}`] = 0.1;
+      events[`B${i}`] = 0.1;
+      gates.push(OR(`G${i}`, [`A${i}`, `B${i}`]));
+    }
+    return mkDoc('TOP', events, gates);
+  };
+  const run = (doc: Doc, over: Partial<Parameters<typeof analyzeBuiltin>[1]> = {}) => analyzeBuiltin(JSON.stringify(doc), { runsDir: tmp, runId: runId(), ...over });
+
+  it('MCUB keeps a tiny probability: 1e-20 is not rounded to zero by cancellation', async () => {
+    const doc = mkDoc('A', { A: 1e-20 }, []);
+    const out = await run(doc, { settings: { method: 'mcub' } });
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'completed', completeness: 'complete' });
+    if (out.kind === 'ran') {
+      expect(out.record.top_event_probability).toBeCloseTo(1e-20, 30);
+      expect(out.record.top_event_probability).toBeGreaterThan(9e-21);
+      expect(out.record.approximation_value!).toBeGreaterThan(9e-21);
+    }
+  });
+
+  it('MCUB of several tiny cut sets, and an endpoint of probability 1', async () => {
+    const doc = mkDoc('T', { A: 1e-15, B: 2e-15 }, [OR('T', ['A', 'B'])]);
+    const out = await run(doc, { settings: { method: 'mcub' } });
+    expect(out.kind === 'ran' && out.record.top_event_probability).toBeCloseTo(3e-15, 25);
+    const one = await run(mkDoc('T', { A: 1, B: 0.5 }, [OR('T', ['A', 'B'])]), { settings: { method: 'mcub' } });
+    expect(one.kind === 'ran' && one.record.top_event_probability).toBe(1);
+  });
+
+  it('a time limit that passes while the result is being checked is a recorded timeout, not a thrown error', async () => {
+    let calls = 0;
+    const now = (): number => (calls++ > 1 ? 1e12 : 0); // readings 1 and 2: deadline and before the solver; later ones are past it
+    const out = await run(mkDoc('A', { A: 0.1 }, []), { now, timeoutMs: 1000 });
+    expect(out.kind).toBe('ran');
+    if (out.kind === 'ran') {
+      expect(out.record).toMatchObject({ status: 'failed', reasons: ['timeout'], top_event_probability: null });
+      expect(existsSync(path.join(out.runDir, 'results.json'))).toBe(true);
+    }
+  });
+
+  // 1000 mandatory events times 12 pairs: allowed by every size limit, so the solver is busy for seconds before the cache budget stops it
+  it('a cancel is heard while the solver is computing (its own thread): cancelled in well under the time the model needs', async () => {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 200);
+    const t0 = Date.now();
+    const out = await run(prefixed(), { signal: ac.signal });
+    // if the cancel were only noticed after the solver finished, the record would be the solver's own failure (too-much-memory)
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'cancelled', reasons: ['cancelled'], top_event_probability: null });
+    expect(Date.now() - t0).toBeLessThan(4000);
+  }, 60_000);
+
+  it('a cancel that arrives while the result is being checked is also heard (the checks poll the signal)', async () => {
+    let reads = 0;
+    const signal = { get aborted() { return ++reads > 2; }, addEventListener() {}, removeEventListener() {} } as unknown as AbortSignal; // false for the solver, true from the checks on
+    const out = await run(mkDoc('A', { A: 0.1 }, []), { signal });
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'cancelled', reasons: ['cancelled'], top_event_probability: null });
+  });
+
+  it('a time limit ends a run that is still computing, with no numbers', async () => {
+    const t0 = Date.now();
+    const out = await run(hard(15), { timeoutMs: 100 });
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'failed', reasons: ['timeout'], minimal_cut_sets: [] });
+    expect(Date.now() - t0).toBeLessThan(8000);
+  }, 30_000);
+
+  // 1000 mandatory events times 12 pairs: 4096 cut sets, but each node's cached copy is a longer array than the last
+  const prefixed = (): Doc => {
+    const events: Record<string, number> = {};
+    const ps = Array.from({ length: 1000 }, (_, i) => `P${i}`);
+    for (const p of ps) events[p] = 0.99;
+    const gates = [];
+    const pairs = [];
+    for (let i = 0; i < 12; i++) {
+      events[`E${2 * i}`] = 0.1;
+      events[`E${2 * i + 1}`] = 0.1;
+      gates.push(OR(`G${i}`, [`E${2 * i}`, `E${2 * i + 1}`]));
+      pairs.push(`G${i}`);
+    }
+    return mkDoc('TOP', events, [AND('TOP', [...ps, ...pairs]), ...gates]);
+  };
+
+  it('a model that would cache billions of numbers is stopped by the cache budget, quickly, with a named reason (found by Codex)', async () => {
+    const t0 = Date.now();
+    const out = await run(prefixed());
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'failed', reasons: ['too-much-memory'], top_event_probability: null });
+    expect(Date.now() - t0).toBeLessThan(60_000);
+  }, 90_000);
+
+  it('the worker heap limit is a second line: with the cache budget off, a small heap ends the same model as too-much-memory, and the server process lives', async () => {
+    const t0 = Date.now();
+    const out = await run(prefixed(), { memoryMb: 64, limits: { maxCached: 1e12 } });
+    expect(out.kind === 'ran' && out.record).toMatchObject({ status: 'failed', reasons: ['too-much-memory'], top_event_probability: null });
+    expect(Date.now() - t0).toBeLessThan(30_000); // the small heap, not the machine's default, ended it
+  }, 90_000);
+
+  it('the cache budget itself (the first line): a tiny budget stops even a small model, naming the reason', () => {
+    expect(() => solve(model(hard(6)), { limits: { maxCached: 100 } })).toThrow(SolveAborted);
+    try {
+      solve(model(hard(6)), { limits: { maxCached: 100 } });
+    } catch (e) {
+      expect((e as SolveAborted).why).toBe('too-much-memory');
+    }
+    expect(solve(model(hard(6)), { limits: { maxCached: 1e9 } }).cutSets).toHaveLength(64); // and an ample one does not
+  });
+});
+

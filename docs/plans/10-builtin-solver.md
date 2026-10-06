@@ -1,6 +1,6 @@
 # Plan 10: A built-in second engine
 
-**Status 2026-10-06: S0 to S4 built** (see [ENGINES.md](../ENGINES.md)); S5 (Codex review of the engine) not yet run. The user's decisions (2026-10-06): it lives inside this repository; the built-in engine is the default, with SCRAM an optional install (when SNEED is installed from SEED, the SCRAM install is optional) and the independent cross-check; MIT; go now. The headless runner's default stays SCRAM until SEED's adapter is updated to expect otherwise. Text below is the original plan.
+**Status 2026-10-06: S0 to S4 built** (see [ENGINES.md](../ENGINES.md)); S5 done (Codex review of the engine: 8 findings fixed, see ENGINES.md). The user's decisions (2026-10-06): it lives inside this repository; the built-in engine is the default, with SCRAM an optional install (when SNEED is installed from SEED, the SCRAM install is optional) and the independent cross-check; MIT; go now. The headless runner's default stays SCRAM until SEED's adapter is updated to expect otherwise. Text below is the original plan.
 
 Raised by the user on 2026-10-05: is there a better option than SCRAM, and should one be built? This note answers with a plan. Nothing here starts until the user approves it, and it changes nothing in V1.
 
