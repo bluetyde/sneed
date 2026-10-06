@@ -522,6 +522,38 @@ MUTATIONS += [
     fm("the figure never marks a stale result", "stale: this.figureStale, ...", "stale: false, ...", WE),
 ]
 
+# Publication scrub mutations.
+SCR = ROOT / "src/core/scrub.ts"
+SCRUB_SUITE = ("tests/unit/scrub.test.ts", 90)
+
+
+def sm(name: str, old: str, new: str, f: pathlib.Path = SCR) -> tuple:
+    return (f"scrub: {name}", f, old, new, SCRUB_SUITE)
+
+
+MUTATIONS += [
+    sm("Windows home folders are kept", "  out = out.replace(WIN_USERS, (m, a: string, n: string) => (keep(n) ? m : `${a}<user>`));\n", ""),
+    sm("WSL home folders are kept", "  out = out.replace(MNT_USERS, (m, a: string, n: string) => (keep(n) ? m : `${a}<user>`));\n", ""),
+    sm("macOS home folders are kept", "  out = out.replace(MAC_USERS, (m, pre: string, a: string, n: string) => (keep(n) ? m : `${pre}${a}<user>`));\n", ""),
+    sm("Linux home folders are kept", "  out = out.replace(HOME, (m, pre: string, a: string, n: string) => (keep(n) ? m : `${pre}${a}<user>`));\n", ""),
+    sm("an example name is replaced", "const keep = (name: string): boolean => EXAMPLE_NAMES.has(name.toLowerCase());\n  out = out.replace(WIN_USERS", "const keep = (name: string): boolean => false as boolean;\n  out = out.replace(WIN_USERS"),
+    sm("account names are not removed", "    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'gi'), '<user>');", "    void u;"),
+    sm("account names are matched inside other words", "    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'gi'), '<user>');", "    out = out.replace(new RegExp(escapeRe(u), 'gi'), '<user>');"),
+    sm("account names are case sensitive", "    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'gi'), '<user>');", "    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRe(u)}(?![A-Za-z0-9])`, 'g'), '<user>');"),
+    sm("a very short name is removed from words", "    if (u.length < 3 || keep(u)) continue; // a one- or two-letter name would be removed from ordinary words", "    if (keep(u)) continue;"),
+    sm("the percent-encoded folder is not replaced", "  for (const s of [...out]) out.add(s.replace(/ /g, '%20'));", "  void 0;"),
+    sm("the WSL spelling of a folder is not replaced", "  if (drive) out.add(`/mnt/${drive[1]!.toLowerCase()}/${fwd.slice(3)}`); // the same folder as WSL names it", "  void drive;"),
+    sm("the JSON-escaped folder is not replaced", ", fwd.replace(/\\//g, '\\\\\\\\')]);", "]);"),
+    sm("the backslash folder is not replaced", "fwd.replace(/\\//g, '\\\\'), ", ""),
+    sm("a folder name is used as a pattern", "new RegExp(escapeRe(s), 'gi'), placeholder", "new RegExp(s, 'gi'), placeholder"),
+    sm("a longer folder is not tried first", ".sort((a, b) => b.length - a.length); // longest first", "; // longest first"),
+    sm("a folder match is case sensitive", "new RegExp(escapeRe(s), 'gi'), placeholder", "new RegExp(escapeRe(s), 'g'), placeholder"),
+    sm("an empty folder replaces everything", "    if (!folder) continue;\n", ""),
+    sm("the leak check ignores home folders", "  for (const re of [WIN_USERS, MNT_USERS, MAC_USERS, HOME]) {", "  for (const re of [] as RegExp[]) {"),
+    sm("the leak check ignores account names", "  for (const u of opts.usernames ?? []) {\n    if (u.length < 3 || keep(u)) continue;\n    for (const m of text.matchAll", "  for (const u of [] as string[]) {\n    if (u.length < 3 || keep(u)) continue;\n    for (const m of text.matchAll"),
+    sm("the leak check reports example names", "      if (!keep(name)) leaks.push({ kind: 'user-folder'", "      if (true as boolean) leaks.push({ kind: 'user-folder'"),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -580,6 +612,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("queue:")]
     if only == "export":  # just the figure and print mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("figure:")]
+    if only == "scrub":  # just the publication scrub mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("scrub:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
