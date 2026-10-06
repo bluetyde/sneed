@@ -3,6 +3,7 @@
 // string opens in any viewer, converts to PNG in the browser and prints in black and white (shape and line style carry the meaning,
 // never colour). The caption states what a reader must not miss: a result that is not complete is labelled diagnostic only.
 import type { ResultRecord } from '../../core/result.js';
+import type { CrossCheckInfo } from '../api.js';
 import { CAVEAT_TEXT, METHOD_TEXT, reasonText } from '../ui/hints.js';
 import { findEvent, findGate, type Doc } from './doc.js';
 import { buildVisual, type Visual, type VisualNode } from './visual.js';
@@ -11,6 +12,8 @@ export interface FigureResult {
   record: ResultRecord;
   /** True when the model or method changed after this result: it is then not described as the result for this drawing. */
   stale: boolean;
+  /** The second engine's answer, when both were asked for: a disagreement or a failed comparison is part of the result. */
+  cross?: CrossCheckInfo;
 }
 
 export interface FigureOptions {
@@ -26,7 +29,9 @@ const FONT = 'Arial, Helvetica, sans-serif';
 const LINE = 16;
 const CHAR_W = 6.6; // an estimate of the average width of 11 px text, to size the page
 
-const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** Characters XML 1.0 does not allow at all (control characters, lone surrogates, U+FFFE and U+FFFF); a model name may hold them, a document may not. */
+const XML_INVALID = /[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+const esc = (t: string): string => t.replace(XML_INVALID, '\uFFFD').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const short = (t: string, max: number): string => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
 const num = (n: number): string => String(Math.round(n * 100) / 100);
 /** Breaks a line at spaces to at most `max` characters; a continuation keeps the indent of its line. */
@@ -62,6 +67,15 @@ export function resultLines(r: FigureResult | null | undefined): string[] {
     out.push(`Method: ${METHOD_TEXT[rec.method] ?? rec.method}. Engine: ${rec.engine.name} ${rec.engine.version}. Status: ${rec.status} / ${rec.completeness}.`);
     if (rec.top_event_probability !== null) out.push(`Top event probability: ${prob(rec.top_event_probability)}${rec.method === 'exact' ? '' : ' (approximation)'}.`);
     out.push(`Minimal cut sets: ${rec.minimal_cut_sets.length}.`);
+    const c = r.cross;
+    if (c) {
+      if ('unavailable' in c) out.push(`Cross-check: no second opinion (${c.reason}).`);
+      else if (c.agree) out.push(`Cross-check: ${c.engine.name} ${c.engine.version} gives the same probability and the same minimal cut sets.`);
+      else {
+        out.push('CROSS-CHECK DISAGREEMENT: the second engine differs; treat these numbers as unverified until this is explained.');
+        for (const d of c.differences) out.push(`  ${d}`);
+      }
+    }
     for (const c of rec.caveats) out.push(CAVEAT_TEXT[c] ?? c);
     out.push(`Model hash ${rec.input_hashes.model_hash.slice(0, 12)}.`);
   }

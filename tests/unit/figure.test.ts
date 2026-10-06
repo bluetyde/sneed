@@ -187,3 +187,30 @@ describe('gaps closed by mutation checks', () => {
   });
 });
 
+describe('the second engine in the figure, and characters XML cannot hold', () => {
+  const eng = { name: 'SCRAM', version: '0.16.2' };
+  it('an agreement, a disagreement and an unavailable comparison are each in the figure next to the numbers', () => {
+    const agree = resultLines({ record: record(), stale: false, cross: { engine: eng, status: 'completed', agree: true, differences: [] } }).join('\n');
+    expect(agree).toContain('Cross-check: SCRAM 0.16.2 gives the same probability and the same minimal cut sets.');
+    const differ = resultLines({ record: record(), stale: false, cross: { engine: eng, status: 'completed', agree: false, differences: ['the probabilities differ: 0.19 and 0.2'] } }).join('\n');
+    expect(differ).toContain('CROSS-CHECK DISAGREEMENT');
+    expect(differ).toContain('the probabilities differ: 0.19 and 0.2');
+    const none = resultLines({ record: record(), stale: false, cross: { unavailable: true, reason: 'the SCRAM runtime is not installed' } }).join('\n');
+    expect(none).toContain('Cross-check: no second opinion (the SCRAM runtime is not installed).');
+    expect(resultLines({ record: record(), stale: false }).join('\n')).not.toContain('Cross-check');
+    expect(figureSvg(base(), { result: { record: record(), stale: false, cross: { engine: eng, status: 'completed', agree: false, differences: ['x'] } } })).toContain('CROSS-CHECK DISAGREEMENT');
+  });
+
+  it('a stale result carries no cross-check either', () => {
+    expect(resultLines({ record: record(), stale: true, cross: { engine: eng, status: 'completed', agree: false, differences: ['x'] } }).join('\n')).not.toContain('Cross-check');
+  });
+
+  it('control characters and lone surrogates in a name are replaced, so the document stays valid XML', () => {
+    const svg = figureSvg(D.setModelName(base(), 'Pumps\u000cRe\u0000port\ud800x\ufffe'));
+    expect(svg).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ud800-\udfff\ufffe\uffff]/);
+    expect(svg).toContain('Pumps\ufffdRe\ufffdport\ufffdx\ufffd');
+    expect(figureSvg(D.setModelName(base(), 'tab\there'))).toContain('tab\there'); // allowed controls stay
+    expect(figureSvg(D.setModelName(base(), 'pump \u{1F4A7}'))).toContain('\u{1F4A7}'); // astral characters stay
+  });
+});
+

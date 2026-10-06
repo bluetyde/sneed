@@ -586,7 +586,7 @@ export class Editor {
   }
   /** The drawing as a standalone SVG document, with the result if there is one (labelled when it is out of date or not complete). */
   figureSvg(): string {
-    return figureSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.figureStale } : null }); // an edit not yet checked counts as out of date: the figure never pairs old numbers with a new drawing
+    return figureSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.figureStale, ...(this.result.cross ? { cross: this.result.cross } : {}) } : null }); // an edit not yet checked counts as out of date: the figure never pairs old numbers with a new drawing
   }
 
   // ---- import ----

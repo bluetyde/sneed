@@ -982,5 +982,14 @@ describe('the figure of the editor', () => {
     await ed.settle();
     expect(ed.figureSvg()).toContain('Top event probability: 0.19.'); // back to the model the result is for
   });
+
+  it('the figure carries the cross-check of the run it shows', async () => {
+    const api = fakeApi({
+      run: async (text, method) => ({ kind: 'ran', run_id: 'r1', record: recordFor(text, method), cross: { engine: { name: 'SCRAM', version: '0.16.2' }, status: 'completed', agree: false, differences: ['the probabilities differ'] } }),
+    });
+    const { ed } = await ready(api);
+    await ed.run();
+    expect(ed.figureSvg()).toContain('CROSS-CHECK DISAGREEMENT');
+  });
 });
 

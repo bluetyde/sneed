@@ -513,8 +513,14 @@ MUTATIONS += [
     fm("a file name may hold a path", ".replace(/[^A-Za-z0-9._-]+/g, '-')", ""),
     fm("a file name may be long", ".slice(0, 64);\n  return stem", ";\n  return stem"),
     fm("an empty file name stays empty", "return stem || 'fault-tree';", "return stem;"),
+    fm("a disagreement is not in the figure", "else if (c.agree) out.push(", "else if (true as boolean) out.push("),
+    fm("an unavailable comparison is not in the figure", "if ('unavailable' in c) out.push(", "if (false as boolean) out.push("),
+    fm("a stale result carries its cross-check", "    const c = r.cross;", "    const c = r.cross; if (false as boolean) void 0;"),
+    fm("XML-invalid characters stay", "t.replace(XML_INVALID, '\\uFFFD').replace(/&/g, '&amp;')", "t.replace(/&/g, '&amp;')"),
+    fm("allowed characters are removed too", "\\x09\\x0A\\x0D\\x20-", "\\x20-"),
+    fm("the cross-check is not passed to the figure", "...(this.result.cross ? { cross: this.result.cross } : {})", "", WE),
     fm("the figure pairs old numbers with an unchecked edit", "return this.stale || this.validatedText !== this.text;", "return this.stale;", WE),
-    fm("the figure never marks a stale result", "stale: this.figureStale } : null }", "stale: false } : null }", WE),
+    fm("the figure never marks a stale result", "stale: this.figureStale, ...", "stale: false, ...", WE),
 ]
 
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
