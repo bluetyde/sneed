@@ -119,7 +119,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - An instructor guide with answers and discussion questions.
 - A hosted demo (needs a decision about running the engine for other people's models).
 - Lessons that use NODAL component links for naming only.
-- [x] A built-in second engine (BDD, TypeScript, MIT) so students need no SCRAM install, SCRAM kept as the independent cross-check: [plan 10](docs/plans/10-builtin-solver.md), [ENGINES.md](docs/ENGINES.md). Built 2026-10-06. Open: Codex review of the engine (S5); flip the headless runner's default with SEED's adapter; a source hash for the engine identity.
+- [x] A built-in second engine (BDD, TypeScript, MIT) so students need no SCRAM install, SCRAM kept as the independent cross-check: [plan 10](docs/plans/10-builtin-solver.md), [ENGINES.md](docs/ENGINES.md). Built 2026-10-06. Codex review done 2026-10-06 (8 findings fixed). Open: flip the headless runner's default with SEED's adapter; a source hash for the engine identity.
 - Fault trees as advisory context for Mica/Jev in the virtual reactor (explain a cut set; never in the protection path, never live state): [plan 09](docs/plans/09-virtual-reactor-link.md). Idea only; waits for P3.
 
 ## Decisions waiting (the user's)

@@ -418,3 +418,16 @@ describe('a result is accepted only while time is left (second review of the tim
     expect(r.reasons).not.toContain('non-minimal-cut-sets');
   });
 });
+
+describe('probabilities are compared relatively, with no absolute floor (Codex review of the engine)', () => {
+  const tiny = asModel(mkDoc('A', { A: 1e-20 }, []));
+  it('an engine that prints 0 for a cut set of probability 1e-20 is refused', () => {
+    const r = run(tiny, { probability: '0', limit: 1, products: [{ events: ['A'], probability: '0' }] });
+    expect(r.status).toBe('failed');
+    expect(r.reasons).toContain('cut-set-probability-mismatch');
+  });
+  it('and one that prints it to six digits is accepted', () => {
+    expect(run(tiny, { probability: '1e-20', limit: 1, products: [{ events: ['A'], probability: '1e-20' }] }).status).toBe('completed');
+  });
+});
+

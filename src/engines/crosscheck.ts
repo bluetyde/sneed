@@ -4,7 +4,8 @@ import type { ResultRecord } from '../core/result.js';
 
 /** SCRAM prints about six significant digits, so probabilities are compared to that precision. */
 const REL_TOL = 5e-5;
-const close = (a: number, b: number): boolean => Math.abs(a - b) <= Math.max(1e-12, REL_TOL * Math.max(Math.abs(a), Math.abs(b)));
+// relative only, so that 0 and 1e-20 are different (a possible failure reported as impossible is not rounding)
+const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= REL_TOL * Math.max(Math.abs(a), Math.abs(b));
 const key = (sets: { events: string[] }[]): string[] => sets.map((s) => [...s.events].sort().join(',')).sort();
 
 export interface CrossCheck {

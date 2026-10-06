@@ -145,7 +145,9 @@ export function hasNonMinimal(sets: string[][], check: () => void = () => undefi
 
 const APPROXIMATION: Record<Settings['method'], string> = { exact: 'none', 'rare-event': 'rare-event', mcub: 'mcub' };
 const REL_TOL = 5e-5; // the engine prints about 6 significant digits
-const close = (a: number, b: number): boolean => Math.abs(a - b) <= Math.max(1e-12, REL_TOL * Math.max(Math.abs(a), Math.abs(b)));
+// relative only: an engine prints about six significant digits whatever the magnitude, so there is no absolute floor that could
+// call 0 and 1e-20 equal. Equal numbers (including 0 and 0) are equal.
+const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= REL_TOL * Math.max(Math.abs(a), Math.abs(b));
 
 /** Probability that at least one of the cut sets occurs, by inclusion-exclusion (independent events). Small inputs only. */
 function unionProbability(sets: string[][], p: Map<string, number>): number {
@@ -273,7 +275,7 @@ export function assess(input: AssessInput): ResultRecord {
   const caveats: string[] = [];
   if (reasons.length === 0 && settings.method !== 'exact') {
     const pc = report.products.map((prod) => prod.events.reduce((acc, e) => acc * p.get(e)!, 1));
-    const raw = settings.method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : 1 - pc.reduce((a, x) => a * (1 - x), 1);
+    const raw = settings.method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0));
     if (raw > 1 + 1e-9) {
       if (close(report.probability, 1)) caveats.push('approximation-exceeds-1');
       else reasons.push('probability-inconsistent-with-cut-sets');

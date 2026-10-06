@@ -33,6 +33,15 @@ describe('crossCheck', () => {
     expect(c.differences[0]).toMatch(/probability: sneed-bdd 0.19, SCRAM 0.1901/);
   });
 
+  it('zero and a tiny positive probability are different (no absolute floor; found by Codex)', () => {
+    const c = crossCheck(rec({ top_event_probability: 0 }), rec({ top_event_probability: 1e-20 }, 'SCRAM'));
+    expect(c.agree).toBe(false);
+    expect(c.differences[0]).toMatch(/probability/);
+    expect(crossCheck(rec({ top_event_probability: 0 }), rec({ top_event_probability: 0 }, 'SCRAM')).agree).toBe(true);
+    expect(crossCheck(rec({ top_event_probability: 1e-20 }), rec({ top_event_probability: 1.00001e-20 }, 'SCRAM')).agree).toBe(true);
+    expect(crossCheck(rec({ top_event_probability: 1e-20 }), rec({ top_event_probability: 1.1e-20 }, 'SCRAM')).agree).toBe(false);
+  });
+
   it('a cut set in only one engine is named', () => {
     const c = crossCheck(rec(), rec({ minimal_cut_sets: [{ events: ['P1'], probability: 0.1 }, { events: ['P3'], probability: 0.1 }] }, 'SCRAM'));
     expect(c.agree).toBe(false);

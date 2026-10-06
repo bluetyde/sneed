@@ -9,7 +9,7 @@ SNEED has two analysis engines. Both produce the same result record through the 
 | Licence | MIT, same as SNEED, written from the published algorithms | GPL-3.0, never bundled |
 | How | reads the native model directly; a reduced ordered binary decision diagram and Rauzy's minimal solutions | exports Open-PSA XML, runs the engine, parses its report |
 | K-of-N | built into the diagram, exact for every shape | native `atleast` is wrong for some shapes, so the exporter expands it |
-| Limits | 2000 events, 2,000,000 diagram nodes, 50,000 cut sets, whole-analysis time limit, cancel | product-order limit, 50,000 cut sets, report size cap, time limit, cancel |
+| Limits | 2000 events, 2,000,000 diagram nodes, 50,000 cut sets, a 20-million-number cache budget, a 1 GB heap for its thread, whole-analysis time limit, cancel | product-order limit, 50,000 cut sets, report size cap, time limit, cancel |
 | Default | **yes (editor and server)** | optional; also the independent cross-check |
 
 The editor's **Engine** list chooses: **Built-in** (default), **SCRAM**, or **Both**. With Both the built-in answer is shown, SCRAM is run too, and the Results tab says whether they agree. A difference is shown as a difference (probability, or the cut sets only one engine found) and the numbers are called unverified until it is explained. With no SCRAM runtime installed, Both still answers and says there is no second opinion. A result made with another engine than the one selected is shown as out of date.
@@ -22,8 +22,10 @@ The headless runner (`docs/HEADLESS.md`) takes `--engine scram|builtin`. Its def
 - **Probability.** `P(node) = p * P(failed branch) + (1 - p) * P(working branch)`, memoised, for independent events. Floating point; on the hand-checkable models the error is far below the `1e-12` tolerance of the oracles.
 - **Minimal cut sets.** Rauzy's minimal solutions: the sets of the working branch, plus the failed branch's sets with the variable added, minus any set the working branch already has. (A set of the failed branch can never strictly contain a set of the working branch, because the function is monotone, so no subset test is needed; the mutation run found the subset test was dead code.)
 - **Approximations.** Rare-event and min-cut-upper-bound values are computed from the cut sets with the rules in `result.ts`; a rare-event sum above 1 is shown labelled with the bound 1 as the probability, exactly as for SCRAM.
-- **Limits fail loudly.** Node limit, cut-set cap, event cap, time limit and cancel each end the run as `failed` (reasons `too-many-nodes`, `too-many-cut-sets`, `too-many-events`, `timeout`) or `cancelled`, with no numbers. Never a partial number presented as complete.
-- **Recursion depth** is bounded by the number of events (at most 2000), and gates are walked iteratively, so a chain of 1500 gates does not overflow the stack.
+- **Its own thread.** The solver runs in a worker thread (`isolate.ts`, `worker.ts`), so the server's event loop stays free: an HTTP cancel, a disconnect or the headless runner's cancel poll are heard while it computes, the thread is terminated at the time limit, and its heap is limited (default 1 GB; a model that needs more ends as `too-much-memory` while the server process lives). Built as plain JavaScript the worker is `dist/node/engines/bdd/worker.js`; under tsx or a test runner it is the `.ts` file loaded with `--import tsx`.
+- **Limits fail loudly.** Node limit, cut-set cap, event cap, cache budget, heap limit, time limit and cancel each end the run as `failed` (reasons `too-many-nodes`, `too-many-cut-sets`, `too-many-events`, `too-much-memory`, `timeout`, `engine-error` for anything unexpected) or `cancelled`, with no numbers. Never a partial number presented as complete.
+- **Recursion depth** is bounded by the number of events (at most 2000), gates are walked iteratively, and K-of-N is built bottom-up over its inputs, so neither a chain of 1500 gates nor a vote over 12000 gates overflows the stack.
+- **Small probabilities.** MCUB is computed as `-expm1(sum(log1p(-p)))`, so a cut set of probability 1e-20 is not rounded to 0. Probabilities are compared relatively everywhere (the result checks and the cross-check), with no absolute floor, so 0 and 1e-20 are different.
 
 ## Verification
 
@@ -35,7 +37,8 @@ Nothing in the engine is checked by itself alone:
 4. The same models through SCRAM (`tests/engine/bdd-vs-scram.test.ts`): hand oracles, both approximations, and 40 random trees: same probability to SCRAM's printed precision, same cut sets.
 5. The shapes SCRAM's native K-of-N gets wrong, against the enumerator.
 6. Limits, cancel, a time limit that has passed, a 1500-level chain, a hard 14-pair model (16384 cut sets) in about 2 seconds.
-7. Mutation tests: `python tests/mutation/verifier_mutations.py engines` (23 deliberate breaks of the diagram, the solver, the analysis, the cross-check, the engine choice; all caught).
+7. Mutation tests: `python tests/mutation/verifier_mutations.py engines` (31 deliberate breaks of the diagram, the solver, the thread, the analysis, the cross-check, the engine choice; all caught).
+8. Codex review of the engine (2026-10-06): 8 findings (MCUB cancellation, absolute tolerance in the cross-check, an abort thrown past the result checks, a blocking solver that no cancel could reach, unbounded cache memory, stack depth in K-of-N, and the same timeout escape), all confirmed and fixed with tests.
 
 Unit tests: `tests/unit/bdd.test.ts`, `crosscheck.test.ts`, engine choice blocks in `server.test.ts`, `web-editor.test.ts`, `headless.test.ts`; e2e: `e2e/engines.spec.ts`, `failures.spec.ts`, `a11y.spec.ts`.
 

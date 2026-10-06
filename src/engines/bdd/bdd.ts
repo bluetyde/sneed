@@ -9,7 +9,7 @@ export const FALSE = 0;
 export const TRUE = 1;
 
 export class SolveAborted extends Error {
-  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events') {
+  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events' | 'too-much-memory') {
     super(`solve stopped: ${why}`);
   }
 }
@@ -19,6 +19,8 @@ export interface BddLimits {
   maxNodes: number;
   /** Most minimal cut sets that may be produced. */
   maxCutSets: number;
+  /** Most numbers the minimal-cut-set cache may hold in total (every stored set, with its length). Bounds memory, not just count. */
+  maxCached: number;
 }
 
 /** Node ids stay below this, so that a pair of ids is one exact number (a * SHIFT + b < 2^53). */
@@ -124,19 +126,20 @@ export class Bdd {
    */
   atLeast(k: number, fs: number[]): number {
     const n = fs.length;
-    const memo = new Map<number, number>();
-    const go = (i: number, j: number): number => {
-      if (j <= 0) return TRUE;
-      if (n - i < j) return FALSE;
-      const key = i * (n + 1) + j;
-      const hit = memo.get(key);
-      if (hit !== undefined) return hit;
-      this.charge();
-      const r = this.or(go(i + 1, j), this.and(fs[i]!, go(i + 1, j - 1)));
-      memo.set(key, r);
-      return r;
-    };
-    return go(0, k);
+    if (k <= 0) return TRUE;
+    if (k > n) return FALSE;
+    // bottom-up over the inputs (no recursion, so a gate with thousands of inputs cannot exhaust the stack):
+    // row[j] = "at least j of the inputs from i on", for j = 0..k
+    let row: number[] = Array.from({ length: k + 1 }, (_, j) => (j === 0 ? TRUE : FALSE));
+    for (let i = n - 1; i >= 0; i--) {
+      const next = row.slice();
+      for (let j = 1; j <= k; j++) {
+        this.charge();
+        next[j] = this.or(row[j]!, this.and(fs[i]!, row[j - 1]!));
+      }
+      row = next;
+    }
+    return row[k]!;
   }
 
   /** Probability that the function is true, for independent variables with failure probabilities `p`. */
@@ -165,6 +168,7 @@ export class Bdd {
     if (root === FALSE) return [];
     if (root === TRUE) return [[]];
     const memo = new Map<number, number[][]>();
+    let cached = 0;
     const go = (n: number): number[][] => {
       if (n === FALSE) return [];
       if (n === TRUE) return [[]];
@@ -182,6 +186,8 @@ export class Bdd {
       const x = this.v[n]!;
       const result = low.concat(kept.map((s) => [x, ...s]));
       if (result.length > this.limits.maxCutSets) throw new SolveAborted('too-many-cut-sets');
+      for (const s of result) cached += s.length + 1;
+      if (cached > this.limits.maxCached) throw new SolveAborted('too-much-memory');
       memo.set(n, result);
       return result;
     };
