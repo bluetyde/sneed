@@ -207,8 +207,8 @@ MUTATIONS = [
     ("server: writes need no custom header", SA, "req.headers['x-sneed-request'] !== '1'", "false as boolean"),
     ("server: static files outside the web folder", SA, "if (!file.startsWith(path.resolve(root) + path.sep))", "if (false as boolean)"),
     ("server: internal errors leak their text", SA, "return send(res, 500, { error: { code: 'E_INTERNAL', message: 'internal error' } });", "return send(res, 500, { error: { code: 'E_INTERNAL', message: String((e as Error).message) } });"),
-    ("server: disconnect does not stop the engine", SA, "if (!res.writableEnded) job.abort.abort(); // the browser went away: stop the engine", ""),
-    ("server: a second run is allowed", SA, "if (running) throw new HttpError(409, 'E_BUSY', 'a run is already in progress');", ""),
+    ("server: disconnect does not stop the engine", SA, "if (!dequeue(job)) job.abort.abort();", "if (!dequeue(job)) void 0;"),
+    ("server: runs are not held back", SA, "await acquire(job);", "running = job;"),
     ("storage: unsafe names accepted", ST, "if (!isValidModelName(name)) throw new StorageError('E_NAME'", "if (false as boolean) throw new StorageError('E_NAME'"),
     # browser: builds the app from the mutated source and drives real Chrome
     ("ui canvas: arrow keys do nothing", WC, "if (key && dirs[e.key]) {", "if (false as boolean) {", E2E),
@@ -326,8 +326,8 @@ MUTATIONS = [
     ("crosscheck: a result that is not complete is ignored", XC, "if (!solid(b)) differences.push(", "if (false as boolean) differences.push("),
     ("crosscheck: the tolerance is far too wide", XC, "const REL_TOL = 5e-5;", "const REL_TOL = 1e-1;"),
     ("crosscheck: cut sets only in the other engine are ignored", XC, "if (onlyB.length) differences.push(", "if (false as boolean) differences.push("),
-    ("engine choice: the server default is SCRAM", SA, "const engine = (body.engine ?? 'builtin') as EngineChoice;", "const engine = (body.engine ?? 'scram') as EngineChoice;"),
-    ("engine choice: an unknown engine is accepted", SA, "if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD',", "if (false as boolean) throw new HttpError(400, 'E_FIELD',"),
+    ("engine choice: the server default is SCRAM", SA, "const engine = (body.engine ?? 'builtin') as EngineChoice;\n      if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);\n      const requestId", "const engine = (body.engine ?? 'scram') as EngineChoice;\n      if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);\n      const requestId"),
+    ("engine choice: an unknown engine is accepted", SA, "if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);\n      const requestId", "if (false as boolean) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);\n      const requestId"),
     ("engine choice: no runtime still means a cross-check", SA, "if (rt.installed !== true) cross =", "if (false as boolean) cross ="),
     ("engine choice: a result of another engine stays current", WE, " || this.resultEngine !== this.engine;", ";"),
     ("engine choice: both is blocked without SCRAM", WE, "return this.engine === 'scram' && this.runtime !== null && !this.runtime.installed;", "return this.engine !== 'builtin' && this.runtime !== null && !this.runtime.installed;"),
@@ -433,6 +433,48 @@ MUTATIONS += [
     im("a refusal is an error status", "return send(res, 200, { kind: 'refused', errors: result.errors });", "return send(res, 400, { kind: 'refused', errors: result.errors });", SA),
 ]
 
+# Queue and saved-run reuse mutations.
+QUEUE_SUITE = ("tests/unit/server.test.ts tests/unit/web-editor.test.ts", 200)
+
+
+def qm(name: str, old: str, new: str, f: pathlib.Path = SA) -> tuple:
+    return (f"queue: {name}", f, old, new, QUEUE_SUITE)
+
+
+MUTATIONS += [
+    qm("the queue limit is off by one", "if (queue.length >= MAX_QUEUE)", "if (queue.length > MAX_QUEUE)"),
+    qm("a finished run does not start the next", "      running = next;\n      next.start();", "      running = next;"),
+    qm("a dequeued job is not marked dropped", "    job.dropped = true;\n    job.start();", "    job.start();"),
+    qm("a dropped job still runs", "if (job.dropped) {", "if (false as boolean) {"),
+    qm("a client that went away keeps its place", "if (!dequeue(job)) job.abort.abort();", "job.abort.abort();"),
+    qm("cancel by id ignores the id", "const waiting = queue.find((j) => j.requestId === rid);", "const waiting = queue[0];"),
+    qm("cancel by id of a running request does nothing", "if (running && running.requestId === rid) {", "if (false as boolean) {"),
+    qm("a request id is not checked", "if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw", "if (typeof v !== 'string') throw"),
+    qm("a request id may be long", "/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw", "/^[A-Za-z0-9_-]{1,640}$/.test(v)) throw"),
+    qm("the status does not list the queue", "queued: queue.map((j) => ({ request_id: j.requestId }))", "queued: []"),
+    qm("lookup ignores the method", "r.method === chosen && ", ""),
+    qm("lookup ignores whether the run was complete", " && r.completeness === 'complete'", ""),
+    qm("lookup ignores whether the run completed", "r.status === 'completed' && ", ""),
+    qm("lookup ignores the engine name", " && r.engine_name === wantName", ""),
+    qm("lookup ignores the engine version", " && r.engine_version === wantVersion", ""),
+    qm("lookup ignores the model", "r.model_hash === hash && ", ""),
+    qm("lookup reuses the cross-check", "if (engine === 'both' || !validateModelText(text).valid)", "if (!validateModelText(text).valid)"),
+    qm("lookup accepts an invalid model", "if (engine === 'both' || !validateModelText(text).valid)", "if (engine === 'both')"),
+    qm("lookup does not need the runtime for SCRAM", "if (wantVersion === null) return send(res, 200, none);", "void 0;"),
+    qm("an unreadable saved run is offered", "return send(res, 200, none); // unreadable now: run it again", "throw new HttpError(500, 'E_INTERNAL', 'x');"),
+    qm("the offer ignores the method", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.engine}`;", WE),
+    qm("the offer ignores the engine", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.method}`;", WE),
+    qm("the offer ignores the model", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.method}|${this.engine}`;", WE),
+    qm("Run again still offers", "if (!opts.fresh && this.engine !== 'both') {", "if (this.engine !== 'both') {", WE),
+    qm("both looks for a saved run", "if (!opts.fresh && this.engine !== 'both') {", "if (!opts.fresh) {", WE),
+    qm("a reused result is not marked", "    this.reused = { run_id: o.run_id, saved_at: o.saved_at };\n", "", WE),
+    qm("a fresh result stays marked as reused", "        this.reused = null;\n        this.highlight = [];\n        void this.refreshRuns();", "        this.highlight = [];\n        void this.refreshRuns();", WE),
+    qm("a waiting run counts the running one wrongly", "waiting + (st.running ? 1 : 0)", "waiting", WE),
+    qm("cancel does not name the request", "await this.api.cancel(this.runRequestId ?? undefined)", "await this.api.cancel()", WE),
+    qm("a dequeued run replaces the result", "if (r.kind === 'dequeued') this.setNotice(", "if (false as boolean) this.setNotice(", WE),
+    qm("the queue poll never stops", "      clearInterval(poll);\n", "", WE),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -487,6 +529,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process", "analyze:"))]
     if only == "import":  # just the importer mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("import:")]
+    if only == "queue":  # just the queue and saved-run reuse mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("queue:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
