@@ -1141,7 +1141,7 @@ describe('event trees over the API (plan 13, stage S1)', () => {
   });
 
   it('names are checked like model names, text must be JSON, a missing tree is 404 in its own words, and writes need the header', async () => {
-    for (const name of ['../x', 'a/b', '.hidden', 'x'.repeat(65)]) {
+    for (const name of ['../x', 'a/b', '.hidden', 'a..b', 'x'.repeat(65)]) {
       const r = await put(`/api/event-trees/${encodeURIComponent(name)}`, { text: '{}' });
       expect(r.status, name).toBe(400);
       expect(r.json.error.code, name).toBe('E_NAME');
@@ -1184,6 +1184,11 @@ describe('event trees over the API (plan 13, stage S1)', () => {
     expect((await post('/api/event-tree/validate', { text: JSON.stringify(bad) })).json.errors.map((e: { code: string }) => e.code)).toEqual(['E_UNKNOWN_EVENT']);
     await put('/api/models/broken-model', { text: '{"top":"X"}' }); // saved work in progress: valid JSON, not a valid model
     expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('broken-model', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
+    // a saved model that parses and has gates but is not valid (a gate input that does not exist) is not a model to refer to
+    const invalid = JSON.parse(modelText);
+    invalid.gates[0].inputs.push('NOWHERE');
+    await put('/api/models/invalid-model', { text: JSON.stringify(invalid) });
+    expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('invalid-model', hash)) })).json.errors.map((e: { code: string }) => e.code)).toEqual(['E_MODEL_NOT_FOUND']);
     // a model name that is not a model name is "not found", never a file read outside the folder
     expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('../secret', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
   });
