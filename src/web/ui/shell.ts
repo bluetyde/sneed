@@ -190,7 +190,8 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     const blocked = ed.runBlockedReason;
     let pillText = 'Ready to run';
     let pillClass = 'ok';
-    if (ed.running) [pillText, pillClass] = ['Running…', 'warn'];
+    if (ed.running) [pillText, pillClass] = [ed.queueAhead > 0 ? `Waiting for ${ed.queueAhead} other run${ed.queueAhead === 1 ? '' : 's'}…` : 'Running…', 'warn'];
+    else if (ed.reuseOffer) [pillText, pillClass] = ['A saved result for this run exists', 'ok'];
     else if (blocked) [pillText, pillClass] = [`Run blocked: ${blocked}`, 'blocked'];
     else if (ed.result?.kind === 'ran') [pillText, pillClass] = ed.stale ? ['Result out of date', 'warn'] : ['Result is current', 'ok'];
     pill.textContent = pillText;

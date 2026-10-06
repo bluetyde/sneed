@@ -121,6 +121,13 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
   return value as Record<string, unknown>;
 }
 
+/** A client's name for one run request, so that it can be found in the queue and cancelled. Absent is fine; anything else must be a short plain token. */
+function optRequestId(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw new HttpError(400, 'E_FIELD', 'request_id must be 1 to 64 letters, digits, dashes or underscores');
+  return v;
+}
+
 function needText(body: Record<string, unknown>): string {
   if (typeof body.text !== 'string') throw new HttpError(400, 'E_FIELD', 'the field "text" must be a string');
   if (Buffer.byteLength(body.text, 'utf8') > MAX_MODEL_BYTES) throw new HttpError(413, 'E_TOO_LARGE', 'the model is larger than the allowed size');
@@ -143,8 +150,45 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const env = opts.runtimeEnv ?? defaultRuntimeEnv();
   const analyzeFn = opts.analyzeFn ?? realAnalyze;
   const builtinFn = opts.builtinFn ?? realBuiltin;
-  let running: { id: number; abort: AbortController } | null = null;
+  // One engine run at a time; further requests wait in order (at most MAX_QUEUE of them) instead of being refused.
+  interface Job {
+    id: number;
+    requestId: string | null;
+    abort: AbortController;
+    /** Set when the job leaves the queue without ever starting (cancelled by its client, or the client went away). */
+    dropped: boolean;
+    start: () => void;
+  }
+  let running: Job | null = null;
+  const queue: Job[] = [];
   let nextRun = 1;
+  const MAX_QUEUE = 8;
+  /** Resolves when it is this job's turn. */
+  const acquire = (job: Job): Promise<void> =>
+    new Promise<void>((resolve) => {
+      job.start = resolve;
+      if (!running) {
+        running = job;
+        resolve();
+      } else queue.push(job);
+    });
+  const release = (job: Job): void => {
+    if (running !== job) return;
+    running = null;
+    const next = queue.shift();
+    if (next) {
+      running = next;
+      next.start();
+    }
+  };
+  const dequeue = (job: Job): boolean => {
+    const i = queue.indexOf(job);
+    if (i < 0) return false;
+    queue.splice(i, 1);
+    job.dropped = true;
+    job.start();
+    return true;
+  };
   let ownPort = 0;
 
   const allowedHosts = (): string[] => [`127.0.0.1:${ownPort}`, `localhost:${ownPort}`, `[::1]:${ownPort}`];
@@ -211,12 +255,18 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       if (!METHODS.includes(chosen)) throw new HttpError(400, 'E_FIELD', `the method must be one of ${METHODS.join(', ')}`);
       const engine = (body.engine ?? 'builtin') as EngineChoice;
       if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);
-      if (running) throw new HttpError(409, 'E_BUSY', 'a run is already in progress');
-      const job = { id: nextRun++, abort: new AbortController() };
-      running = job;
+      const requestId = optRequestId(body.request_id);
+      if (queue.length >= MAX_QUEUE) throw new HttpError(409, 'E_BUSY', `${MAX_QUEUE} runs are already waiting; try again when one has finished`);
+      const job: Job = { id: nextRun++, requestId, abort: new AbortController(), dropped: false, start: () => undefined };
       res.on('close', () => {
-        if (!res.writableEnded) job.abort.abort(); // the browser went away: stop the engine
+        if (res.writableEnded) return;
+        if (!dequeue(job)) job.abort.abort(); // the browser went away: leave the queue, or stop the engine
       });
+      await acquire(job);
+      if (job.dropped) {
+        if (!res.writableEnded && !res.destroyed) return send(res, 200, { kind: 'dequeued' });
+        return;
+      }
       try {
         const common = { runsDir: opts.runsDir, settings: { method: chosen }, signal: job.abort.signal };
         const out = engine === 'scram' ? await analyzeFn(text, common) : await builtinFn(text, common);
@@ -233,11 +283,55 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         }
         return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record, ...(cross ? { cross } : {}) });
       } finally {
-        if (running === job) running = null;
+        release(job);
       }
     }
+    if (p === '/api/run/lookup' && method === 'POST') {
+      // Is there already a saved result for exactly this run? Same model (by its hash), method and engine build, and a complete
+      // answer. "both" is never reused (the cross-check is not saved). Nothing is run and nothing is written.
+      const body = await readJson(req);
+      const text = needText(body);
+      const chosen = (body.method ?? 'exact') as Method;
+      if (!METHODS.includes(chosen)) throw new HttpError(400, 'E_FIELD', `the method must be one of ${METHODS.join(', ')}`);
+      const engine = (body.engine ?? 'builtin') as EngineChoice;
+      if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);
+      const none = { found: false };
+      if (engine === 'both' || !validateModelText(text).valid) return send(res, 200, none);
+      let hash: string;
+      try {
+        hash = modelHash(JSON.parse(text) as NativeModel);
+      } catch {
+        return send(res, 200, none);
+      }
+      const rt = engine === 'scram' ? runtimeInfo() : null;
+      const wantName = engine === 'scram' ? 'SCRAM' : BDD_ENGINE_NAME;
+      const wantVersion = engine === 'scram' ? (rt?.installed === true ? String(rt.engine_version) : null) : BDD_ENGINE_VERSION;
+      if (wantVersion === null) return send(res, 200, none);
+      const hit = listRuns(opts.runsDir).find((r) => r.model_hash === hash && r.method === chosen && r.status === 'completed' && r.completeness === 'complete' && r.engine_name === wantName && r.engine_version === wantVersion);
+      if (!hit) return send(res, 200, none);
+      try {
+        const saved = readRun(opts.runsDir, hit.id);
+        return send(res, 200, { found: true, run_id: hit.id, saved_at: hit.modified, record: saved.record });
+      } catch {
+        return send(res, 200, none); // unreadable now: run it again
+      }
+    }
+    if (p === '/api/run/status' && method === 'GET') {
+      return send(res, 200, { running: running ? { request_id: running.requestId } : null, queued: queue.map((j) => ({ request_id: j.requestId })) });
+    }
     if (p === '/api/run/cancel' && method === 'POST') {
-      await readJson(req);
+      const body = await readJson(req);
+      const rid = optRequestId(body.request_id);
+      if (rid !== null) {
+        // a named request: cancel exactly that one, whether it is waiting or running
+        const waiting = queue.find((j) => j.requestId === rid);
+        if (waiting) return send(res, 200, { cancelled: dequeue(waiting) });
+        if (running && running.requestId === rid) {
+          running.abort.abort();
+          return send(res, 200, { cancelled: true });
+        }
+        return send(res, 200, { cancelled: false });
+      }
       if (!running) return send(res, 200, { cancelled: false });
       running.abort.abort();
       return send(res, 200, { cancelled: true });
@@ -297,6 +391,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     close: () =>
       new Promise<void>((resolve) => {
         running?.abort.abort();
+        for (const j of [...queue]) dequeue(j);
         server.close(() => resolve());
         server.closeAllConnections();
       }),

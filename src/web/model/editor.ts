@@ -1,7 +1,7 @@
 // The editor's state and commands, with no DOM: what is selected, the undo history, validation, runs and what is stale.
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
-import { ApiError, type Api, type Engine, type ImportResponse, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
+import { ApiError, type Api, type Engine, type ImportResponse, type RanResponse, type RunStatus, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
@@ -42,7 +42,16 @@ export class Editor {
   engine: Engine = 'builtin';
   /** The engine choice the shown result was made with. */
   private resultEngine: Engine = 'builtin';
+  /** How often, in milliseconds, a run in progress asks the server where it is in the queue. */
+  static queuePollMs = 700;
   running = false;
+  /** While a run is under way: how many other runs are ahead of it. 0 means this one is running; 2 means it waits behind two. */
+  queueAhead = 0;
+  private runRequestId: string | null = null;
+  /** A saved result for exactly this run, offered instead of running it again. It is only shown while the model, method and engine are the ones it was found for. */
+  private offer: { key: string; run_id: string; saved_at: string; result: RanResponse } | null = null;
+  /** Set when the result on show is a saved one that was reused (nothing was run). */
+  reused: { run_id: string; saved_at: string } | null = null;
   result: RunResponse | null = null;
   runError: string | null = null;
   /** Event ids of the cut set being explained, highlighted on the drawing. */
@@ -140,6 +149,13 @@ export class Editor {
     if (!this.validation) return 'the model has not been checked yet';
     if (!this.validation.valid) return `${this.errorCount} problem${this.errorCount === 1 ? '' : 's'} to fix first`;
     return null;
+  }
+  private offerKey(): string {
+    return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;
+  }
+  /** The saved result on offer for the run Run would make now, or null. */
+  get reuseOffer(): { run_id: string; saved_at: string; result: RanResponse } | null {
+    return this.offer && this.offer.key === this.offerKey() ? this.offer : null;
   }
   /** True when the shown result is for an earlier version of the model or another method. */
   get stale(): boolean {
@@ -340,31 +356,90 @@ export class Editor {
     this.engine = engine;
     this.emit();
   }
-  async run(): Promise<void> {
+  /**
+   * Runs the model. Unless `fresh`, a complete saved result for exactly this run (same model, method and engine build) is offered
+   * first and nothing is run: the student chooses between showing it and running again. A lookup that fails just runs.
+   * While the engine is busy with another run, this one waits in the server's queue and `queueAhead` says how far back it is.
+   */
+  async run(opts: { fresh?: boolean } = {}): Promise<void> {
     if (this.running) return;
     await this.settle(); // run exactly the text that was just checked
     const blocked = this.runBlockedReason;
     if (blocked) return this.setNotice('warning', `Run blocked: ${blocked}.`);
+    if (!opts.fresh && this.engine !== 'both') {
+      const key = this.offerKey();
+      try {
+        const hit = await this.api.lookupRun(this.text, this.method, this.engine);
+        if (hit.found && key === this.offerKey()) {
+          this.offer = { key, run_id: hit.run_id, saved_at: hit.saved_at, result: { kind: 'ran', run_id: hit.run_id, record: hit.record } };
+          this.setNotice(null);
+          this.emit();
+          return;
+        }
+      } catch {
+        /* no lookup: run it */
+      }
+    }
+    this.offer = null;
     this.running = true;
+    this.queueAhead = 0;
+    const requestId = `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    this.runRequestId = requestId;
     this.runError = null;
     this.setNotice(null);
     this.emit();
+    const poll = setInterval(() => void this.pollQueue(requestId), Editor.queuePollMs);
     try {
-      this.result = await this.api.run(this.text, this.method, this.engine);
-      this.resultEngine = this.engine;
-      this.highlight = [];
-      void this.refreshRuns();
+      const r = await this.api.run(this.text, this.method, this.engine, requestId);
+      if (r.kind === 'dequeued') this.setNotice('info', 'The run was cancelled while it waited its turn. Nothing was run.');
+      else {
+        this.result = r;
+        this.resultEngine = this.engine;
+        this.reused = null;
+        this.highlight = [];
+        void this.refreshRuns();
+      }
     } catch (e) {
       if (e instanceof ApiError && e.code === 'E_SETUP_REQUIRED') this.runtime = { installed: false, code: e.code, message: e.message };
       this.runError = e instanceof ApiError ? `${e.message} (${e.code})` : (e as Error).message;
     } finally {
+      clearInterval(poll);
       this.running = false;
+      this.queueAhead = 0;
+      this.runRequestId = null;
       this.emit();
     }
   }
+  private async pollQueue(requestId: string): Promise<void> {
+    let st: RunStatus;
+    try {
+      st = await this.api.runStatus();
+    } catch {
+      return;
+    }
+    if (!this.running || this.runRequestId !== requestId) return;
+    const waiting = st.queued.findIndex((q) => q.request_id === requestId);
+    const ahead = st.running?.request_id === requestId ? 0 : waiting >= 0 ? waiting + (st.running ? 1 : 0) : 0;
+    if (ahead !== this.queueAhead) {
+      this.queueAhead = ahead;
+      this.emit();
+    }
+  }
+  /** Shows the saved result that was offered, instead of running. */
+  useSaved(): void {
+    const o = this.reuseOffer;
+    if (!o) return;
+    this.result = o.result;
+    this.resultEngine = this.engine;
+    this.reused = { run_id: o.run_id, saved_at: o.saved_at };
+    this.highlight = [];
+    this.offer = null;
+    this.setNotice('info', 'Showing the saved result. Nothing was run.');
+    this.emit();
+  }
   async cancel(): Promise<void> {
     if (!this.running) return;
-    await this.api.cancel().catch(() => undefined);
+    await this.api.cancel(this.runRequestId ?? undefined).catch(() => undefined);
   }
 
   // ---- compare ----

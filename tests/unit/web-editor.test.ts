@@ -31,6 +31,8 @@ function fakeApi(over: Partial<Api> = {}): Api & { calls: string[]; files: Map<s
       return { kind: 'ran', run_id: 'r1', record: recordFor(text, method) };
     },
     cancel: async () => ({ cancelled: true }),
+    lookupRun: async () => ({ found: false }),
+    runStatus: async () => ({ running: null, queued: [] }),
     lessons: async () => [],
     importModel: async () => ({ kind: 'refused', errors: [] }),
     listRuns: async () => [],
@@ -784,5 +786,111 @@ describe('comparing saved runs', () => {
     const before = lists;
     await ed.run();
     expect(lists).toBeGreaterThan(before);
+  });
+});
+
+describe('saved runs offered, and the queue', () => {
+  it('an identical saved run is offered instead of running; showing it runs nothing', async () => {
+    const api = fakeApi({ lookupRun: async (text, method) => ({ found: true, run_id: 'old-run', saved_at: '2026-10-01T00:00:00Z', record: recordFor(text, method) }) });
+    const { ed } = await ready(api);
+    await ed.run();
+    expect(api.calls.filter((c) => c.startsWith('run:'))).toEqual([]); // nothing was run
+    expect(ed.running).toBe(false);
+    expect(ed.reuseOffer).toMatchObject({ run_id: 'old-run' });
+    expect(ed.result).toBeNull();
+    ed.useSaved();
+    expect(ed.result?.kind).toBe('ran');
+    expect(ed.reused).toEqual({ run_id: 'old-run', saved_at: '2026-10-01T00:00:00Z' });
+    expect(ed.reuseOffer).toBeNull();
+    expect(ed.stale).toBe(false); // it is for this very model
+    expect(api.calls.filter((c) => c.startsWith('run:'))).toEqual([]);
+  });
+
+  it('"Run again" runs, and a fresh result is no longer marked as reused', async () => {
+    const api = fakeApi({ lookupRun: async (text, method) => ({ found: true, run_id: 'old-run', saved_at: 'x', record: recordFor(text, method) }) });
+    const { ed } = await ready(api);
+    await ed.run();
+    ed.useSaved();
+    await ed.run({ fresh: true });
+    expect(api.calls.filter((c) => c.startsWith('run:'))).toEqual(['run:exact']);
+    expect(ed.reused).toBeNull();
+  });
+
+  it('the offer is withdrawn when the model, the method or the engine changes', async () => {
+    const api = fakeApi({ lookupRun: async (text, method) => ({ found: true, run_id: 'old-run', saved_at: 'x', record: recordFor(text, method) }) });
+    const { ed } = await ready(api);
+    await ed.run();
+    expect(ed.reuseOffer).not.toBeNull();
+    ed.setMethod('rare-event');
+    expect(ed.reuseOffer).toBeNull();
+    ed.setMethod('exact');
+    expect(ed.reuseOffer).not.toBeNull();
+    ed.setEngine('scram');
+    expect(ed.reuseOffer).toBeNull();
+    ed.setEngine('builtin');
+    ed.setProbability('E1', 0.3);
+    await ed.settle();
+    expect(ed.reuseOffer).toBeNull();
+    ed.useSaved(); // nothing on offer: nothing happens
+    expect(ed.result).toBeNull();
+  });
+
+  it('the engine "both" never looks for a saved run, and a failed lookup just runs', async () => {
+    let looked = 0;
+    const api = fakeApi({ lookupRun: async () => { looked++; throw new Error('down'); } });
+    const { ed } = await ready(api);
+    ed.setEngine('both');
+    await ed.run();
+    expect(looked).toBe(0);
+    ed.setEngine('builtin');
+    await ed.run();
+    expect(looked).toBe(1);
+    expect(api.calls.filter((c) => c.startsWith('run:')).length).toBe(2);
+  });
+
+  it('a run that waits says how many are ahead of it, and cancel names the request', async () => {
+    Editor.queuePollMs = 10;
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let id = '';
+      const cancelled: (string | undefined)[] = [];
+      const api = fakeApi({
+        run: async (text, method, _e, requestId) => {
+          id = requestId!;
+          await gate;
+          return { kind: 'ran', run_id: 'r1', record: recordFor(text, method) };
+        },
+        runStatus: async () => ({ running: { request_id: 'someone-else' }, queued: [{ request_id: 'another' }, { request_id: id }] }),
+        cancel: async (rid) => {
+          cancelled.push(rid);
+          return { cancelled: true };
+        },
+      });
+      const { ed } = await ready(api);
+      const p = ed.run();
+      for (let i = 0; i < 100 && ed.queueAhead !== 2; i++) await new Promise((r) => setTimeout(r, 10));
+      expect(ed.queueAhead).toBe(2); // the running one and the one queued before it
+      await ed.cancel();
+      expect(cancelled).toEqual([id]);
+      expect(id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+      release();
+      await p;
+      expect(ed.queueAhead).toBe(0);
+      expect(ed.running).toBe(false);
+    } finally {
+      Editor.queuePollMs = 700;
+    }
+  });
+
+  it('a run cancelled while it waited leaves the shown result alone and says so', async () => {
+    const api = fakeApi();
+    const { ed } = await ready(api);
+    await ed.run();
+    const before = ed.result;
+    api.run = async () => ({ kind: 'dequeued' });
+    await ed.run({ fresh: true });
+    expect(ed.result).toBe(before);
+    expect(ed.notice?.text).toMatch(/cancelled while it waited/);
   });
 });

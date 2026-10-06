@@ -48,7 +48,15 @@ export type Engine = 'builtin' | 'scram' | 'both';
 /** The second engine's answer when both were asked for, or why there is none. */
 export type CrossCheckInfo = { engine: { name: string; version: string }; status: string; agree: boolean; differences: string[] } | { unavailable: true; reason: string };
 
-export type RunResponse = { kind: 'ran'; run_id: string; record: ResultRecord; cross?: CrossCheckInfo } | { kind: 'refused'; errors: Issue[]; warnings: Issue[] };
+export type RanResponse = { kind: 'ran'; run_id: string; record: ResultRecord; cross?: CrossCheckInfo };
+export type RunResponse = RanResponse | { kind: 'refused'; errors: Issue[]; warnings: Issue[] } | { kind: 'dequeued' };
+
+/** A saved result for exactly the run asked about (same model, method and engine build, complete), or nothing. */
+export type RunLookup = { found: false } | { found: true; run_id: string; saved_at: string; record: ResultRecord };
+export interface RunStatus {
+  running: { request_id: string | null } | null;
+  queued: { request_id: string | null }[];
+}
 
 export interface ModelInfo {
   name: string;
@@ -79,8 +87,10 @@ export type Method = 'exact' | 'rare-event' | 'mcub';
 export interface Api {
   health(): Promise<{ name: string; runtime: RuntimeInfo; engines?: { builtin: { available: boolean; name: string; version: string }; scram: RuntimeInfo } }>;
   validate(text: string): Promise<ValidateResponse>;
-  run(text: string, method: Method, engine?: Engine): Promise<RunResponse>;
-  cancel(): Promise<{ cancelled: boolean }>;
+  run(text: string, method: Method, engine?: Engine, requestId?: string): Promise<RunResponse>;
+  cancel(requestId?: string): Promise<{ cancelled: boolean }>;
+  lookupRun(text: string, method: Method, engine: Engine): Promise<RunLookup>;
+  runStatus(): Promise<RunStatus>;
   listModels(): Promise<ModelInfo[]>;
   loadModel(name: string): Promise<string>;
   saveModel(name: string, text: string): Promise<ModelInfo>;
@@ -112,8 +122,10 @@ export function httpApi(base = ''): Api {
   return {
     health: () => call('GET', '/api/health'),
     validate: (text) => call('POST', '/api/validate', { text }),
-    run: (text, method, engine = 'builtin') => call('POST', '/api/run', { text, method, engine }),
-    cancel: () => call('POST', '/api/run/cancel', {}),
+    run: (text, method, engine = 'builtin', requestId) => call('POST', '/api/run', { text, method, engine, ...(requestId ? { request_id: requestId } : {}) }),
+    cancel: (requestId) => call('POST', '/api/run/cancel', requestId ? { request_id: requestId } : {}),
+    lookupRun: (text, method, engine) => call('POST', '/api/run/lookup', { text, method, engine }),
+    runStatus: () => call('GET', '/api/run/status'),
     listModels: async () => (await call<{ models: ModelInfo[] }>('GET', '/api/models')).models,
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,
     listRuns: async () => (await call<{ runs: RunInfo[] }>('GET', '/api/runs')).runs,

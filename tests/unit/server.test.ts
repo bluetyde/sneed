@@ -9,6 +9,7 @@ import { readRun } from '../../src/server/runs.js';
 import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeImport, writeModel, StorageError } from '../../src/server/storage.js';
 import { RuntimeNotInstalledError } from '../../src/runtime/resolve.js';
 import { ORACLE_MODELS } from '../oracle/models.js';
+import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../../src/engines/bdd/solve.js';
 
 let tmp: string;
 let server: RunningServer;
@@ -269,26 +270,31 @@ describe('runs', () => {
     expect(r.body).not.toContain('secret');
   });
 
-  it('one run at a time: a second request is busy, and cancel aborts the first', async () => {
+  it('one run at a time: a second request waits, and cancel aborts the first', async () => {
     let signal: AbortSignal | undefined;
     let started!: () => void;
     const hasStarted = new Promise<void>((r) => (started = r));
     analyzeImpl = (_t, opts) =>
       new Promise((resolve) => {
-        signal = opts.signal;
+        signal ??= opts.signal; // the first run's signal
         started();
         opts.signal?.addEventListener('abort', () => resolve({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-cancelled'), record: { status: 'cancelled' } as never }), { once: true });
       });
+    const callsBefore = analyzeCalls.length;
     const first = post('/api/run', { text: text('pra-and'), engine: 'scram' });
     await hasStarted;
-    const second = await post('/api/run', { text: text('pra-and'), engine: 'scram' });
-    expect(second.status).toBe(409);
-    expect(second.json.error.code).toBe('E_BUSY');
+    const second = post('/api/run', { text: text('pra-and'), engine: 'scram' }); // waits its turn instead of being refused
+    await new Promise((r) => setTimeout(r, 100));
+    expect(analyzeCalls.length).toBe(callsBefore + 1); // only the first has reached the engine
     expect(signal!.aborted).toBe(false);
     expect((await post('/api/run/cancel', {})).json).toEqual({ cancelled: true });
     const done = await first;
     expect(done.json.record.status).toBe('cancelled');
     expect(signal!.aborted).toBe(true);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(analyzeCalls.length).toBe(callsBefore + 2); // the waiting run started when the first was done
+    expect((await post('/api/run/cancel', {})).json).toEqual({ cancelled: true }); // and cancel now reaches that one
+    expect((await second).json.record.status).toBe('cancelled');
     expect((await post('/api/run/cancel', {})).json).toEqual({ cancelled: false }); // nothing running now
     analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
     expect((await post('/api/run', { text: text('pra-and'), engine: 'scram' })).status).toBe(200); // free again
@@ -752,6 +758,222 @@ describe('writeImport never overwrites or removes what it did not create', () =>
       expect(readdirSync(dir)).toEqual(['wi.opsa.xml']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+
+describe('queued runs', () => {
+  /** An engine stand-in whose runs finish only when told to; records the order they started in. */
+  const gate = () => {
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const impl = (t: string, opts: AnalyzeOptions): Promise<AnalyzeOutcome> =>
+      new Promise((resolve) => {
+        const tag = (JSON.parse(t) as { model: { name: string } }).model.name;
+        started.push(tag);
+        const done = (status: string): void => resolve({ kind: 'ran', runDir: path.join(tmp, 'runs', `run-${tag}`), record: { status } as never });
+        finish.set(tag, () => done('completed'));
+        opts.signal?.addEventListener('abort', () => done('cancelled'), { once: true });
+      });
+    return { started, finish, impl };
+  };
+  const named = (name: string): string => JSON.stringify({ ...ORACLE_MODELS['pra-and'], model: { ...(ORACLE_MODELS['pra-and'] as unknown as { model: object }).model, name } });
+  const wait = async (cond: () => boolean): Promise<void> => {
+    for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 20));
+    expect(cond()).toBe(true);
+  };
+  const run = (name: string, request_id?: string): Promise<Reply> => post('/api/run', { text: named(name), engine: 'scram', ...(request_id ? { request_id } : {}) });
+  const status = async () => (await request('GET', '/api/run/status')).json;
+
+  it('runs wait in order, one at a time, and the status names who is running and who is waiting', async () => {
+    const g = gate();
+    analyzeImpl = g.impl;
+    const a = run('qa', 'req-a');
+    await wait(() => g.started.includes('qa'));
+    const b = run('qb', 'req-b');
+    const c = run('qc', 'req-c');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(await status()).toEqual({ running: { request_id: 'req-a' }, queued: [{ request_id: 'req-b' }, { request_id: 'req-c' }] });
+    expect(g.started).toEqual(['qa']);
+    g.finish.get('qa')!();
+    expect((await a).json.record.status).toBe('completed');
+    await wait(() => g.started.includes('qb'));
+    expect(g.started).toEqual(['qa', 'qb']); // c still waits
+    g.finish.get('qb')!();
+    await wait(() => g.started.includes('qc'));
+    g.finish.get('qc')!();
+    expect((await b).status).toBe(200);
+    expect((await c).status).toBe(200);
+    expect(await status()).toEqual({ running: null, queued: [] });
+  });
+
+  it('cancelling a waiting request by its id removes only that one; it never reaches the engine', async () => {
+    const g = gate();
+    analyzeImpl = g.impl;
+    const a = run('xa', 'req-a');
+    await wait(() => g.started.includes('xa'));
+    const b = run('xb', 'req-b');
+    const c = run('xc', 'req-c');
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await post('/api/run/cancel', { request_id: 'req-b' })).json).toEqual({ cancelled: true });
+    expect((await b).json).toEqual({ kind: 'dequeued' });
+    expect((await post('/api/run/cancel', { request_id: 'req-b' })).json).toEqual({ cancelled: false }); // already gone
+    expect((await post('/api/run/cancel', { request_id: 'nobody' })).json).toEqual({ cancelled: false });
+    expect(await status()).toEqual({ running: { request_id: 'req-a' }, queued: [{ request_id: 'req-c' }] });
+    g.finish.get('xa')!();
+    await a;
+    await wait(() => g.started.includes('xc'));
+    expect(g.started).toEqual(['xa', 'xc']);
+    g.finish.get('xc')!();
+    expect((await c).status).toBe(200);
+  });
+
+  it('cancelling by id aborts the running request and not the waiting one; without an id the running one is aborted', async () => {
+    const g = gate();
+    analyzeImpl = g.impl;
+    const a = run('ya', 'req-a');
+    await wait(() => g.started.includes('ya'));
+    const b = run('yb', 'req-b');
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await post('/api/run/cancel', { request_id: 'req-a' })).json).toEqual({ cancelled: true });
+    expect((await a).json.record.status).toBe('cancelled');
+    await wait(() => g.started.includes('yb'));
+    expect((await post('/api/run/cancel', {})).json).toEqual({ cancelled: true }); // no id: the running one (yb)
+    expect((await b).json.record.status).toBe('cancelled');
+  });
+
+  it('a waiting client that goes away never runs', async () => {
+    const g = gate();
+    analyzeImpl = g.impl;
+    const a = run('za', 'req-a');
+    await wait(() => g.started.includes('za'));
+    const u = new URL('/api/run', server.url);
+    const req = http.request({ method: 'POST', hostname: u.hostname, port: u.port, path: u.pathname, headers: JSON_HEADERS });
+    req.on('error', () => undefined);
+    req.end(JSON.stringify({ text: named('zb'), engine: 'scram', request_id: 'req-gone' }));
+    await new Promise<void>((resolve) => void (async () => {
+      for (let i = 0; i < 100; i++) {
+        if (((await status()).queued as unknown[]).length === 1) return resolve();
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      resolve();
+    })());
+    req.destroy();
+    for (let i = 0; i < 100 && ((await status()).queued as unknown[]).length > 0; i++) await new Promise((r) => setTimeout(r, 20));
+    expect((await status()).queued).toEqual([]);
+    g.finish.get('za')!();
+    await a;
+    await new Promise((r) => setTimeout(r, 100));
+    expect(g.started).toEqual(['za']);
+  });
+
+  it('too many waiting requests are refused as busy, and a bad request id is a bad request', async () => {
+    const g = gate();
+    analyzeImpl = g.impl;
+    const first = run('qq0', 'req-0');
+    await wait(() => g.started.includes('qq0'));
+    const waiting = Array.from({ length: 8 }, (_, i) => run(`qq${i + 1}`, `req-${i + 1}`));
+    for (let i = 0; i < 100 && ((await status()).queued as unknown[]).length < 8; i++) await new Promise((r) => setTimeout(r, 20));
+    const over = await run('qq9', 'req-9');
+    expect(over.status).toBe(409);
+    expect(over.json.error.code).toBe('E_BUSY');
+    for (const bad of ['', 'a b', 'x'.repeat(65), '../x', 7]) {
+      const r = await post('/api/run', { text: named('bad'), engine: 'scram', request_id: bad });
+      expect(r.status, JSON.stringify(bad)).toBe(400);
+      expect(r.json.error.code).toBe('E_FIELD');
+    }
+    expect((await post('/api/run/cancel', { request_id: '../x' })).status).toBe(400);
+    // drain: cancel everything
+    for (let i = 8; i >= 1; i--) await post('/api/run/cancel', { request_id: `req-${i}` });
+    await Promise.all(waiting);
+    g.finish.get('qq0')!();
+    await first;
+    analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
+  });
+});
+
+describe('finding an identical saved run', () => {
+  const makeServer = async (): Promise<{ url: string; runs: string; close: () => Promise<void>; dir: string }> => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-reuse-'));
+    const runs = path.join(dir, 'runs');
+    mkdirSync(runs, { recursive: true });
+    const s = await startServer({ projectDir: path.join(dir, 'm'), runsDir: runs, runtimeEnv: { distro: 'Ubuntu', linuxRoot: '/root/none', stateDir: path.join(dir, 's') } }, 0);
+    return { url: s.url, runs, dir, close: async () => { await s.close(); rmSync(dir, { recursive: true, force: true }); } };
+  };
+  const hashOf = async (url: string, t: string): Promise<string> => {
+    const r = await fetch(`${url}/api/validate`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ text: t }) });
+    return ((await r.json()) as { model_hash: string }).model_hash;
+  };
+  const save = (runs: string, id: string, over: Record<string, unknown>): void => {
+    mkdirSync(path.join(runs, id, 'native'), { recursive: true });
+    writeFileSync(path.join(runs, id, 'results.json'), JSON.stringify({ schema_version: 1, status: 'completed', completeness: 'complete', method: 'exact', top_event_probability: 0.5, ...over }));
+    writeFileSync(path.join(runs, id, 'native', 'model.json'), '{"model":{"name":"x"}}');
+  };
+  const lookup = async (url: string, body: Record<string, unknown>) => {
+    const r = await fetch(`${url}/api/run/lookup`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
+    return { status: r.status, json: (await r.json()) as any };
+  };
+
+  it('finds the newest complete run of the same model, method and engine build, and nothing else', async () => {
+    const s = await makeServer();
+    try {
+      const t = text('pra-and');
+      const h = await hashOf(s.url, t);
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      const base = { input_hashes: { model_hash: h }, engine: eng };
+      expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toEqual({ found: false }); // nothing saved yet
+      save(s.runs, '2026-01-01T00-00-00-old-aaaaaaaa', { ...base, top_event_probability: 0.1 });
+      save(s.runs, '2026-02-01T00-00-00-new-bbbbbbbb', { ...base, top_event_probability: 0.2 });
+      const hit = (await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json;
+      expect(hit).toMatchObject({ found: true, run_id: '2026-02-01T00-00-00-new-bbbbbbbb', record: { top_event_probability: 0.2 } });
+      expect(typeof hit.saved_at).toBe('string');
+      // each of these differs in one respect, so none may be offered
+      const miss = async (body: Record<string, unknown>): Promise<void> => expect((await lookup(s.url, body)).json, JSON.stringify(body)).toEqual({ found: false });
+      await miss({ text: t, method: 'mcub', engine: 'builtin' }); // another method
+      await miss({ text: t, method: 'exact', engine: 'scram' }); // another engine (no SCRAM record, and no runtime)
+      await miss({ text: t, method: 'exact', engine: 'both' }); // the cross-check is never reused
+      await miss({ text: text('pra-or'), method: 'exact', engine: 'builtin' }); // another model
+      await miss({ text: '{nope', method: 'exact', engine: 'builtin' }); // not a model
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('does not offer a run that is truncated, failed, from another engine version, or whose files cannot be read', async () => {
+    const s = await makeServer();
+    try {
+      const t = text('pra-and');
+      const h = await hashOf(s.url, t);
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      const base = { input_hashes: { model_hash: h }, engine: eng };
+      save(s.runs, 'r1', { ...base, completeness: 'truncated' });
+      save(s.runs, 'r2', { ...base, status: 'failed', completeness: 'none' });
+      save(s.runs, 'r3', { ...base, status: 'truncated' });
+      save(s.runs, 'r4', { ...base, engine: { name: BDD_ENGINE_NAME, version: '0.0.0-other' } });
+      save(s.runs, 'r5', { ...base, engine: { name: 'SCRAM', version: BDD_ENGINE_VERSION } });
+      save(s.runs, 'r6', { ...base, input_hashes: { model_hash: 'f'.repeat(64) } });
+      expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toEqual({ found: false });
+      save(s.runs, 'r7', base);
+      rmSync(path.join(s.runs, 'r7', 'native', 'model.json')); // a run without its model file is not served, so not offered
+      expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toEqual({ found: false });
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('writes nothing and needs the request header and a valid method and engine', async () => {
+    const s = await makeServer();
+    try {
+      const before = readdirSync(s.runs);
+      expect((await lookup(s.url, { text: text('pra-and'), method: 'nope' })).status).toBe(400);
+      expect((await lookup(s.url, { text: text('pra-and'), engine: 'nope' })).status).toBe(400);
+      expect((await lookup(s.url, { method: 'exact' })).status).toBe(400);
+      const noHeader = await fetch(`${s.url}/api/run/lookup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: text('pra-and') }) });
+      expect(noHeader.status).toBe(403);
+      expect(readdirSync(s.runs)).toEqual(before);
+    } finally {
+      await s.close();
     }
   });
 });

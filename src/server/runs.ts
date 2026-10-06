@@ -25,6 +25,8 @@ export interface RunInfo {
   top_event_probability: number | null;
   model_name: string | null;
   model_hash: string | null;
+  engine_name: string | null;
+  engine_version: string | null;
 }
 
 export const isValidRunId = (id: string): boolean => typeof id === 'string' && RUN_ID.test(id) && !id.includes('..') && !id.endsWith('.');
@@ -100,6 +102,7 @@ export function listRuns(dir: string): RunInfo[] {
         /* the model file is optional for the list */
       }
       const hashes = isObj(rec.input_hashes) ? rec.input_hashes : {};
+      const eng = isObj(rec.engine) ? rec.engine : {};
       out.push({
         id,
         modified: statSync(path.join(d, 'results.json')).mtime.toISOString(),
@@ -109,6 +112,8 @@ export function listRuns(dir: string): RunInfo[] {
         top_event_probability: typeof rec.top_event_probability === 'number' && Number.isFinite(rec.top_event_probability) ? rec.top_event_probability : null,
         model_name,
         model_hash: typeof hashes.model_hash === 'string' ? hashes.model_hash : null,
+        engine_name: typeof eng.name === 'string' ? eng.name : null,
+        engine_version: typeof eng.version === 'string' ? eng.version : null,
       });
     } catch {
       /* not a readable run */
