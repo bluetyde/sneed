@@ -403,7 +403,6 @@ MUTATIONS += [
     im("a probability above one is accepted", "v < 0 || v > 1", "v < 0"),
     im("a generated gate may take a defined name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!generatedIds.has(id)) {"),
     im("a generated gate may repeat a generated name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!defined.has(id)) {"),
-    im("a generated name is not shortened", "const id = `${base}_${k}`.slice(0, 64);", "const id = `${base}_${k}`;"),
     im("a reference may carry more than a name", "for (const a of el.attrs.keys()) if (a !== 'name') unsupported(`attribute ${a}`, el, `on <${el.name}>`);", "void 0;"),
     im("a reference may hold content", "if (el.children.length || el.textLine) unsupported(`content inside <${el.name}>`", OFF + " unsupported(`content inside <${el.name}>`"),
     im("a gate with no formula is accepted", "if (el.children.length !== 1) {", "if (el.children.length < 1) {"),
@@ -420,7 +419,6 @@ MUTATIONS += [
     im("errors are not capped", "if (errors.length < MAX_ERRORS) errors.push(e);", "errors.push(e);"),
     im("formula errors do not stop before resolving", "  if (errors.length) return { ok: false, errors };\n\n  // ---- resolve names", "\n  // ---- resolve names"),
     im("the model name is not bounded", ".slice(0, 200) || 'Imported model'", " || 'Imported model'"),
-    im("an import replaces a note file", "if (existsSync(file)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
     im("a failed import leaves its files", "for (const f of written) {", "for (const f of [] as string[]) {", ST),
     im("an import is not size checked", "for (const t of [files.modelText, files.originalText, files.report]) {", "for (const t of [] as string[]) {", ST),
     im("a generated name loses its suffix", "const id = `${base.slice(0, 64 - suffix.length)}${suffix}`;", "const id = `${base}${suffix}`.slice(0, 64);"),
@@ -428,9 +426,7 @@ MUTATIONS += [
     im("a loop apart from the top is not looked for", "else resolve({ name: nm, kind: 'gate', line: lineOf(nm), column: 1 });", "else void 0;"),
     im("an alias is followed whatever it was called", "if (r.kind === 'basic-event') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate", "if (false as boolean) err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate"),
     im("an import overwrites an existing file", "linkSync(tmp, file);", "renameSync(tmp, file);", ST),
-    im("a rollback removes files that are not ours", "      written.push(file);
-    } finally {", "    } finally {
-      written.push(file);", ST),
+    im("a rollback removes files that are not ours", "      written.push(file);\n    } finally {", "    } finally {\n      written.push(file);", ST),
     im("an existing model is a bad request", "e.code === 'E_EXISTS' ? 409 : 400", "e.code === 'E_EXISTS' ? 400 : 400", SA),
     im("the import name is not checked as text", "if (typeof name !== 'string') throw new HttpError(400, 'E_FIELD', 'name must be a string');", "void 0;", SA),
     im("the original is not kept as sent", "originalText: text, report", "originalText: text.trim(), report", SA),
