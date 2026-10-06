@@ -725,12 +725,26 @@ def main() -> int:
             continue
         stash = BACKUP / (path.name + ".orig")
         stash.write_bytes(path.relative_to(ROOT).as_posix().encode("utf-8") + b"\n" + original)
+        # A mutant in a file the built-in engine's identity hashes would fail the identity test for that reason alone and hide real gaps:
+        # regenerate build-id.ts for the mutant (and put the original back afterwards), so the mutant is judged by its behaviour.
+        rel = path.relative_to(ROOT).as_posix()
+        regen = (rel.startswith("src/engines/bdd/") and rel != "src/engines/bdd/build-id.ts") or rel in ("src/core/result.ts", "src/core/canonical.ts")
+        bid = ROOT / "src/engines/bdd/build-id.ts"
+        bid_original = bid.read_bytes() if regen else b""
+        bid_stash = BACKUP / "build-id.ts.orig"
+        if regen:
+            bid_stash.write_bytes(b"src/engines/bdd/build-id.ts\n" + bid_original)
         try:
             path.write_bytes(text.replace(old, new, 1).encode("utf-8"))
+            if regen:
+                subprocess.run("npx tsx scripts/gen-engine-id.ts", cwd=ROOT, shell=True, capture_output=True)
             green, summary = run_tests(suite)
         finally:
             path.write_bytes(original)
             stash.unlink(missing_ok=True)
+            if regen:
+                bid.write_bytes(bid_original)
+                bid_stash.unlink(missing_ok=True)
         if green is None:
             timed_out.append(name)
             print(f"TIMEOUT  {name}: {summary} (hang; counted as caught, but the test should fail fast)")
