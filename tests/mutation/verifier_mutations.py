@@ -433,7 +433,7 @@ MUTATIONS += [
     im("a refusal is an error status", "return send(res, 200, { kind: 'refused', errors: result.errors });", "return send(res, 400, { kind: 'refused', errors: result.errors });", SA),
 ]
 
-# Queue and saved-run reuse mutations. Two mutants were removed as equivalent: a lookup of an invalid model cannot match a saved hash, and a SCRAM lookup without a runtime compares a null version with strings.
+# Queue and saved-run reuse mutations. Three mutants were removed as equivalent (the third: the offer also compares the document text, which includes the model): a lookup of an invalid model cannot match a saved hash, and a SCRAM lookup without a runtime compares a null version with strings.
 QUEUE_SUITE = ("tests/unit/server.test.ts tests/unit/web-editor.test.ts", 200)
 
 
@@ -466,7 +466,6 @@ MUTATIONS += [
     qm("an unreadable saved run is offered", "return send(res, 200, none); // unreadable now: run it again", "throw new HttpError(500, 'E_INTERNAL', 'x');"),
     qm("the offer ignores the method", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.engine}`;", WE),
     qm("the offer ignores the engine", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.method}`;", WE),
-    qm("the offer ignores the model", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.method}|${this.engine}`;", WE),
     qm("Run again still offers", "if (!opts.fresh && this.engine !== 'both') {", "if (this.engine !== 'both') {", WE),
     qm("both looks for a saved run", "if (!opts.fresh && this.engine !== 'both') {", "if (!opts.fresh) {", WE),
     qm("a reused result is not marked", "    this.reused = { run_id: o.run_id, saved_at: o.saved_at };\n", "", WE),
