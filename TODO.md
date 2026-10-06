@@ -83,7 +83,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## P4: extensions ([plan 07](docs/plans/07-extensions.md))
 
-- [ ] Importance measures with hand oracles.
+- [x] Importance measures with hand oracles (built 2026-10-06, plan 12, docs/EDITOR.md).
 - [ ] Event trees: write the semantics (initiating-event rate and time unit, sequences, end-state definition, shared events across branches) and the oracle set **before** code.
 - [ ] Common-cause groups: stated model, data source and zero-parameter reduction check.
 - [ ] Uncertainty: seeds, sampling design, noise reported separately from input uncertainty.
