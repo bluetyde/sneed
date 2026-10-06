@@ -714,7 +714,12 @@ def run_tests(suite: tuple[str, int] = UNIT) -> tuple[bool | None, str]:
     if not m:  # Playwright prints "N passed" / "N failed" lines instead
         pw = re.findall(r"^\s*(\d+ (?:passed|failed|flaky)[^\n]*)$", out, re.MULTILINE)
         return proc.returncode == 0, (" | ".join(pw) if pw else "no test summary (crash)")
-    return proc.returncode == 0, m.group(1).strip()
+    summary = m.group(1).strip()
+    if proc.returncode != 0:  # name what failed, so a red baseline can be told from a flaky test at a glance
+        names = [l.strip()[:140] for l in out.splitlines() if l.strip().startswith(("\u00d7", "FAIL"))][:4]
+        if names:
+            summary += " | " + " | ".join(names)
+    return proc.returncode == 0, summary
 
 
 def hashed_files() -> set[str]:
