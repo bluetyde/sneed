@@ -506,6 +506,18 @@ describe('Codex review of the importer: found by reading, each reproduced', () =
     expect(first(xml).message).toMatch(/is a gate, but it is referred to as a basic event/);
   });
 
+  it('a long chain of pass-through gates is resolved in about linear time (each gate is walked once, not once per gate before it)', () => {
+    const n = 30_000;
+    const gates = Array.from({ length: n }, (_, i) => `<define-gate name="G${i}"><gate name="G${i + 1}"/></define-gate>`);
+    gates.push(`<define-gate name="G${n}"><basic-event name="A"/></define-gate>`);
+    const xml = `<opsa-mef><define-fault-tree name="F">${be('A', '0.1')}<define-gate name="TOP"><or><gate name="G0"/><basic-event name="B"/></or></define-gate>${be('B', '0.2')}${gates.join('')}</define-fault-tree></opsa-mef>`;
+    expect(Buffer.byteLength(xml)).toBeLessThan(MAX_IMPORT_BYTES);
+    const t0 = performance.now();
+    const r = imp(xml);
+    expect(r.ok, JSON.stringify(!r.ok && r.errors.slice(0, 2))).toBe(true);
+    expect(performance.now() - t0, 'a quadratic walk takes tens of seconds here').toBeLessThan(5000);
+  });
+
   it('a very long chain of pass-through gates is resolved without overflowing the stack', () => {
     const n = 15_000;
     const gates = Array.from({ length: n }, (_, i) => `<define-gate name="G${i}"><gate name="G${i + 1}"/></define-gate>`);

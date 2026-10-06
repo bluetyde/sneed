@@ -459,28 +459,38 @@ export function importOpenPsa(text: string, opts: { now?: string } = {}): Import
     if (gateDefs.has(id)) return 'gate'; // a generated gate is never named in the file, so a reference to one is a missing name
     return null;
   };
+  // what each pass-through gate finally stands for (null: a loop or a missing name): a chain of n gates is walked once, not n times
+  const aliasMemo = new Map<string, string | null>();
   const resolve = (start: Ref): string | null => {
     // follow pass-through gates one by one (a chain can be long, so no recursion), each reference checked as written
     const seen = new Set<string>();
+    const trail: string[] = [];
+    const remember = (result: string | null): string | null => {
+      for (const t of trail) aliasMemo.set(t, result);
+      return result;
+    };
     let r = start;
     for (let al = aliases.get(r.name); al; al = aliases.get(r.name)) {
       if (r.kind === 'basic-event') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate, but it is referred to as a basic event` });
+      const known = aliasMemo.get(r.name);
+      if (known !== undefined) return remember(known); // the rest of this chain was walked before; any error in it was reported then
       if (seen.has(r.name)) {
         err({ code: 'E_CYCLE', line: r.line, column: r.column, message: `pass-through gates refer to each other in a loop through ${r.name}` });
-        return null;
+        return remember(null);
       }
       seen.add(r.name);
+      trail.push(r.name);
       r = al;
     }
     const k = kindOf(r.name);
     if (k === null) {
       err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is not defined` });
-      return null;
+      return remember(null);
     }
     // a reference element must match what the name is (a <basic-event> that names a gate is a mistake in the file)
     if (r.kind === 'basic-event' && k !== 'event') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate, but it is referred to as a basic event` });
     else if (r.kind === 'gate' && k !== 'gate') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a basic event, but it is referred to as a gate` });
-    return r.name;
+    return remember(r.name);
   };
 
   const referencedNames = new Set<string>();
