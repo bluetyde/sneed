@@ -2,14 +2,17 @@
 // the built-in engine has no binary, so its build is these files. `scripts/gen-engine-id.ts` writes the result into
 // src/engines/bdd/build-id.ts and tests/unit/engine-id.test.ts fails when the committed value no longer matches the sources, so a change to
 // the solver cannot ship under the old identity (saved-run reuse and Compare both rely on it).
+//
+// Which files: every .ts file in the engine's folder, everything those import (followed through relative imports, so a helper such as the
+// product-order bound or the validator cannot be forgotten), and the data files read at run time (the model schema).
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /** The generated file itself is not part of what it hashes. */
 export const BUILD_ID_FILE = 'src/engines/bdd/build-id.ts';
-/** Outside the engine folder, the files whose behaviour is part of every result record the engine writes (the checks and the model hash). */
-export const EXTRA_SOURCE_FILES = ['src/core/result.ts', 'src/core/canonical.ts'];
+/** Files the code reads as data, or loads without a static import: not found by following imports. */
+export const EXTRA_SOURCE_FILES = ['schema/model.schema.json'];
 
 export interface SourceFile {
   /** Forward-slash path relative to the project root. */
@@ -28,14 +31,45 @@ export function sourceHash(files: SourceFile[]): string {
   return sha256(lines.join(''));
 }
 
-/** Reads the engine's source files from a project folder. */
+// static imports and re-exports ("from './x.js'"), side-effect imports ("import './x.js'") and dynamic ones ("import('./x.js')")
+const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}\/[^'"]+)['"]/g;
+
+/** The relative modules a source text names, as written. */
+export function relativeImports(text: string): string[] {
+  // `import type` and `export type ... from` vanish at compile time: they cannot change what runs, so they are not followed
+  const runtime = text.replace(/\b(?:import|export)\s+type\b[^;]*?from\s*['"][^'"]+['"]/g, '');
+  return [...runtime.matchAll(IMPORT)].map((m) => m[1]!);
+}
+
+/** Resolves a relative import ("./x.js" names x.ts) from a file; null when it names nothing in the project. */
+function resolveImport(root: string, from: string, spec: string): string | null {
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
+  for (const candidate of [base.replace(/\.js$/, '.ts'), base.replace(/\.js$/, '.tsx'), base, `${base}.ts`, `${base}/index.ts`]) {
+    if (candidate.startsWith('..')) continue;
+    if (existsSync(path.join(root, candidate)) && /\.(ts|tsx|json)$/.test(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Reads the engine's source files from a project folder: the engine's own folder, then everything reachable from it by relative imports. */
 export function readEngineSources(root: string): SourceFile[] {
-  const dir = path.join(root, 'src', 'engines', 'bdd');
-  const own = readdirSync(dir)
+  const seeds = readdirSync(path.join(root, 'src', 'engines', 'bdd'))
     .filter((f) => f.endsWith('.ts'))
-    .map((f) => `src/engines/bdd/${f}`)
-    .filter((f) => f !== BUILD_ID_FILE);
-  return [...own, ...EXTRA_SOURCE_FILES].map((p) => ({ path: p, content: readFileSync(path.join(root, p), 'utf8') }));
+    .map((f) => `src/engines/bdd/${f}`);
+  const seen = new Map<string, string>();
+  const queue = [...seeds, ...EXTRA_SOURCE_FILES];
+  while (queue.length) {
+    const p = queue.pop()!;
+    if (seen.has(p) || p === BUILD_ID_FILE) continue;
+    const content = readFileSync(path.join(root, p), 'utf8');
+    seen.set(p, content);
+    if (p.endsWith('.json')) continue;
+    for (const spec of relativeImports(content)) {
+      const next = resolveImport(root, p, spec);
+      if (next) queue.push(next);
+    }
+  }
+  return [...seen].map(([p, content]) => ({ path: p, content }));
 }
 
 export function renderBuildId(files: SourceFile[]): string {
