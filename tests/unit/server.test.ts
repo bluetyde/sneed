@@ -1100,3 +1100,98 @@ describe('importance measures over the API', () => {
   });
 });
 
+describe('event trees over the API (plan 13, stage S1)', () => {
+  const put = (url: string, body: unknown): Promise<Reply> => request('PUT', url, { body: JSON.stringify(body), headers: JSON_HEADERS });
+  const ASSUME = { frequency_unit: 'per-year', probability_basis: 'per-demand', independence: 'declared-independent', ie_independent_of_events: true, success_branches: 'exact' };
+  const treeFor = (modelName: string, hash: string): Record<string, unknown> => ({
+    schema: { id: 'sneed.event-tree', version: 1 },
+    tree: { id: 'et', name: 'Shared supply (example)', created: '2026-10-06T00:00:00Z', updated: '2026-10-06T00:00:00Z' },
+    fault_tree_model: { name: modelName, model_hash: hash },
+    initiating_event: { name: 'Transient (example)', description: 'An example.', frequency: 0.5, unit: 'per-year' },
+    // pra-shared: TOP = AB OR AC, AB = A AND B, AC = A AND C: the two headings share the basic event A
+    headings: [{ id: 'H1', name: 'First function', event: 'AB' }, { id: 'H2', name: 'Second function', event: 'AC' }],
+    end_states: [{ id: 'OK', name: 'Fine (example)', description: 'Nothing lost (example).', synthetic: true }, { id: 'BAD', name: 'Lost (example)', description: 'Something lost (example).', synthetic: true }],
+    sequences: [
+      { path: [{ heading: 'H1', branch: 'works' }, { heading: 'H2', branch: 'works' }], end_state: 'OK' },
+      { path: [{ heading: 'H1', branch: 'works' }, { heading: 'H2', branch: 'fails' }], end_state: 'BAD' },
+      { path: [{ heading: 'H1', branch: 'fails' }, { heading: 'H2', branch: 'works' }], end_state: 'BAD' },
+      { path: [{ heading: 'H1', branch: 'fails' }, { heading: 'H2', branch: 'fails' }], end_state: 'BAD' },
+    ],
+    assumptions: ASSUME,
+  });
+  const modelHashOf = async (modelText: string): Promise<string> => (await post('/api/validate', { text: modelText })).json.model_hash;
+
+  it('saves a tree in its own folder, lists it apart from the models, and gives back the exact text', async () => {
+    const before = (await request('GET', '/api/models')).json.models.length;
+    const doc = JSON.stringify(treeFor('et-model', 'a'.repeat(64)), null, 2) + '\n';
+    const saved = await put('/api/event-trees/my-tree', { text: doc });
+    expect(saved.status).toBe(200);
+    expect(saved.json).toMatchObject({ name: 'my-tree' });
+    expect((await request('GET', '/api/event-trees')).json.trees.map((t: { name: string }) => t.name)).toContain('my-tree');
+    expect((await request('GET', '/api/event-trees/my-tree')).json.text).toBe(doc);
+    expect((await request('GET', '/api/models')).json.models).toHaveLength(before); // not a model
+    expect(readdirSync(path.join(projectDir, 'event-trees'))).toContain('my-tree.json');
+  });
+
+  it('a tree and a model can have the same name without touching each other', async () => {
+    await put('/api/models/same-name', { text: text('pra-and') });
+    await put('/api/event-trees/same-name', { text: '{"work":"in progress"}' }); // unfinished work is saved as it is, like a model
+    expect(JSON.parse((await request('GET', '/api/models/same-name')).json.text).top).toBe('TOP');
+    expect(JSON.parse((await request('GET', '/api/event-trees/same-name')).json.text)).toEqual({ work: 'in progress' });
+  });
+
+  it('names are checked like model names, text must be JSON, a missing tree is 404 in its own words, and writes need the header', async () => {
+    for (const name of ['../x', 'a/b', '.hidden', 'x'.repeat(65)]) {
+      const r = await put(`/api/event-trees/${encodeURIComponent(name)}`, { text: '{}' });
+      expect(r.status, name).toBe(400);
+      expect(r.json.error.code, name).toBe('E_NAME');
+    }
+    expect((await put('/api/event-trees/not-json', { text: '{nope' })).json.error.code).toBe('E_NOT_JSON');
+    const missing = await request('GET', '/api/event-trees/nothing-here');
+    expect(missing.status).toBe(404);
+    expect(missing.json.error.message).toContain('no saved event tree');
+    const noHeader = await request('PUT', '/api/event-trees/x', { body: JSON.stringify({ text: '{}' }), headers: { 'content-type': 'application/json' } });
+    expect(noHeader.status).toBe(403);
+    expect((await post('/api/event-tree/validate', {})).status).toBe(400);
+  });
+
+  it('validates against the saved fault-tree model: valid, then stale after the model changes, then not found', async () => {
+    const modelText = text('pra-shared');
+    await put('/api/models/et-model', { text: modelText });
+    const hash = await modelHashOf(modelText);
+    const doc = JSON.stringify(treeFor('et-model', hash));
+    const ok = await post('/api/event-tree/validate', { text: doc });
+    expect(ok.json).toMatchObject({ valid: true, errors: [], modelChecked: true });
+    expect(ok.json.tree_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(ok.json.document_hash).toMatch(/^[0-9a-f]{64}$/);
+    // change the model: the tree pins the hash it was checked against
+    const changed = JSON.parse(modelText);
+    changed.events[0].probability = 0.5;
+    await put('/api/models/et-model', { text: JSON.stringify(changed) });
+    const stale = await post('/api/event-tree/validate', { text: doc });
+    expect(stale.json.valid).toBe(false);
+    expect(stale.json.errors.map((e: { code: string }) => e.code)).toEqual(['E_STALE_MODEL']);
+    expect(stale.json.tree_hash).toBeNull();
+    expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('no-such-model', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
+  });
+
+  it('a heading naming something the saved model does not have, and a saved model that is itself invalid, are refused', async () => {
+    const modelText = text('pra-shared');
+    await put('/api/models/et-model2', { text: modelText });
+    const hash = await modelHashOf(modelText);
+    const bad = treeFor('et-model2', hash) as { headings: { event: string }[] };
+    bad.headings[1]!.event = 'NOPE';
+    expect((await post('/api/event-tree/validate', { text: JSON.stringify(bad) })).json.errors.map((e: { code: string }) => e.code)).toEqual(['E_UNKNOWN_EVENT']);
+    await put('/api/models/broken-model', { text: '{"top":"X"}' }); // saved work in progress: valid JSON, not a valid model
+    expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('broken-model', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
+    // a model name that is not a model name is "not found", never a file read outside the folder
+    expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('../secret', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
+  });
+
+  it('text that is not a document is reported as E_SCHEMA, not as a server error', async () => {
+    const r = await post('/api/event-tree/validate', { text: '{nope' });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ valid: false, errors: [{ code: 'E_SCHEMA' }], tree_hash: null });
+  });
+});
+

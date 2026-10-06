@@ -17,6 +17,7 @@ import { validateModelText } from '../core/validate.js';
 import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
+import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
 import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
 export const SERVER_NAME = 'sneed';
@@ -166,6 +167,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const queue: Job[] = [];
   let nextRun = 1;
   const MAX_QUEUE = 8;
+  /** Event trees live in their own folder, so a tree and a fault-tree model can never take each other's name. */
+  const eventTreeDir = path.join(opts.projectDir, 'event-trees');
   /** Resolves when it is this job's turn. */
   const acquire = (job: Job): Promise<void> =>
     new Promise<void>((resolve) => {
@@ -235,6 +238,39 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     }
 
     if (p === '/api/validate' && method === 'POST') return send(res, 200, validateWithHashes(needText(await readJson(req))));
+
+    // ---- event trees (plan 13, stage S1): saved beside the models in their own folder, checked against the saved fault-tree models. No analysis yet.
+    if (p === '/api/event-trees' && method === 'GET') return send(res, 200, { trees: listModels(eventTreeDir) });
+    if (p === '/api/event-tree/validate' && method === 'POST') {
+      const text = needText(await readJson(req));
+      const resolveModel = (name: string): ModelRef | null => {
+        try {
+          const modelText = readModel(opts.projectDir, name);
+          if (!validateModelText(modelText).valid) return null;
+          const model = JSON.parse(modelText) as NativeModel;
+          return { hash: modelHash(model), events: new Set(model.events.map((e) => e.id)), gates: new Set(model.gates.map((g) => g.id)) };
+        } catch {
+          return null; // no such model, an unreadable one, or a name that is not a model name: all "not found" to the validator
+        }
+      };
+      const v = validateEventTreeText(text, { resolveModel });
+      let tree_hash: string | null = null;
+      if (v.valid) tree_hash = eventTreeHash(JSON.parse(text));
+      return send(res, 200, { ...v, tree_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+    }
+    const em = /^\/api\/event-trees\/([^/]+)$/.exec(p);
+    if (em) {
+      const name = safeDecode(em[1]!);
+      if (method === 'GET') {
+        try {
+          return send(res, 200, { name, text: readModel(eventTreeDir, name) });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === 'E_NOT_FOUND') throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);
+          throw e;
+        }
+      }
+      if (method === 'PUT') return send(res, 200, writeModel(eventTreeDir, name, needText(await readJson(req))));
+    }
 
     if (p === '/api/lessons' && method === 'GET') {
       if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');

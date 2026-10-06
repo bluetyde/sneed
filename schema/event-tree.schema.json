@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/event-tree-1.json",
+  "title": "SNEED event tree, schema version 1",
+  "description": "Structural rules only (docs/plans/13-event-trees.md). References to the fault-tree model, heading and path rules, end states and the staleness check are in src/core/event-tree.ts. Unknown fields are allowed and preserved.",
+  "type": "object",
+  "required": ["schema", "tree", "fault_tree_model", "initiating_event", "headings", "end_states", "sequences", "assumptions"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "const": "sneed.event-tree" },
+        "version": { "const": 1 }
+      }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["id", "name", "created", "updated"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "created": { "type": "string", "minLength": 1 },
+        "updated": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fault_tree_model": {
+      "type": "object",
+      "required": ["name", "model_hash"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "model_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "initiating_event": {
+      "type": "object",
+      "required": ["name", "description", "frequency", "unit"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "frequency": { "type": "number", "minimum": 0 },
+        "unit": { "const": "per-year" }
+      }
+    },
+    "headings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "event"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "event": { "type": "string", "pattern": "^[A-Za-z_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" },
+          "asked_only_if": {
+            "type": "object",
+            "required": ["heading", "branch"],
+            "properties": {
+              "heading": { "type": "string" },
+              "branch": { "enum": ["works", "fails"] }
+            }
+          }
+        }
+      }
+    },
+    "end_states": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "synthetic"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "synthetic": { "type": "boolean" }
+        }
+      }
+    },
+    "sequences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "required": ["path", "end_state"],
+        "properties": {
+          "path": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": ["heading", "branch"],
+              "properties": {
+                "heading": { "type": "string" },
+                "branch": { "enum": ["works", "fails"] }
+              }
+            }
+          },
+          "end_state": { "type": "string" }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "object",
+      "required": ["frequency_unit", "probability_basis", "independence", "ie_independent_of_events", "success_branches"],
+      "properties": {
+        "frequency_unit": { "const": "per-year" },
+        "probability_basis": { "const": "per-demand" },
+        "independence": { "const": "declared-independent" },
+        "ie_independent_of_events": { "const": true },
+        "success_branches": { "const": "exact" }
+      }
+    }
+  }
+}
