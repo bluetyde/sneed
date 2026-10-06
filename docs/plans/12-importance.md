@@ -12,7 +12,7 @@ Let T be the top event, p_i the probability of basic event i, P = P(T). P(T | i 
 |---|---|---|
 | Birnbaum | IB_i = P(T \| i fails) − P(T \| i works) = ∂P/∂p_i | how much the top probability moves per unit change of p_i |
 | Risk achievement worth | RAW_i = P(T \| i fails) / P | how many times more likely the top event is if i is certain to fail |
-| Risk reduction worth | RRW_i = P / P(T \| i works) | how many times less likely it would be if i could never fail; **infinite** (reported as null with the reason) when P(T \| i works) = 0, which means i is in every cut set |
+| Risk reduction worth | RRW_i = P / P(T \| i works) | how many times less likely it would be if i could never fail; **infinite** (reported as null with the reason) when P(T \| i works) = 0, which means that with p_i at zero the top event cannot happen (i is in every cut set that has a non-zero probability) |
 | Fussell-Vesely (exact form) | FV_i = (P − P(T \| i works)) / P | the fraction of the top probability that goes away if i never fails. This is the exact version; textbooks also give a cut-set version that differs slightly when probabilities are not small |
 
 Undefined cases: if P = 0, RAW and FV are null (nothing to divide by), RRW is null; a model with P = 0 is flagged. Only events reachable from the top are listed. A repeated reference to one event is one event.
@@ -24,6 +24,9 @@ Repeated event: (A AND B) OR (A AND C) is A AND (B OR C): IB_A = P(B OR C); IB_B
 
 ## Independent oracle (level 2)
 The exhaustive enumeration oracle (`tests/oracle/enumerate.ts`, exact rationals) computes P(T | i fails) and P(T | i works) by changing the model's p_i to 1 and 0, with no shared code. Required on the frozen oracle models and 1000 random trees: every measure agrees to 1e-12 relative. Also the identity IB_i = ∂P/∂p_i is checked by a finite difference, and FV and RRW are checked to satisfy FV = 1 − 1/RRW.
+
+## Numerical honesty
+The Birnbaum difference is taken on the "false" side when the top event is almost certain (an OR of twenty events at 0.9 has Birnbaum 1e-19 per event, which a plain `P(T|i fails) - P(T|i works)` would round to 0). Fussell-Vesely is p_i x Birnbaum / P. A top probability or a conditional probability that underflowed to 0 although the event can structurally happen, or any non-finite measure, is a failure (`numeric-range`), never a table with a wrong zero. "Impossible" is decided structurally (every free event at probability 0.5), not by the size of a number.
 
 ## Limits and failure
 At most 300 reachable events and a diagram-size budget (events x nodes); beyond that the answer is a refusal with the reason (`too-large`), never a partial table. Runs in the same worker thread as the solver with the same time and memory limits; cancel works. An invalid model is refused with the validator's errors.

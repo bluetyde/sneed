@@ -7,7 +7,7 @@ export const IMPORTANCE_ASSUMPTIONS =
 export const IMPORTANCE_DEFINITIONS: { key: 'birnbaum' | 'raw' | 'rrw' | 'fv'; name: string; meaning: string }[] = [
   { key: 'birnbaum', name: 'Birnbaum', meaning: 'The change of the top probability per unit change of this event\'s probability: P(top | event fails) minus P(top | event works).' },
   { key: 'raw', name: 'Risk achievement worth (RAW)', meaning: 'How many times more likely the top event is if this event is certain to fail: P(top | event fails) / P(top).' },
-  { key: 'rrw', name: 'Risk reduction worth (RRW)', meaning: 'How many times less likely the top event would be if this event could never fail: P(top) / P(top | event works). Unbounded (shown as "infinite") when the event is in every cut set.' },
+  { key: 'rrw', name: 'Risk reduction worth (RRW)', meaning: 'How many times less likely the top event would be if this event could never fail: P(top) / P(top | event works). Unbounded (shown as "infinite") when setting the probability of this event to zero makes the top probability zero.' },
   { key: 'fv', name: 'Fussell-Vesely (exact form)', meaning: 'The fraction of the top probability that goes away if this event never fails: (P(top) - P(top | event works)) / P(top). Textbooks also give a cut-set form that differs slightly when probabilities are not small.' },
 ];
 
@@ -35,6 +35,8 @@ export function importanceFailureText(why: string): string {
       return 'The model has more basic events than the importance table handles (300). The analysis itself is not affected.';
     case 'too-many-nodes':
       return 'The model is too large for the importance table to be computed in reasonable time. The analysis itself is not affected.';
+    case 'numeric-range':
+      return 'Some of these numbers are too small or too large for the arithmetic used (a probability below about 1e-300). Nothing is shown rather than a table with wrong zeros.';
     case 'timeout':
       return 'The importance table took too long and was stopped.';
     case 'cancelled':

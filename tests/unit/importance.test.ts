@@ -183,3 +183,58 @@ describe('edge cases and limits', () => {
     expect(JSON.stringify(doc)).toBe(before);
   });
 });
+
+describe('floating point is watched (Codex review)', () => {
+  const why = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      expect(e).toBeInstanceOf(SolveAborted);
+      return (e as SolveAborted).why;
+    }
+    return 'no error';
+  };
+
+  it('an almost certain top event keeps its importance: an OR of 16 events near 0.9 is not reported as zero or tied', () => {
+    const ps = Array.from({ length: 16 }, (_, i) => 0.9 + i / 200); // 0.900 ... 0.975, all different
+    const events = Object.fromEntries(ps.map((p, i) => [`E${i}`, p]));
+    const d = mkDoc('T', events, [OR('T', Object.keys(events))]);
+    const r = imp(d);
+    const falseAll = ps.reduce((a, p) => a * (1 - p), 1);
+    for (const row of r.rows) {
+      const i = Number(row.id.slice(1));
+      const expected = falseAll / (1 - ps[i]!); // product of the other events' (1 - p)
+      expect(row.birnbaum, row.id).toBeGreaterThan(0);
+      expect(Math.abs(row.birnbaum - expected) / expected, row.id).toBeLessThan(1e-9);
+      expect(row.fv!, row.id).toBeCloseTo(ps[i]! * expected, 25);
+      expect(row.fv!, row.id).toBeGreaterThan(0);
+    }
+    expect(new Set(r.rows.map((x) => x.birnbaum)).size).toBe(16); // no artificial ties
+    expect(r.rows[0]!.id).toBe('E15'); // Birnbaum is the product of the OTHERS' (1 - p): largest when this event's own (1 - p) is smallest
+  });
+
+  it('a top probability below what a double can hold is a numeric-range failure, never a table with zeros', () => {
+    const events = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`E${i}`, 0.001]));
+    const d = mkDoc('T', events, [AND('T', Object.keys(events))]);
+    expect(why(() => imp(d))).toBe('numeric-range');
+  });
+
+  it('a conditional probability that underflows although the event can matter is a failure; a structural zero is not', () => {
+    const events: Record<string, number> = { Y: 0.5 };
+    for (let i = 0; i < 200; i++) events[`E${i}`] = 0.001;
+    const d = mkDoc('T', events, [OR('T', ['Y', 'X']), AND('X', Object.keys(events).filter((k) => k !== 'Y'))]);
+    expect(why(() => imp(d))).toBe('numeric-range'); // with Y working the top probability is 1e-600: not zero, only too small
+    const impossible = mkDoc('T', { A: 0.5, B: 0.2, C: 0 }, [OR('T', ['A', 'X']), AND('X', ['B', 'C'])]);
+    const m = byId(impossible);
+    expect(m.B!.rrwInfinite).toBe(false); // B can fail, and A keeps the top possible with B working
+    expect(Number.isFinite(m.B!.birnbaum)).toBe(true);
+    const onlyPath = mkDoc('T', { A: 0.5, B: 0.2 }, [AND('T', ['A', 'B'])]);
+    expect(byId(onlyPath).A!.rrwInfinite).toBe(true); // structurally impossible with A working: infinite, not an error
+  });
+
+  it('a measure that overflows (a tiny top probability) is a failure, not Infinity inside a table', () => {
+    const d = mkDoc('T', { A: 1e-320, B: 0 }, [OR('T', ['A', 'B'])]);
+    expect(why(() => imp(d))).toBe('numeric-range');
+  });
+});
+

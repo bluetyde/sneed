@@ -1035,6 +1035,15 @@ describe('importance measures over the API', () => {
     expect(r.json.events).toBeUndefined();
   });
 
+  it('a numeric range failure is reported as that, in words, and no table', async () => {
+    const events = Array.from({ length: 200 }, (_, i) => ({ id: `E${i}`, probability: 0.001 }));
+    const doc = { ...ORACLE_MODELS['pra-or'], top: 'T', events, gates: [{ id: 'T', type: 'and', inputs: events.map((e) => e.id) }] };
+    const r = await post('/api/importance', { text: JSON.stringify(doc) });
+    expect(r.json).toMatchObject({ kind: 'failed', why: 'numeric-range' });
+    expect(r.json.message).toContain('too small');
+    expect(r.json.events).toBeUndefined();
+  });
+
   it('takes its turn behind a run, can be cancelled while it waits, and the status lists it', async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
