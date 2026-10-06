@@ -965,3 +965,22 @@ describe('saved runs offered, and the queue', () => {
     expect(ed.result?.kind).toBe('ran');
   });
 });
+
+describe('the figure of the editor', () => {
+  it('has no numbers before a run, the numbers after one, and none again as soon as the model is edited (checked or not)', async () => {
+    const { ed } = await ready();
+    expect(ed.figureSvg()).toContain('the model has not been run');
+    await ed.run();
+    expect(ed.figureSvg()).toContain('Top event probability: 0.19.');
+    ed.setProbability('E1', 0.3); // not yet validated: the old number must not be printed beside the new drawing
+    expect(ed.figureStale).toBe(true);
+    expect(ed.figureSvg()).toContain('NO CURRENT RESULT');
+    expect(ed.figureSvg()).not.toContain('Top event probability');
+    await ed.settle();
+    expect(ed.figureSvg()).toContain('NO CURRENT RESULT'); // checked now, still a different model than the result
+    ed.undo();
+    await ed.settle();
+    expect(ed.figureSvg()).toContain('Top event probability: 0.19.'); // back to the model the result is for
+  });
+});
+

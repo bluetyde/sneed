@@ -5,6 +5,7 @@ import type { Engine, Method } from '../api.js';
 import type { Editor } from '../model/editor.js';
 import { Canvas } from './canvas.js';
 import { confirmDiscard, importDialog, openDialog, saveAsDialog } from './dialogs.js';
+import { exportPng, exportSvg, installPrint } from './exporter.js';
 import { h } from './dom.js';
 import { METHOD_TEXT } from './hints.js';
 import { icon } from './icons.js';
@@ -71,6 +72,9 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     new: rbtn('new', 'new', 'New', 'New model (starts from a two-event OR)', newModel),
     open: rbtn('open', 'open', 'Open', 'Open a saved model', () => void openModel()),
     save: rbtn('save', 'save', 'Save', 'Save the model (Ctrl+S)', () => void save()),
+    svg: rbtn('export-svg', 'layout', 'SVG', 'Save the drawing and its result as an SVG file', () => exportSvg(editor)),
+    png: rbtn('export-png', 'image', 'PNG', 'Save the drawing and its result as a PNG image', () => void exportPng(editor)),
+    print: rbtn('print', 'print', 'Print', 'Print the drawing, its result and the cut sets', () => window.print()),
     import: rbtn('import', 'import', 'Import', 'Import an Open-PSA XML file as a new model', () => void importModel()),
     saveas: rbtn('saveas', 'saveas', 'Save as', 'Save under a new name', () => void saveAs()),
     undo: rbtn('undo', 'undo', 'Undo', 'Undo (Ctrl+Z)', () => editor.undo()),
@@ -92,7 +96,9 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     group('File', btn.new, btn.open, btn.import, btn.save, btn.saveas),
     group('Edit', btn.undo, btn.redo, btn.del),
     group('Add', btn.event, btn.and, btn.or, btn.vote),
-    group('View', btn.fit, btn.zin, btn.zout, btn.reset));
+    group('View', btn.fit, btn.zin, btn.zout, btn.reset),
+    group('Export', btn.svg, btn.png, btn.print));
+  installPrint(editor);
 
   // ---- title bar ----
   const docName = h('div', { class: 'doc-name', 'data-testid': 'doc-name' });
