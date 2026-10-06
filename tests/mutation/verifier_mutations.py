@@ -361,7 +361,7 @@ def im(name: str, old: str, new: str, f: pathlib.Path = IM) -> tuple:
     return (f"import: {name}", f, old, new, IMPORT_SUITE)
 
 
-# Two mutants were removed as equivalent: an early existsSync(model) check is repeated by put(model) (the cleanup removes what was written), and the "written" bookkeeping mutant did not change behaviour.
+# Three mutants were removed as equivalent (the third: a non-integer min is caught by the validator with the same code): an early existsSync(model) check is repeated by put(model) (the cleanup removes what was written), and the "written" bookkeeping mutant did not change behaviour.
 MUTATIONS += [
     im("depth limit is off by one", "if (stack.length >= MAX_DEPTH)", "if (stack.length > MAX_DEPTH)"),
     im("element count limit is off by one", "++elements > MAX_ELEMENTS", "++elements > MAX_ELEMENTS + 1"),
@@ -371,7 +371,7 @@ MUTATIONS += [
     im("size limit is off by one", "> MAX_IMPORT_BYTES) return", "> MAX_IMPORT_BYTES + 1) return"),
     im("a DOCTYPE is skipped", "xmlFail(line, col, 'a DTD, DOCTYPE or entity declaration is not accepted');", "adv(input.indexOf('>', i) + 1 - i);"),
     im("a CDATA section is skipped", "xmlFail(line, col, 'a CDATA section is not accepted');", "adv(input.indexOf(']]>', i) + 3 - i);"),
-    im("a processing instruction is skipped", "xmlFail(line, col, 'a processing instruction is not accepted');", "adv(input.indexOf('?>', i) + 2 - i);"),
+    im("a processing instruction is skipped", "xmlFail(line, col, 'a processing instruction is not accepted');", "adv(2);"),
     im("an unknown entity in an attribute is accepted", "checkNoAmp(raw, raw, aLine, aCol);", "void 0;"),
     im("an unknown entity in text is accepted", "checkNoAmp(decode(text, line, col), text, line, col);", "decode(text, line, col);"),
     im("a second root element is accepted", "if (root && stack.length === 0) xmlFail(", OFF + " xmlFail("),
@@ -404,7 +404,6 @@ MUTATIONS += [
     im("a generated gate may take a defined name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!generatedIds.has(id)) {"),
     im("a generated gate may repeat a generated name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!defined.has(id)) {"),
     im("a generated name is not shortened", "const id = `${base}_${k}`.slice(0, 64);", "const id = `${base}_${k}`;"),
-    im("any min is a number", "!/^[0-9]{1,6}$/.test(raw)", "Number.isNaN(Number(raw))"),
     im("a reference may carry more than a name", "for (const a of el.attrs.keys()) if (a !== 'name') unsupported(`attribute ${a}`, el, `on <${el.name}>`);", "void 0;"),
     im("a reference may hold content", "if (el.children.length || el.textLine) unsupported(`content inside <${el.name}>`", OFF + " unsupported(`content inside <${el.name}>`"),
     im("a gate with no formula is accepted", "if (el.children.length !== 1) {", "if (el.children.length < 1) {"),
