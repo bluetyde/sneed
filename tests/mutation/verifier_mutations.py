@@ -694,8 +694,71 @@ MUTATIONS += [
     tm("event trees share the model folder", "  const eventTreeDir = path.join(opts.projectDir, 'event-trees');", "  const eventTreeDir = opts.projectDir;", SA),
     tm("a tree name is not checked as a name", "      const name = safeDecode(em[1]!);\n      if (method === 'GET') {", "      const name = safeDecode(em[1]!).replace(/[.][.]/g, '');\n      if (method === 'GET') {", SA),
     tm("a missing tree is reported as a model", "throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);", "throw e;", SA),
-    tm("a saved model is trusted without validation", "          if (!validateModelText(modelText).valid) return null;\n          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", "          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", SA),
+    tm("a saved model is trusted without validation", "      if (!validateModelText(text).valid) return null;\n      const model = JSON.parse(text) as NativeModel;", "      const model = JSON.parse(text) as NativeModel;", SA),
     tm("a valid tree has no hash", "          tree_hash = eventTreeHash(JSON.parse(text));", "          void 0;", SA),
+]
+
+# Event tree engine (plan 13, stage S2) mutations.
+ETE = ROOT / "src/engines/bdd/event-tree.ts"
+ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
+ETB = ROOT / "src/engines/bdd/bdd.ts"
+ETS = ROOT / "src/engines/bdd/solve.ts"
+ETE_SUITE = ("tests/unit/event-tree-engine.test.ts tests/unit/event-tree-analyze.test.ts tests/unit/server.test.ts tests/unit/bdd.test.ts", 240)
+
+
+def ee(name: str, old: str, new: str, f: pathlib.Path = ETE) -> tuple:
+    return (f"event tree engine: {name}", f, old, new, ETE_SUITE)
+
+
+MUTATIONS += [
+    ee("a negation of false is false", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", "    if (a === FALSE) return FALSE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", ETB),
+    ee("a negation of true is true", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return TRUE;\n    const hit = this.notMemo", ETB),
+    ee("a negation swaps nothing", "const r = this.mk(this.v[a]!, this.not(this.lo[a]!), this.not(this.hi[a]!));", "const r = this.mk(this.v[a]!, this.not(this.hi[a]!), this.not(this.lo[a]!));", ETB),
+    ee("only the first root is built", "  const stack: string[] = [...roots].reverse();\n  while (stack.length) {\n    const id = stack[stack.length - 1]!;", "  const stack: string[] = [roots[0]!];\n  while (stack.length) {\n    const id = stack[stack.length - 1]!;", ETS),
+    ee("a works branch is the failure event", "    workNode.set(h.id, bdd.not(f));", "    workNode.set(h.id, f);"),
+    ee("a fails branch is the complement", "      cond = bdd.and(cond, step.branch === 'fails' ? f : workNode.get(step.heading)!);", "      cond = bdd.and(cond, step.branch === 'fails' ? workNode.get(step.heading)! : f);"),
+    ee("a path condition is an OR", "      cond = bdd.and(cond, step.branch === 'fails' ? f : workNode.get(step.heading)!);", "      cond = bdd.or(cond === TRUE ? 0 : cond, step.branch === 'fails' ? f : workNode.get(step.heading)!);"),
+    ee("the approximation counts no failure", "      if (step.branch === 'fails') failures = bdd.and(failures, f);", "      void 0;"),
+    ee("the approximation counts the successes too", "      if (step.branch === 'fails') failures = bdd.and(failures, f);", "      failures = bdd.and(failures, step.branch === 'fails' ? f : workNode.get(step.heading)!);"),
+    ee("the frequency is not scaled", "    const frequency = lambda * probability;", "    const frequency = probability;"),
+    ee("an underflowed path is a table", "    if (probability === 0 && possible(cond)) return range();", "    void 0;"),
+    ee("an impossible path is an error", "    if (probability === 0 && possible(cond)) return range();", "    if (probability === 0) return range();"),
+    ee("zero and certain events are free", "bdd.probability(node, p.map((q) => (q === 0 ? 0 : q === 1 ? 1 : 0.5))) > 0;", "bdd.probability(node, p.map(() => 0.5)) > 0;"),
+    ee("a non-finite probability is a table", "    if (!Number.isFinite(probability)) return range();", "    void 0;"),
+    ee("a frequency that underflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (!Number.isFinite(frequency)) return range();"),
+    ee("a frequency that overflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (frequency === 0 && probability > 0 && lambda > 0) return range();"),
+    ee("an underflowed approximation is a table", "      if (ap === 0 && possible(failures)) return range();", "      void 0;"),
+    ee("the partition is not checked", "  if (!(partitionError <= PARTITION_TOLERANCE)) throw new SolveAborted('sequences-do-not-partition');", "  void 0;"),
+    ee("the partition tolerance is loose", "export const PARTITION_TOLERANCE = 1e-9;", "export const PARTITION_TOLERANCE = 0.5;"),
+    ee("a partition error that is not a number passes", "  if (!(partitionError <= PARTITION_TOLERANCE)) throw", "  if (partitionError > PARTITION_TOLERANCE) throw"),
+    ee("the sum is not compensated", "    c += Math.abs(sum) >= Math.abs(x) ? sum - t + x : x - t + sum;", "    c += 0;"),
+    ee("the sum depends on the order", "  const sorted = [...xs].sort((a, b) => a - b);", "  const sorted = [...xs];"),
+    ee("end states sum probabilities as frequencies", "frequency: stableSum(list.map((x) => x.frequency)), probability:", "frequency: stableSum(list.map((x) => x.probability)), probability:"),
+    ee("an end state collects every sequence", "const list = byEnd.get(e.id) ?? [];", "const list = sequences;"),
+    ee("the total frequency is not scaled", "    total: { frequency: lambda * probabilitySum, probabilitySum, partitionError },", "    total: { frequency: probabilitySum, probabilitySum, partitionError },"),
+    ee("the approximation sum is taken when not asked", "    approximationFrequencySum: opts.approximation ? stableSum(", "    approximationFrequencySum: true ? stableSum("),
+    ee("too many events are not refused", "  if (order.length > MAX_EVENTS) throw new SolveAborted('too-many-events');\n  const range", "  const range"),
+    ee("a path naming no heading is accepted", "      if (f === undefined) throw new RangeError(`the path names ${step.heading}, which is not a heading`);", "      if (f === undefined) continue;"),
+    ee("the run does not check for a cancel", "  if (opts.signal?.aborted) return failed('cancelled', 'cancelled');", "  void 0;", ETA),
+    ee("an expired deadline starts the engine", "  if (remaining <= 0) return failed('failed', 'timeout');", "  void 0;", ETA),
+    ee("a late result is accepted", "  if (now() > deadline) return failed('failed', 'timeout'); // a last look", "  void 0; // a last look", ETA),
+    ee("a failed analysis is reported as complete", "  if (!answer.ok) return answer.why === 'cancelled' ? failed('cancelled', 'cancelled') : failed('failed', answer.why);", "  if (!answer.ok) return failed('failed', 'x');", ETA),
+    ee("a cancel is reported as a failure", "  if (!answer.ok) return answer.why === 'cancelled' ? failed('cancelled', 'cancelled') : failed('failed', answer.why);", "  if (!answer.ok) return failed('failed', answer.why);", ETA),
+    ee("the inputs are not kept as submitted", "  writeFileSync(path.join(runDir, 'native', 'event-tree.json'), treeText, { encoding: 'utf8' }); // byte for byte as submitted", "  writeFileSync(path.join(runDir, 'native', 'event-tree.json'), JSON.stringify(JSON.parse(treeText)), { encoding: 'utf8' });", ETA),
+    ee("a run folder may be reused", "  if (existsSync(runDir)) throw new Error(`run directory already exists: ${runDir}`);", "  void 0;", ETA),
+    ee("a weak run id is accepted", "  if (!/^[A-Za-z0-9_-]{8,}$/.test(runId)) throw new RangeError", "  if (false as boolean) throw new RangeError", ETA),
+    ee("a refused tree writes a folder", "  if (!v.valid) return { kind: 'refused', errors: v.errors, warnings: v.warnings };", "  void 0;", ETA),
+    ee("an invalid model is analysed", "  if (!modelCheck.valid) return refuse(", "  if (false as boolean) return refuse(", ETA),
+    ee("the ratio divides by zero", "ratio_to_exact: s.probability === 0 ? null : s.approximation.probability / s.probability", "ratio_to_exact: s.approximation.probability / s.probability", ETA),
+    ee("the approximation block is always there", "    approximation: c.approximationFrequencySum === null ? null : {", "    approximation: {", ETA),
+    ee("the record names no engine build", "    engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null },", "    engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null },", ETA),
+    ee("the caveat about plants is dropped", "caveats: ['A frequency here is a model result under the stated assumptions, not a plant figure.', ", "caveats: [", ETA),
+    ee("a non-boolean approximation flag is accepted", "      if (body.approximation !== undefined && typeof body.approximation !== 'boolean') throw new HttpError(400, 'E_FIELD', 'approximation must be true or false');", "      void 0;", SA),
+    ee("a missing model still takes a turn", "      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", "      if (!v.valid) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", SA),
+    ee("an invalid tree takes a turn first", "      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });\n      const job = await takeTurn(res, requestId);", "      const job = await takeTurn(res, requestId);\n      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", SA),
+    ee("the turn is not given back", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal, approximation: body.approximation === true });\n        if (out.kind === 'refused') return send(res, 200, out);\n        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });\n      } finally {\n        release(job);", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal, approximation: body.approximation === true });\n        if (out.kind === 'refused') return send(res, 200, out);\n        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });\n      } finally {\n        void job;", SA),
+    ee("the request is not cancellable", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal,", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir,", SA),
+    ee("the approximation flag is ignored", "approximation: body.approximation === true });", "approximation: false });", SA),
 ]
 
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
@@ -776,6 +839,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("engine id:")]
     if only == "eventtree":  # just the event tree mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree:")]
+    if only == "etengine":  # just the event tree engine mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree engine:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
