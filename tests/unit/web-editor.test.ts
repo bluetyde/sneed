@@ -893,4 +893,34 @@ describe('saved runs offered, and the queue', () => {
     expect(ed.result).toBe(before);
     expect(ed.notice?.text).toMatch(/cancelled while it waited/);
   });
+
+  it('the queue poll stops when the run is over', async () => {
+    Editor.queuePollMs = 10;
+    try {
+      let polls = 0;
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const api = fakeApi({
+        run: async (text, method) => {
+          await gate;
+          return { kind: 'ran', run_id: 'r1', record: recordFor(text, method) };
+        },
+        runStatus: async () => {
+          polls++;
+          return { running: null, queued: [] };
+        },
+      });
+      const { ed } = await ready(api);
+      const p = ed.run();
+      for (let i = 0; i < 100 && polls < 2; i++) await new Promise((r) => setTimeout(r, 10));
+      expect(polls).toBeGreaterThanOrEqual(2);
+      release();
+      await p;
+      const after = polls;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(polls).toBe(after); // nothing asks any more
+    } finally {
+      Editor.queuePollMs = 700;
+    }
+  });
 });

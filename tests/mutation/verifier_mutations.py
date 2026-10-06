@@ -433,7 +433,7 @@ MUTATIONS += [
     im("a refusal is an error status", "return send(res, 200, { kind: 'refused', errors: result.errors });", "return send(res, 400, { kind: 'refused', errors: result.errors });", SA),
 ]
 
-# Queue and saved-run reuse mutations.
+# Queue and saved-run reuse mutations. Two mutants were removed as equivalent: a lookup of an invalid model cannot match a saved hash, and a SCRAM lookup without a runtime compares a null version with strings.
 QUEUE_SUITE = ("tests/unit/server.test.ts tests/unit/web-editor.test.ts", 200)
 
 
@@ -459,8 +459,6 @@ MUTATIONS += [
     qm("lookup ignores the engine version", " && r.engine_version === wantVersion", ""),
     qm("lookup ignores the model", "r.model_hash === hash && ", ""),
     qm("lookup reuses the cross-check", "if (engine === 'both' || !validateModelText(text).valid)", "if (!validateModelText(text).valid)"),
-    qm("lookup accepts an invalid model", "if (engine === 'both' || !validateModelText(text).valid)", "if (engine === 'both')"),
-    qm("lookup does not need the runtime for SCRAM", "if (wantVersion === null) return send(res, 200, none);", "void 0;"),
     qm("an unreadable saved run is offered", "return send(res, 200, none); // unreadable now: run it again", "throw new HttpError(500, 'E_INTERNAL', 'x');"),
     qm("the offer ignores the method", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.engine}`;", WE),
     qm("the offer ignores the engine", "return `${this.validation?.model_hash ?? ''}|${this.method}|${this.engine}`;", "return `${this.validation?.model_hash ?? ''}|${this.method}`;", WE),
