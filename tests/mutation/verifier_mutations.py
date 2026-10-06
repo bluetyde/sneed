@@ -557,7 +557,7 @@ MUTATIONS += [
     sm("the leak check reports example names", "      if (!keep(name)) leaks.push({ kind: 'user-folder'", "      if (true as boolean) leaks.push({ kind: 'user-folder'"),
 ]
 
-# Importance measure mutations.
+# Importance measure mutations. One mutant was removed as equivalent: a second computation cannot start while one is busy, so the sequence guard on an answer never differs from true.
 IMP = ROOT / "src/engines/bdd/importance.ts"
 IMPORTANCE_SUITE = ("tests/unit/importance.test.ts tests/unit/server.test.ts tests/unit/web-editor.test.ts", 240)
 
@@ -593,7 +593,6 @@ MUTATIONS += [
     mi("a table outlives an edit", "if (!d || d.text !== this.text) return null;", "if (!d) return null;", WE),
     mi("the table can be asked for an unchecked edit", "return !this.importanceBusy && this.validation?.valid === true && this.validatedText === this.text;", "return !this.importanceBusy && this.validation?.valid === true;", WE),
     mi("a second press during the check also asks", "    this.importanceBusy = true; // before the first await, so a second press while the model is being checked is ignored\n    this.emit();\n    const mine = ++this.importanceSeq;", "    const mine = ++this.importanceSeq;", WE),
-    mi("an old answer is shown", "if (mine === this.importanceSeq && r.kind !== 'dequeued') this.importanceData", "if (r.kind !== 'dequeued') this.importanceData", WE),
     mi("an invalid model is sent", "if (this.validation?.valid !== true) {\n      this.importanceBusy = false;", "if (false as boolean) {\n      this.importanceBusy = false;", WE),
     mi("a thrown error is shown as nothing", "this.importanceData = { text, model_hash, response: { kind: 'failed', why: 'internal', message: `Could not compute the importance table: ${(e as Error).message}` } };", "void 0;", WE),
 ]
