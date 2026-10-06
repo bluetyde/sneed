@@ -137,6 +137,7 @@ export class ResultsPanel {
     out.push(h('dl', { class: 'kv' },
       h('dt', {}, 'Engine'), h('dd', {}, `${rec.engine.name} ${rec.engine.version}`),
       h('dt', {}, 'Runtime'), h('dd', {}, rec.engine.name === 'sneed-bdd' ? 'built into the app, nothing to install' : rec.engine.runtime ? `installed, ${rec.engine.runtime.install_id}` : 'not a managed install'),
+      h('dt', {}, 'Engine build'), h('dd', {}, rec.engine.sha256 ? h('code', {}, rec.engine.sha256.slice(0, 16)) : 'not recorded'),
       h('dt', {}, 'Model hash'), h('dd', {}, h('code', {}, rec.input_hashes.model_hash.slice(0, 16))),
       h('dt', {}, 'Method'), h('dd', {}, `${METHOD_TEXT[rec.method] ?? rec.method}, product-order limit ${rec.settings.limitOrder}`),
       h('dt', {}, 'Assumptions'), h('dd', {}, Object.entries(rec.assumptions).map(([k, v]) => `${k}: ${String(v)}`).join('; '))));

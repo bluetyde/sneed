@@ -10,6 +10,7 @@ import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeImport, 
 import { RuntimeNotInstalledError } from '../../src/runtime/resolve.js';
 import { ORACLE_MODELS } from '../oracle/models.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../../src/engines/bdd/solve.js';
+import { BDD_SOURCE_SHA256 } from '../../src/engines/bdd/build-id.js';
 
 let tmp: string;
 let server: RunningServer;
@@ -920,7 +921,7 @@ describe('finding an identical saved run', () => {
     try {
       const t = text('pra-and');
       const h = await hashOf(s.url, t);
-      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 };
       const base = { input_hashes: { model_hash: h }, engine: eng };
       expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toEqual({ found: false }); // nothing saved yet
       save(s.runs, '2026-01-01T00-00-00-old-aaaaaaaa', { ...base, top_event_probability: 0.1 });
@@ -945,7 +946,7 @@ describe('finding an identical saved run', () => {
     try {
       const t = text('pra-and');
       const h = await hashOf(s.url, t);
-      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 };
       save(s.runs, '2020-01-01T00-00-00-oldest-aaaaaaaa', { input_hashes: { model_hash: h }, engine: eng });
       for (let i = 0; i < 120; i++) save(s.runs, `2026-01-${String(i).padStart(3, '0')}-other-bbbbbbbb`, { input_hashes: { model_hash: 'f'.repeat(64) }, engine: eng });
       expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toMatchObject({ found: true, run_id: '2020-01-01T00-00-00-oldest-aaaaaaaa' });
@@ -961,7 +962,7 @@ describe('finding an identical saved run', () => {
     try {
       const t = text('pra-and');
       const h = await hashOf(s.url, t);
-      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 };
       const base = { input_hashes: { model_hash: h }, engine: eng };
       save(s.runs, 'r1', { ...base, completeness: 'truncated' });
       save(s.runs, 'r2', { ...base, status: 'failed', completeness: 'none' });
@@ -969,6 +970,9 @@ describe('finding an identical saved run', () => {
       save(s.runs, 'r4', { ...base, engine: { name: BDD_ENGINE_NAME, version: '0.0.0-other' } });
       save(s.runs, 'r5', { ...base, engine: { name: 'SCRAM', version: BDD_ENGINE_VERSION } });
       save(s.runs, 'r6', { ...base, input_hashes: { model_hash: 'f'.repeat(64) } });
+      save(s.runs, 'r8', { ...base, engine: { ...eng, sha256: 'f'.repeat(64) } }); // the same version, another build of the source
+      save(s.runs, 'r9', { ...base, engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null } }); // a record from before the build was recorded
+      save(s.runs, 'r10', { ...base, engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION } }); // no build at all
       expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toEqual({ found: false });
       save(s.runs, 'r7', base);
       rmSync(path.join(s.runs, 'r7', 'native', 'model.json')); // a run without its model file is not served, so not offered

@@ -1,3 +1,4 @@
+import { BDD_SOURCE_SHA256 } from '../../src/engines/bdd/build-id.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -264,7 +265,7 @@ describe('the record', () => {
     expect(out.kind).toBe('ran');
     if (out.kind !== 'ran') return;
     const r = out.record;
-    expect(r.engine).toEqual({ name: 'sneed-bdd', version: '0.1.0', sha256: null, runtime: null });
+    expect(r.engine).toEqual({ name: 'sneed-bdd', version: '0.1.0', sha256: BDD_SOURCE_SHA256, runtime: null }); // the identity is the hash of the engine's sources, not null
     expect(r.assumptions).toMatchObject({ independence: 'declared-independent' });
     expect(r.input_hashes.model_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(r.exporter_version).toMatch(/native model/);

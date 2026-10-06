@@ -9,7 +9,7 @@ export type Completeness = 'complete' | 'truncated' | 'unknown';
 export interface EngineIdentity {
   name: string;
   version: string;
-  /** sha256 of the engine binary, when it could be read. */
+  /** sha256 of the engine binary, when it could be read; for the built-in engine (no binary) the hash of its source files (src/engines/bdd/build-id.ts). */
   sha256: string | null;
   /** The managed runtime install this engine came from; null for an unmanaged development build. */
   runtime?: { install_id: string; recipe_revision: number; manifest_sha256: string } | null;

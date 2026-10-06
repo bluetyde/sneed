@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
+import { BDD_SOURCE_SHA256 } from '../engines/bdd/build-id.js';
 import { hasOwned as realHasOwned, killOwned as realKillOwned, toWslPath, type EngineConfig } from '../core/engine.js';
 import type { Method } from '../core/model.js';
 import { validateModelText, type Issue } from '../core/validate.js';
@@ -189,7 +190,7 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
         ok: true,
         engine: { name: 'sneed-headless', version: HEADLESS_VERSION, backend: 'SCRAM' },
         // `--engine builtin` (the default) needs nothing; `--engine scram` needs the installed runtime. SNEED_ENGINE=scram changes the default.
-        engines: { default: deps.defaultEngine(), scram: runtimeState(), builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION } },
+        engines: { default: deps.defaultEngine(), scram: runtimeState(), builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 } },
         scram: runtimeState(),
         modelFormat: { format: 'sneed.fault-tree', version: '1' },
         methods: METHODS,
