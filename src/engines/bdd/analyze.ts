@@ -38,18 +38,23 @@ function writeAtomic(file: string, text: string): void {
   renameSync(tmp, file);
 }
 
-/** The solution in the form the shared result checks read. The approximations are recomputed here from the cut sets. */
-function asReport(sol: Solution, method: Method): ParsedReport {
-  const pc = sol.cutSets.map((c) => c.probability);
+/**
+ * The solution in the form the shared result checks read. The approximations are recomputed here from the cut sets.
+ * A product-order limit below the order of some cut set is honoured the way SCRAM honours it: only cut sets up to the limit are
+ * reported, the probability stays the exact one, and the shared checks then see that the sets explain less than the whole
+ * (a truncated result), never a complete one.
+ */
+function asReport(sol: Solution, method: Method, limitOrder: number): ParsedReport {
+  const kept = sol.cutSets.filter((c) => c.events.length <= limitOrder);
+  const pc = kept.map((c) => c.probability);
   const raw = method === 'exact' ? sol.probability : method === 'rare-event' ? pc.reduce((a, x) => a + x, 0) : -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0)); // 1 - prod(1 - p), without the cancellation that loses a small p
   return {
     software: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION },
     probability: Math.min(1, raw),
     warning: null,
-    products: sol.cutSets.map((c) => ({ order: c.events.length, probability: c.probability, events: c.events })),
+    products: kept.map((c) => ({ order: c.events.length, probability: c.probability, events: c.events })),
     approximation: APPROX[method],
-    // this engine never drops a cut set by order: it reports "limit" as the number of events, which can never be exceeded
-    productOrderLimit: sol.events.length,
+    productOrderLimit: limitOrder,
     cutSetMethod: 'bdd-minimal-solutions',
   };
 }
@@ -102,6 +107,6 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
     return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [answer.why === 'internal' ? 'engine-error' : answer.why] }));
   }
   sol = answer.solution;
-  const record = assess({ ...base, outcome: idle, reportText: null, parsed: asReport(sol, settings.method) });
+  const record = assess({ ...base, outcome: idle, reportText: null, parsed: asReport(sol, settings.method, settings.limitOrder) });
   return finish(record, { order: sol.events, nodes: sol.nodes, cut_sets: sol.cutSets.length });
 }

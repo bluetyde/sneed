@@ -4,7 +4,9 @@
 //   node dist/node/cli/headless.js describe
 //   node dist/node/cli/headless.js validate <model.json>
 //   node dist/node/cli/headless.js run <model.json> --out <absDir> [--run-id pra] [--method exact|rare-event|mcub]
-//                                      [--engine scram|builtin] [--limit-order N] [--timeout-seconds 60]
+//                                      [--engine builtin|scram] [--limit-order N] [--timeout-seconds 60]
+//   The default engine is the built-in one; the environment variable SNEED_ENGINE=scram makes SCRAM the default for a caller that
+//   has not been updated (an explicit --engine always wins).
 //   node dist/node/cli/headless.js cancel --out <absDir>
 //
 // Exit codes: 0 a reply was produced (a run that ended truncated, failed or cancelled is exit 0 with that status and a
@@ -37,6 +39,8 @@ const WORK_ID = /^pra-[0-9a-f]{12}$/;
 /** What the runner needs from the outside, replaceable in tests. */
 export interface Deps {
   analyze: (text: string, opts: AnalyzeOptions) => Promise<AnalyzeOutcome>;
+  /** The engine used when --engine is not given: the built-in one, unless SNEED_ENGINE=scram. */
+  defaultEngine: () => 'builtin' | 'scram';
   /** The built-in decision-diagram engine (`--engine builtin`). */
   analyzeBuiltin: (text: string, opts: BuiltinOptions) => Promise<AnalyzeOutcome>;
   resolveEngine: () => EngineConfig;
@@ -59,6 +63,7 @@ export interface Deps {
 export const realDeps = (): Deps => ({
   analyze: realAnalyze,
   analyzeBuiltin: realBuiltin,
+  defaultEngine: () => (process.env.SNEED_ENGINE === 'scram' ? 'scram' : 'builtin'),
   resolveEngine: () => realResolveEngine(defaultRuntimeEnv()),
   distro: () => defaultRuntimeEnv().distro,
   killOwned: realKillOwned,
@@ -183,8 +188,8 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
       {
         ok: true,
         engine: { name: 'sneed-headless', version: HEADLESS_VERSION, backend: 'SCRAM' },
-        // `--engine scram` (the default of this runner, kept for the SEED adapter) needs the installed runtime; `--engine builtin` needs nothing
-        engines: { default: 'scram', scram: runtimeState(), builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION } },
+        // `--engine builtin` (the default) needs nothing; `--engine scram` needs the installed runtime. SNEED_ENGINE=scram changes the default.
+        engines: { default: deps.defaultEngine(), scram: runtimeState(), builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION } },
         scram: runtimeState(),
         modelFormat: { format: 'sneed.fault-tree', version: '1' },
         methods: METHODS,
@@ -215,7 +220,7 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
     if (!RUN_ID.test(runId)) return fail('E_PATH_INVALID', '--run-id is not a plain id', '', 2);
     const method = (option(args, '--method') ?? 'exact') as Method;
     if (!METHODS.includes(method)) return fail('E_UNSUPPORTED', `--method must be one of ${METHODS.join(', ')}`, '', 2);
-    const engineChoice = option(args, '--engine') ?? 'scram';
+    const engineChoice = option(args, '--engine') ?? deps.defaultEngine();
     if (engineChoice !== 'scram' && engineChoice !== 'builtin') return fail('E_UNSUPPORTED', '--engine must be scram or builtin', '', 2);
     const limitRaw = option(args, '--limit-order');
     const limitOrder = limitRaw === undefined ? undefined : Number(limitRaw);
