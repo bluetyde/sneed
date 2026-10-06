@@ -115,7 +115,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## Ideas / later
 
-- Print and image export of trees for lab reports.
+- [x] Print and image export of trees for lab reports (built 2026-10-06, see docs/EDITOR.md).
 - An instructor guide with answers and discussion questions.
 - A hosted demo (needs a decision about running the engine for other people's models).
 - Lessons that use NODAL component links for naming only.
