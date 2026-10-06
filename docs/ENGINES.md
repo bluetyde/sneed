@@ -49,3 +49,11 @@ Unit tests: `tests/unit/bdd.test.ts`, `crosscheck.test.ts`, engine choice blocks
 - A model with more than 2000 reachable events, or more than 50,000 minimal cut sets, is refused (for SCRAM too, at the same cut-set cap).
 - The engine's identity has no binary hash (it is a version, `0.1.0`); a source hash can be added when it is packaged.
 - No importance measures, uncertainty or time (plan 07).
+
+## Engine identity (2026-10-06)
+SCRAM's identity is the sha-256 of its binary. The built-in engine has no binary, so its identity is the hash of the source files that decide what it computes: every `src/engines/bdd/*.ts` file (solver, diagram, importance, workers) plus `src/core/result.ts` (the checks every record passes) and `src/core/canonical.ts` (the model hash), each by path and content with line endings normalised. It is generated into `src/engines/bdd/build-id.ts` by `npm run gen:engine-id`, and `tests/unit/engine-id.test.ts` fails when the committed value no longer matches the sources, so a change to the solver cannot ship under the old identity.
+- **Recorded** as `engine.sha256` in every built-in result record (`results.json`, the headless `manifest.json`), in the field SCRAM fills with its binary's hash; listed in `/api/health` and in the headless `describe` (`engines.builtin.sha256`); shown as "Engine build" in the Results panel.
+- **Used** by saved-run reuse (a record is offered only for the same build) and by Compare (two built-in runs of the same build are the same engine, so a difference in numbers is "unexpected"; before this, built-in runs had no build and could never be called the same).
+- **Not covered:** the Node runtime and the compiled output (the hash is of the sources, baked in at build time, so a stale `dist` reports the sources it was built from); changing a file outside the list (the validator, the exporter) does not change it.
+- **After changing any of the listed files** run `npm run gen:engine-id` and commit `build-id.ts`. The mutation runner regenerates it for mutants in those files so they are judged by behaviour.
+
