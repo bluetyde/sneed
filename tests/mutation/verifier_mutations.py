@@ -515,7 +515,6 @@ MUTATIONS += [
     fm("an empty file name stays empty", "return stem || 'fault-tree';", "return stem;"),
     fm("a disagreement is not in the figure", "else if (c.agree) out.push(", "else if (true as boolean) out.push("),
     fm("an unavailable comparison is not in the figure", "if ('unavailable' in c) out.push(", "if (false as boolean) out.push("),
-    fm("a stale result carries its cross-check", "    const c = r.cross;", "    const c = r.cross; if (false as boolean) void 0;"),
     fm("XML-invalid characters stay", "t.replace(XML_INVALID, '\\uFFFD').replace(/&/g, '&amp;')", "t.replace(/&/g, '&amp;')"),
     fm("allowed characters are removed too", "\\x09\\x0A\\x0D\\x20-", "\\x20-"),
     fm("the cross-check is not passed to the figure", "...(this.result.cross ? { cross: this.result.cross } : {})", "", WE),
