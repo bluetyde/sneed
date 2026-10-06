@@ -728,8 +728,13 @@ describe('import over the API (Open-PSA)', () => {
   it('the import route needs the request header and a JSON body like every write', async () => {
     const noHeader = await request('POST', '/api/import', { body: JSON.stringify({ text: GOOD, name: 'imp-x' }), headers: { 'content-type': 'application/json' } });
     expect(noHeader.status).toBe(403);
-    const big = await post('/api/import', { text: 'x'.repeat(2.5 * 1024 * 1024), name: 'imp-big' });
-    expect([400, 413]).toContain(big.status);
+    // an oversize body is refused with 413 and the connection closed: the client either reads that answer or, if the server closes while it is
+    // still sending, sees the connection reset (which of the two happens is a matter of timing, and both are a refusal)
+    const big = await post('/api/import', { text: 'x'.repeat(2.5 * 1024 * 1024), name: 'imp-big' }).then(
+      (r) => r.status,
+      () => 'connection closed',
+    );
+    expect([400, 413, 'connection closed']).toContain(big);
     expect(files().filter((f) => f.startsWith('imp-x') || f.startsWith('imp-big'))).toEqual([]);
   });
 });
