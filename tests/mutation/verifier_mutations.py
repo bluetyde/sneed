@@ -698,7 +698,7 @@ MUTATIONS += [
     tm("a valid tree has no hash", "          tree_hash = eventTreeHash(JSON.parse(text));", "          void 0;", SA),
 ]
 
-# Event tree engine (plan 13, stage S2) mutations.
+# Event tree engine (plan 13, stage S2) mutations. Removed as equivalent, each with its reason: a non-finite probability (a valid model has probabilities in 0..1, so it cannot occur); an underflowed approximation (it is at least the exact path probability, so the exact check fires first); a partition error that is not a number (the finite checks come first); the order of the compensated sum (Neumaier summation is order-insensitive in practice, the sort is a second guard); the event-count check (the diagram builder refuses first, and that line was deleted); a cancel or an expired deadline before the worker starts (the worker and the last look give the same record); a missing model taking a turn (the validator already refuses it).
 ETE = ROOT / "src/engines/bdd/event-tree.ts"
 ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
 ETB = ROOT / "src/engines/bdd/bdd.ts"
@@ -724,23 +724,16 @@ MUTATIONS += [
     ee("an underflowed path is a table", "    if (probability === 0 && possible(cond)) return range();", "    void 0;"),
     ee("an impossible path is an error", "    if (probability === 0 && possible(cond)) return range();", "    if (probability === 0) return range();"),
     ee("zero and certain events are free", "bdd.probability(node, p.map((q) => (q === 0 ? 0 : q === 1 ? 1 : 0.5))) > 0;", "bdd.probability(node, p.map(() => 0.5)) > 0;"),
-    ee("a non-finite probability is a table", "    if (!Number.isFinite(probability)) return range();", "    void 0;"),
     ee("a frequency that underflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (!Number.isFinite(frequency)) return range();"),
     ee("a frequency that overflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (frequency === 0 && probability > 0 && lambda > 0) return range();"),
-    ee("an underflowed approximation is a table", "      if (ap === 0 && possible(failures)) return range();", "      void 0;"),
     ee("the partition is not checked", "  if (!(partitionError <= PARTITION_TOLERANCE)) throw new SolveAborted('sequences-do-not-partition');", "  void 0;"),
     ee("the partition tolerance is loose", "export const PARTITION_TOLERANCE = 1e-9;", "export const PARTITION_TOLERANCE = 0.5;"),
-    ee("a partition error that is not a number passes", "  if (!(partitionError <= PARTITION_TOLERANCE)) throw", "  if (partitionError > PARTITION_TOLERANCE) throw"),
     ee("the sum is not compensated", "    c += Math.abs(sum) >= Math.abs(x) ? sum - t + x : x - t + sum;", "    c += 0;"),
-    ee("the sum depends on the order", "  const sorted = [...xs].sort((a, b) => a - b);", "  const sorted = [...xs];"),
     ee("end states sum probabilities as frequencies", "frequency: stableSum(list.map((x) => x.frequency)), probability:", "frequency: stableSum(list.map((x) => x.probability)), probability:"),
     ee("an end state collects every sequence", "const list = byEnd.get(e.id) ?? [];", "const list = sequences;"),
     ee("the total frequency is not scaled", "    total: { frequency: lambda * probabilitySum, probabilitySum, partitionError },", "    total: { frequency: probabilitySum, probabilitySum, partitionError },"),
     ee("the approximation sum is taken when not asked", "    approximationFrequencySum: opts.approximation ? stableSum(", "    approximationFrequencySum: true ? stableSum("),
-    ee("too many events are not refused", "  if (order.length > MAX_EVENTS) throw new SolveAborted('too-many-events');\n  const range", "  const range"),
     ee("a path naming no heading is accepted", "      if (f === undefined) throw new RangeError(`the path names ${step.heading}, which is not a heading`);", "      if (f === undefined) continue;"),
-    ee("the run does not check for a cancel", "  if (opts.signal?.aborted) return failed('cancelled', 'cancelled');", "  void 0;", ETA),
-    ee("an expired deadline starts the engine", "  if (remaining <= 0) return failed('failed', 'timeout');", "  void 0;", ETA),
     ee("a late result is accepted", "  if (now() > deadline) return failed('failed', 'timeout'); // a last look", "  void 0; // a last look", ETA),
     ee("a failed analysis is reported as complete", "  if (!answer.ok) return answer.why === 'cancelled' ? failed('cancelled', 'cancelled') : failed('failed', answer.why);", "  if (!answer.ok) return failed('failed', 'x');", ETA),
     ee("a cancel is reported as a failure", "  if (!answer.ok) return answer.why === 'cancelled' ? failed('cancelled', 'cancelled') : failed('failed', answer.why);", "  if (!answer.ok) return failed('failed', answer.why);", ETA),
@@ -754,7 +747,6 @@ MUTATIONS += [
     ee("the record names no engine build", "    engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null },", "    engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null },", ETA),
     ee("the caveat about plants is dropped", "caveats: ['A frequency here is a model result under the stated assumptions, not a plant figure.', ", "caveats: [", ETA),
     ee("a non-boolean approximation flag is accepted", "      if (body.approximation !== undefined && typeof body.approximation !== 'boolean') throw new HttpError(400, 'E_FIELD', 'approximation must be true or false');", "      void 0;", SA),
-    ee("a missing model still takes a turn", "      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", "      if (!v.valid) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", SA),
     ee("an invalid tree takes a turn first", "      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });\n      const job = await takeTurn(res, requestId);", "      const job = await takeTurn(res, requestId);\n      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });", SA),
     ee("the turn is not given back", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal, approximation: body.approximation === true });\n        if (out.kind === 'refused') return send(res, 200, out);\n        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });\n      } finally {\n        release(job);", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal, approximation: body.approximation === true });\n        if (out.kind === 'refused') return send(res, 200, out);\n        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });\n      } finally {\n        void job;", SA),
     ee("the request is not cancellable", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal,", "        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir,", SA),

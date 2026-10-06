@@ -5,7 +5,7 @@
 // Floating point is watched as in the importance measures: a probability that underflowed to zero although the path can happen, or any
 // non-finite number, is a failure ('numeric-range'); the sequence probabilities must add up to 1 ('sequences-do-not-partition').
 import { SolveAborted, TRUE } from './bdd.js';
-import { buildNodes, MAX_EVENTS, type SolveOptions } from './solve.js';
+import { buildNodes, type SolveOptions } from './solve.js';
 import type { NativeModel } from '../../core/model.js';
 import type { PathStep } from '../../core/event-tree.js';
 import { pathKey } from '../../core/event-tree.js';
@@ -56,7 +56,6 @@ export function computeEventTree(model: NativeModel, tree: EventTreeInput, opts:
   const roots = tree.headings.map((h) => h.event);
   const d = buildNodes(model, roots, opts);
   const { bdd, order, p } = d;
-  if (order.length > MAX_EVENTS) throw new SolveAborted('too-many-events');
   const range = (): never => {
     throw new SolveAborted('numeric-range');
   };

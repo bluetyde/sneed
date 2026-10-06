@@ -8,7 +8,8 @@ import { startServer, type RunningServer } from '../../src/server/app.js';
 import { readRun } from '../../src/server/runs.js';
 import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeImport, writeModel, StorageError } from '../../src/server/storage.js';
 import { RuntimeNotInstalledError } from '../../src/runtime/resolve.js';
-import { ORACLE_MODELS } from '../oracle/models.js';
+import { AND, mkDoc, OR, ORACLE_MODELS } from '../oracle/models.js';
+import { skeletonSequences } from '../../src/core/event-tree.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../../src/engines/bdd/solve.js';
 import { BDD_SOURCE_SHA256 } from '../../src/engines/bdd/build-id.js';
 
@@ -1292,6 +1293,30 @@ describe('analysing an event tree over the API (plan 13, stage S2)', () => {
     const noHeader = await request('POST', '/api/event-tree/run', { body: JSON.stringify({ text: '{}' }), headers: { 'content-type': 'application/json' } });
     expect(noHeader.status).toBe(403);
   });
+
+  it('a running analysis is cancelled by its request id, and the answer is a cancelled record with no numbers', async () => {
+    const n = 20;
+    const events: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      events[`A${i}`] = 0.1;
+      events[`B${i}`] = 0.1;
+    }
+    const pairs = Array.from({ length: n }, (_, i) => AND(`P${i}`, [`A${i}`, `B${i}`]));
+    const heavy = mkDoc('TOP', events, [OR('TOP', ['PA', 'PB', 'F']), OR('PA', Array.from({ length: n }, (_, i) => `A${i}`)), OR('PB', Array.from({ length: n }, (_, i) => `B${i}`)), OR('F', pairs.map((g) => g.id)), ...pairs]);
+    await put('/api/models/etheavy', { text: JSON.stringify(heavy) });
+    const hash = (await post('/api/validate', { text: JSON.stringify(heavy) })).json.model_hash;
+    const heads = [{ id: 'H1', name: 'A side', event: 'PA' }, { id: 'H2', name: 'B side', event: 'PB' }, { id: 'H3', name: 'Pairs', event: 'F' }];
+    const doc = treeFor('etheavy', hash);
+    doc.headings = heads;
+    doc.sequences = skeletonSequences(heads).map((x) => ({ path: x.path, end_state: 'OK' }));
+    const started = Date.now();
+    const run = post('/api/event-tree/run', { text: JSON.stringify(doc), request_id: 'req-heavy' });
+    await new Promise((r) => setTimeout(r, 400));
+    expect((await post('/api/run/cancel', { request_id: 'req-heavy' })).json).toEqual({ cancelled: true });
+    const done = await run;
+    expect(done.json.record).toMatchObject({ status: 'cancelled', reasons: ['cancelled'], sequences: [] });
+    expect(Date.now() - started).toBeLessThan(4000); // the model needs seconds: the cancel did not wait for it
+  }, 30000);
 
   it('takes its turn behind a run, can be cancelled while it waits by request id, and the status lists it', async () => {
     const { text: tree } = await setup('etrun-model4');

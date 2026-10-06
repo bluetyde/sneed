@@ -181,6 +181,33 @@ describe('failures are named, never a table with wrong numbers', () => {
     expect(why(() => run(SHARED, { ...t, initiating_event: { frequency: huge } }))).toBe('numeric-range');
   });
 
+  it('a frequency that underflows with the probability is numeric-range (the smallest double times a probability below 1 rounds to 0)', () => {
+    const t = treeOf([{ id: 'A', event: 'X' }, { id: 'B', event: 'Y' }], 5e-324);
+    expect(why(() => run(SHARED, t))).toBe('numeric-range');
+    expect(why(() => run(SHARED, { ...t, initiating_event: { frequency: 0 } }))).toBe('no error'); // a frequency of exactly 0 is allowed: all zeros, with a warning in the validator
+  });
+
+  it('too many basic events are refused by name', () => {
+    const events: Record<string, number> = {};
+    for (let i = 0; i < 2001; i++) events[`E${i}`] = 0.001;
+    const m = mkDoc('TOP', events, [OR('TOP', Object.keys(events))]);
+    expect(why(() => run(m, treeOf([{ id: 'A', event: 'TOP' }], 1)))).toBe('too-many-events');
+  });
+
+  it('dropping any one sequence, or listing any one twice, breaks the partition, however small its probability', () => {
+    const t = treeOf([{ id: 'A', event: 'X' }, { id: 'B', event: 'Y' }], 1);
+    for (let i = 0; i < t.sequences.length; i++) {
+      const dropped = t.sequences.filter((_, k) => k !== i);
+      expect(why(() => run(SHARED, { ...t, sequences: dropped })), `drop ${i}`).toBe('sequences-do-not-partition');
+      expect(why(() => run(SHARED, { ...t, sequences: [...t.sequences, t.sequences[i]!] })), `twice ${i}`).toBe('sequences-do-not-partition');
+    }
+    // a path of probability 1e-12 missing is still caught (the tolerance is 1e-9: a fifth of a billionth is below it, 1e-8 is not)
+    const tiny = mkDoc('TOP', { RARE: 1e-8, OTHER: 0.5 }, [OR('TOP', ['RARE', 'OTHER'])]);
+    const tt = treeOf([{ id: 'A', event: 'RARE' }, { id: 'B', event: 'OTHER' }], 1);
+    const gone = tt.sequences.filter((s) => pathKey(s.path) !== 'A:fails,B:works');
+    expect(why(() => run(tiny, { ...tt, sequences: gone }))).toBe('sequences-do-not-partition'); // 5e-9 > 1e-9 missing
+  });
+
   it('sequences that do not cover the possible outcomes are refused: they do not partition', () => {
     const t = treeOf([{ id: 'A', event: 'X' }, { id: 'B', event: 'Y' }], 1);
     expect(why(() => run(SHARED, { ...t, sequences: t.sequences.slice(1) }))).toBe('sequences-do-not-partition'); // one path missing
