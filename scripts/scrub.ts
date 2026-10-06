@@ -8,6 +8,7 @@
 // binary files and files over 16 MB are left alone and reported, nothing is deleted. A file is replaced only after the new text is complete.
 import { existsSync, lstatSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { accountNames, findLeaks, scrubText, type ScrubOptions } from '../src/core/scrub.js';
 
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -22,6 +23,8 @@ export interface ScrubReport {
 
 export function scrubFolder(root: string, opts: ScrubOptions, write: boolean): ScrubReport {
   const report: ScrubReport = { scanned: 0, changed: [], skipped: [], remaining: [] };
+  // a link as the folder itself would be followed by the directory listing: refuse it, like every link below it
+  if (lstatSync(root).isSymbolicLink()) throw new Error(`${root} is a link; give the real folder (links are never followed)`);
   const walk = (dir: string): void => {
     for (const name of readdirSync(dir).sort()) {
       if (name === '.git' || name === 'node_modules') continue;
@@ -87,4 +90,4 @@ function main(argv: string[]): number {
   return write || r.changed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file:///${process.argv[1].replace(/\\/g, '/')}`).href) process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) process.exit(main(process.argv.slice(2)));

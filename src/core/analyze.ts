@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { accountNames, scrubText } from './scrub.js';
 import { reachableEvents } from './bounds.js';
 import { documentHash, modelHash } from './canonical.js';
@@ -96,7 +97,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   const reportPath = path.join(runDir, 'native', 'report.xml');
   const argv = ['env', `LD_LIBRARY_PATH=${engineCfg.libs}`, engineCfg.binary, ...METHOD_ARGS[settings.method], '-l', String(settings.limitOrder), toWslPath(inputPath), '-o', toWslPath(reportPath)];
   // what is written into the run folder never names this machine's folders or account (publication scrub, src/core/scrub.ts); the engine still gets the real argv
-  const scrub = (t: string): string => scrubText(t, { prefixes: [[toWslPath(runDir), '<run>'], [runDir, '<run>']], usernames: accountNames() });
+  const scrub = (t: string): string => scrubText(t, { prefixes: [[toWslPath(runDir), '<run>'], [runDir, '<run>'], [path.resolve(opts.runsDir), '<runs>'], [process.cwd(), '<repo>'], [homedir(), '<home>']], usernames: accountNames() });
   writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, argv: argv.map(scrub), export_mapping: exported.mapping }, null, 2) + '\n');
 
   const finish = (record: ResultRecord): AnalyzeOutcome => {

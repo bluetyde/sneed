@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,7 +32,7 @@ describe('scrubText', () => {
   });
 
   it('turns any home folder into <user>, in the Windows, WSL, macOS and Linux spellings, but leaves example names', () => {
-    expect(scrubText(`C:${B}Users${B}zed smith${B}x`)).toBe(`C:${B}Users${B}<user> smith${B}x`); // a name stops at a space
+    expect(scrubText(`C:${B}Users${B}zed smith${B}x`)).toBe(`C:${B}Users${B}<user>${B}x`); // a name with a space is taken whole when a separator follows
     expect(scrubText('/mnt/d/Users/carol/p/q')).toBe('/mnt/d/Users/<user>/p/q');
     expect(scrubText('C:/Users/carol/p')).toBe('C:/Users/<user>/p');
     expect(scrubText(`"C:${B}${B}Users${B}${B}carol${B}${B}p"`)).toBe(`"C:${B}${B}Users${B}${B}<user>${B}${B}p"`);
@@ -41,8 +42,11 @@ describe('scrubText', () => {
 
   it('removes the given account names wherever they appear as a whole word, in any case, and never from other words', () => {
     expect(scrubText('owner=Carol123 CAROL123 carol1234 xcarol123', { usernames: ['carol123'] })).toBe('owner=<user> <user> carol1234 xcarol123');
-    expect(scrubText('ab is short', { usernames: ['ab'] })).toBe('ab is short'); // a name that short would be taken out of ordinary words
-    expect(scrubText('student here', { usernames: ['student'] })).toBe('student here'); // an example name is not a person
+    // an account name that is given is removed whatever it looks like: a real account may be called `student` or be two letters long
+    expect(scrubText('ab is short', { usernames: ['ab'] })).toBe('<user> is short');
+    expect(scrubText('owner=alice C:/Users/alice/work', { usernames: ['alice'] })).toBe('owner=<user> C:/Users/<user>/work');
+    expect(findLeaks('owner=alice', { usernames: ['alice'] })).toHaveLength(1);
+    expect(findLeaks('owner=ab', { usernames: ['ab'] })).toHaveLength(1);
   });
 
   it('is idempotent, and never changes text that has nothing to scrub', () => {
@@ -59,6 +63,53 @@ describe('scrubText', () => {
     const doc = { argv: ['/mnt/c/Users/erin/p/in.xml', 'C:\\Users\\erin\\p\\out.xml'], stderr: 'File: /mnt/c/Users/erin/My%20Folder/p/in.xml\n' };
     const scrubbed = JSON.parse(scrubText(JSON.stringify(doc), { usernames: ['erin'] }));
     expect(scrubbed).toEqual({ argv: ['/mnt/c/Users/<user>/p/in.xml', 'C:\\Users\\<user>\\p\\out.xml'], stderr: 'File: /mnt/c/Users/<user>/My%20Folder/p/in.xml\n' });
+  });
+});
+
+describe('account names with spaces, encoded names, case and file URLs', () => {
+  it('a name with a space is removed whole, plain or as %20, before a path pattern could cut it', () => {
+    expect(scrubText('C:/Users/Zed Smith/work', { usernames: ['Zed Smith'] })).toBe('C:/Users/<user>/work');
+    expect(scrubText('file:///C:/Users/Zed%20Smith/work', { usernames: ['Zed Smith'] })).toBe('file:///C:/Users/<user>/work');
+    expect(scrubText('by zed smith', { usernames: ['Zed Smith'] })).toBe('by <user>');
+    expect(findLeaks('file:///C:/Users/Zed%20Smith/work', { usernames: ['Zed Smith'] }).length).toBeGreaterThan(0);
+  });
+
+  it('a home folder with a spaced name is taken whole even when the name is not known', () => {
+    expect(scrubText('C:/Users/Zed Smith/work')).toBe('C:/Users/<user>/work');
+    expect(scrubText('/mnt/c/Users/Zed Smith/My Docs/x')).toBe('/mnt/c/Users/<user>/My Docs/x');
+    expect(scrubText('file:///C:/Users/Zed%20Smith/work')).toBe('file:///C:/Users/<user>/work');
+  });
+
+  it('prose after a bare home folder is left alone, and a name is never longer than three words', () => {
+    expect(scrubText('see C:/Users/carol is where it went')).toBe('see C:/Users/<user> is where it went');
+    expect(scrubText('C:/Users/one two three four/x')).toBe('C:/Users/<user> two three four/x'); // more than three words is not taken as one name: only its first word is
+  });
+
+  it('Windows folder names are matched whatever their case, and file URLs of POSIX home folders are found', () => {
+    expect(scrubText('c:/users/carol/work')).toBe('c:/users/<user>/work');
+    expect(scrubText('C:\\USERS\\Carol\\work')).toBe('C:\\USERS\\<user>\\work');
+    expect(scrubText('file:///home/carol/work')).toBe('file:///home/<user>/work');
+    expect(scrubText('file:///Users/carol/work')).toBe('file:///Users/<user>/work');
+    expect(findLeaks('file:///home/carol/work')).toHaveLength(1);
+    expect(findLeaks('c:/users/carol/work')).toHaveLength(1);
+  });
+
+  it('the account names of this process leave out system accounts such as root, which is also a folder in every WSL path', () => {
+    const saved = { u: process.env.USERNAME, n: process.env.USER, l: process.env.LOGNAME };
+    try {
+      process.env.USERNAME = 'root';
+      process.env.USER = 'Administrator';
+      process.env.LOGNAME = 'somebody';
+      const names = accountNames();
+      expect(names).toContain('somebody');
+      expect(names.map((n) => n.toLowerCase())).not.toContain('root');
+      expect(names.map((n) => n.toLowerCase())).not.toContain('administrator');
+    } finally {
+      for (const [k, v] of [['USERNAME', saved.u], ['USER', saved.n], ['LOGNAME', saved.l]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 });
 
@@ -129,6 +180,45 @@ describe('the scrub tool on a folder', () => {
     if (linked) expect(r.skipped.some((s) => s.why.startsWith('a link'))).toBe(true);
     expect(readFileSync(path.join(outside, 'secret.txt'), 'utf8')).toBe('/mnt/c/Users/jan/outside'); // untouched
     expect(readFileSync(path.join(d, 'bin.dat')).includes(Buffer.from('jan'))).toBe(true);
+  });
+});
+
+describe('the command line', () => {
+  const run = (args: string[]) => spawnSync(process.execPath, ['--import', 'tsx', path.join(ROOT, 'scripts', 'scrub.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+
+  it('really runs when started as a script (not only when imported): reports, then rewrites, with matching exit codes', () => {
+    const d = mkdtempSync(path.join(tmpdir(), 'sneed-scrub-cli-'));
+    try {
+      writeFileSync(path.join(d, 'a.log'), 'File: /mnt/c/Users/zelda/p/in.xml\n');
+      const dry = run([d]);
+      expect(dry.status, dry.stdout + dry.stderr).toBe(1); // something would change
+      expect(dry.stdout).toContain('1 would change');
+      expect(readFileSync(path.join(d, 'a.log'), 'utf8')).toContain('zelda');
+      const done = run([d, '--write']);
+      expect(done.status, done.stdout + done.stderr).toBe(0);
+      expect(readFileSync(path.join(d, 'a.log'), 'utf8')).toBe('File: /mnt/c/Users/<user>/p/in.xml\n');
+      expect(run([d]).status).toBe(0); // clean now
+      expect(run([path.join(d, 'missing')]).status).toBe(2);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it('refuses a folder that is itself a link, and writes nothing through it', () => {
+    const d = mkdtempSync(path.join(tmpdir(), 'sneed-scrub-root-'));
+    try {
+      mkdirSync(path.join(d, 'real'));
+      writeFileSync(path.join(d, 'real', 'a.log'), '/mnt/c/Users/zelda/x');
+      try {
+        symlinkSync(path.join(d, 'real'), path.join(d, 'link'), 'junction');
+      } catch {
+        return; // links cannot be made here
+      }
+      expect(() => scrubFolder(path.join(d, 'link'), {}, true)).toThrow(/is a link/);
+      expect(readFileSync(path.join(d, 'real', 'a.log'), 'utf8')).toBe('/mnt/c/Users/zelda/x');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 });
 
