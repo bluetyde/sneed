@@ -334,7 +334,7 @@ MUTATIONS = [
     ("engine choice: the runner ignores --engine builtin", HL, "outcome = engine === null ? await deps.analyzeBuiltin(text, common) : await deps.analyze(text, { ...common, engine });", "outcome = await deps.analyze(text, { ...common, engine: engine! });"),
     # (no mutation for the k > n shortcut in atLeast, which gives the same FALSE by the rows; none for the parent's hard terminate after the grace period, which only matters for a solver that stops ticking: the cooperative check ends every run in the tests first)
     ("bdd: the cache budget is off", BD, "if (cached > this.limits.maxCached) throw new SolveAborted('too-much-memory');", ""),
-    ("bdd: a cancel is not heard while the solver computes", BI, "const onAbort = (): void => finish({ ok: false, why: 'cancelled' });", "const onAbort = (): void => undefined;"),
+    ("bdd: a cancel is not heard while the solver computes", BI, "const onAbort = (): void => finish(fail({ ok: false, why: 'cancelled' }));", "const onAbort = (): void => undefined;"),
     ("bdd: a worker out of memory is called an internal error", BI, "e.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'too-much-memory' : 'internal'", "'internal'"),
     ("bdd: the checks after the solver ignore the deadline", BA, "if (now() > deadline) throw new AssessAborted('timeout');", "if (false as boolean) throw new AssessAborted('timeout');"),
     ("bdd: MCUB loses a small probability to cancellation", BA, ": -Math.expm1(pc.reduce((a, x) => a + Math.log1p(-x), 0));", ": 1 - pc.reduce((a, x) => a * (1 - x), 1);"),
@@ -557,6 +557,47 @@ MUTATIONS += [
     sm("the leak check reports example names", "      if (!keep(name)) leaks.push({ kind: 'user-folder'", "      if (true as boolean) leaks.push({ kind: 'user-folder'"),
 ]
 
+# Importance measure mutations.
+IMP = ROOT / "src/engines/bdd/importance.ts"
+IMPORTANCE_SUITE = ("tests/unit/importance.test.ts tests/unit/server.test.ts tests/unit/web-editor.test.ts", 240)
+
+
+def mi(name: str, old: str, new: str, f: pathlib.Path = IMP) -> tuple:
+    return (f"importance: {name}", f, old, new, IMPORTANCE_SUITE)
+
+
+MUTATIONS += [
+    mi("the failed state is not certain failure", "    p[i] = 1;\n    const failed", "    p[i] = 0.9;\n    const failed"),
+    mi("the working state is not certain working", "    p[i] = 0;\n    const works", "    p[i] = 0.1;\n    const works"),
+    mi("a probability is not put back", "    p[i] = q;\n", ""),
+    mi("Birnbaum is only the failed side", "birnbaum: failed - works,", "birnbaum: failed,"),
+    mi("RAW divides by the wrong thing", "raw: top > 0 ? failed / top : null,", "raw: top > 0 ? failed / works : null,"),
+    mi("RAW of a zero top is a number", "raw: top > 0 ? failed / top : null,", "raw: failed / top,"),
+    mi("RRW of a zero denominator is infinity", "rrw: top > 0 && works > 0 ? top / works : null,", "rrw: top > 0 ? top / works : null,"),
+    mi("RRW is the inverse", "rrw: top > 0 && works > 0 ? top / works : null,", "rrw: top > 0 && works > 0 ? works / top : null,"),
+    mi("an infinite RRW is not flagged", "rrwInfinite: top > 0 && works === 0,", "rrwInfinite: false,"),
+    mi("an infinite RRW is flagged for a zero top", "rrwInfinite: top > 0 && works === 0,", "rrwInfinite: works === 0,"),
+    mi("FV is relative to the wrong thing", "fv: top > 0 ? (top - works) / top : null,", "fv: top > 0 ? (top - works) / failed : null,"),
+    mi("FV of a zero top is a number", "fv: top > 0 ? (top - works) / top : null,", "fv: (top - works) / top,"),
+    mi("the table is sorted smallest first", "rows.sort((a, b) => b.birnbaum - a.birnbaum ||", "rows.sort((a, b) => a.birnbaum - b.birnbaum ||"),
+    mi("ties are not broken by id", " || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));", " || 0);"),
+    mi("the event limit is off by one", "if (n > MAX_IMPORTANCE_EVENTS)", "if (n >= MAX_IMPORTANCE_EVENTS)"),
+    mi("the event limit is gone", "if (n > MAX_IMPORTANCE_EVENTS) throw new SolveAborted('too-many-events');", ""),
+    mi("the work limit is gone", "if (n * bdd.nodeCount > (opts.maxWork ?? MAX_IMPORTANCE_WORK)) throw new SolveAborted('too-many-nodes');", ""),
+    mi("the work limit ignores the node count", "n * bdd.nodeCount >", "n >"),
+    mi("an invalid model gets a table", "if (!validation.valid) return send(res, 200, { kind: 'refused', errors: validation.errors } satisfies ImportanceResponse);", "", SA),
+    mi("names are not given", "...(names.get(r.id) ? { name: names.get(r.id)! } : {})", "", SA),
+    mi("a table does not wait its turn", "      const job = await takeTurn(res, requestId);\n      if (!job) return;\n      try {\n        const answer", "      const job = { id: 0, requestId, abort: new AbortController(), dropped: false, start: () => undefined } as unknown as { id: number };\n      try {\n        const answer", SA),
+    mi("a table does not give its turn back", "      } finally {\n        release(job);\n      }\n    }\n    if (p === '/api/run/lookup'", "      } finally {\n        void job;\n      }\n    }\n    if (p === '/api/run/lookup'", SA),
+    mi("a failure is reported as a table", "if (!answer.ok) return send(res, 200, { kind: 'failed'", "if (false as boolean) return send(res, 200, { kind: 'failed'", SA),
+    mi("a table outlives an edit", "if (!d || d.text !== this.text) return null;", "if (!d) return null;", WE),
+    mi("the table can be asked for an unchecked edit", "return !this.importanceBusy && this.validation?.valid === true && this.validatedText === this.text;", "return !this.importanceBusy && this.validation?.valid === true;", WE),
+    mi("a second press during the check also asks", "    this.importanceBusy = true; // before the first await, so a second press while the model is being checked is ignored\n    this.emit();\n    const mine = ++this.importanceSeq;", "    const mine = ++this.importanceSeq;", WE),
+    mi("an old answer is shown", "if (mine === this.importanceSeq && r.kind !== 'dequeued') this.importanceData", "if (r.kind !== 'dequeued') this.importanceData", WE),
+    mi("an invalid model is sent", "if (this.validation?.valid !== true) {\n      this.importanceBusy = false;", "if (false as boolean) {\n      this.importanceBusy = false;", WE),
+    mi("a thrown error is shown as nothing", "this.importanceData = { text, model_hash, response: { kind: 'failed', why: 'internal', message: `Could not compute the importance table: ${(e as Error).message}` } };", "void 0;", WE),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -617,6 +658,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("figure:")]
     if only == "scrub":  # just the publication scrub mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("scrub:")]
+    if only == "importance":  # just the importance measure mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("importance:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

@@ -191,6 +191,24 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     job.start();
     return true;
   };
+  /**
+   * Waits for this request's turn at the engine. Returns the job (the caller must `release` it), or null when the request left the queue
+   * first (cancelled by its id, or its client went away): the `dequeued` reply has then been sent already. Throws E_BUSY when the queue is full.
+   */
+  const takeTurn = async (res: http.ServerResponse, requestId: string | null): Promise<Job | null> => {
+    if (queue.length >= MAX_QUEUE) throw new HttpError(409, 'E_BUSY', `${MAX_QUEUE} runs are already waiting; try again when one has finished`);
+    const job: Job = { id: nextRun++, requestId, abort: new AbortController(), dropped: false, start: () => undefined };
+    res.on('close', () => {
+      if (res.writableEnded) return;
+      if (!dequeue(job)) job.abort.abort(); // the browser went away: leave the queue, or stop the engine
+    });
+    await acquire(job);
+    if (job.dropped) {
+      if (!res.writableEnded && !res.destroyed) send(res, 200, { kind: 'dequeued' });
+      return null;
+    }
+    return job;
+  };
   let ownPort = 0;
 
   const allowedHosts = (): string[] => [`127.0.0.1:${ownPort}`, `localhost:${ownPort}`, `[::1]:${ownPort}`];
@@ -258,17 +276,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const engine = (body.engine ?? 'builtin') as EngineChoice;
       if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD', `the engine must be one of ${ENGINES.join(', ')}`);
       const requestId = optRequestId(body.request_id);
-      if (queue.length >= MAX_QUEUE) throw new HttpError(409, 'E_BUSY', `${MAX_QUEUE} runs are already waiting; try again when one has finished`);
-      const job: Job = { id: nextRun++, requestId, abort: new AbortController(), dropped: false, start: () => undefined };
-      res.on('close', () => {
-        if (res.writableEnded) return;
-        if (!dequeue(job)) job.abort.abort(); // the browser went away: leave the queue, or stop the engine
-      });
-      await acquire(job);
-      if (job.dropped) {
-        if (!res.writableEnded && !res.destroyed) return send(res, 200, { kind: 'dequeued' });
-        return;
-      }
+      const job = await takeTurn(res, requestId);
+      if (!job) return;
       try {
         const common = { runsDir: opts.runsDir, settings: { method: chosen }, signal: job.abort.signal };
         const out = engine === 'scram' ? await analyzeFn(text, common) : await builtinFn(text, common);
@@ -297,17 +306,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const validation = validateModelText(text);
       if (!validation.valid) return send(res, 200, { kind: 'refused', errors: validation.errors } satisfies ImportanceResponse);
       const model = JSON.parse(text) as NativeModel;
-      if (queue.length >= MAX_QUEUE) throw new HttpError(409, 'E_BUSY', `${MAX_QUEUE} runs are already waiting; try again when one has finished`);
-      const job: Job = { id: nextRun++, requestId, abort: new AbortController(), dropped: false, start: () => undefined };
-      res.on('close', () => {
-        if (res.writableEnded) return;
-        if (!dequeue(job)) job.abort.abort();
-      });
-      await acquire(job);
-      if (job.dropped) {
-        if (!res.writableEnded && !res.destroyed) return send(res, 200, { kind: 'dequeued' } satisfies ImportanceResponse);
-        return;
-      }
+      const job = await takeTurn(res, requestId);
+      if (!job) return;
       try {
         const answer = await importanceIsolated(model, { timeoutMs: 15_000, signal: job.abort.signal });
         if (!answer.ok) return send(res, 200, { kind: 'failed', why: answer.why, message: importanceFailureText(answer.why) } satisfies ImportanceResponse);
