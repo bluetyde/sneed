@@ -88,7 +88,7 @@ export type Method = 'exact' | 'rare-event' | 'mcub';
 
 /** What the editor needs from the server. The editor takes this interface so tests can supply a fake. */
 export interface Api {
-  health(): Promise<{ name: string; runtime: RuntimeInfo; engines?: { builtin: { available: boolean; name: string; version: string }; scram: RuntimeInfo } }>;
+  health(): Promise<{ name: string; runtime: RuntimeInfo; engines?: { builtin: { available: boolean; name: string; version: string; sha256?: string }; scram: RuntimeInfo } }>;
   validate(text: string): Promise<ValidateResponse>;
   run(text: string, method: Method, engine?: Engine, requestId?: string): Promise<RunResponse>;
   cancel(requestId?: string): Promise<{ cancelled: boolean }>;

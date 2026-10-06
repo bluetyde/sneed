@@ -1,3 +1,4 @@
+import { BDD_SOURCE_SHA256 } from '../../src/engines/bdd/build-id.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -640,7 +641,7 @@ describe('the engine choice (plan 10)', () => {
   it('describe lists both engines and says which one the runner uses by default', async () => {
     const { d, calls } = deps({ defaultEngine: () => 'builtin' });
     await main(['describe'], d);
-    expect(reply(calls).engines).toMatchObject({ default: 'builtin', scram: { installed: true }, builtin: { available: true, name: 'sneed-bdd' } });
+    expect(reply(calls).engines).toMatchObject({ default: 'builtin', scram: { installed: true }, builtin: { available: true, name: 'sneed-bdd', sha256: BDD_SOURCE_SHA256 } });
   });
 
   it('the default is the built-in engine, which needs no SCRAM runtime (flipped on 2026-10-06 at the user request)', async () => {

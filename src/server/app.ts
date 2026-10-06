@@ -7,6 +7,7 @@ import { listRuns, MAX_LOOKUP_RUNS, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
+import { BDD_SOURCE_SHA256 } from '../engines/bdd/build-id.js';
 import { importanceIsolated } from '../engines/bdd/isolate.js';
 import { IMPORTANCE_ASSUMPTIONS, importanceFailureText, type ImportanceResponse } from '../core/importance.js';
 import { crossCheck, type CrossCheck, type CrossCheckUnavailable } from '../engines/crosscheck.js';
@@ -230,7 +231,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
 
     if (p === '/api/health' && method === 'GET') {
       const scram = runtimeInfo();
-      return send(res, 200, { name: SERVER_NAME, runtime: scram, engines: { builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, scram } });
+      return send(res, 200, { name: SERVER_NAME, runtime: scram, engines: { builtin: { available: true, name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 }, scram } });
     }
 
     if (p === '/api/validate' && method === 'POST') return send(res, 200, validateWithHashes(needText(await readJson(req))));
@@ -336,7 +337,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         return send(res, 200, none);
       }
       // the engine build must be the same: for SCRAM the version AND the hash of the binary the installed runtime resolves to
-      let wantSha: string | null = null;
+      let wantSha: string | null = BDD_SOURCE_SHA256; // built-in: the hash of its source files; SCRAM: its binary's hash, below
       let wantVersion: string | null = BDD_ENGINE_VERSION;
       if (engine === 'scram') {
         try {

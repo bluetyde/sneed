@@ -609,6 +609,31 @@ MUTATIONS += [
     mi("a thrown error is shown as nothing", "this.importanceData = { text, model_hash, response: { kind: 'failed', why: 'internal', message: `Could not compute the importance table: ${(e as Error).message}` } };", "void 0;", WE),
 ]
 
+# Built-in engine identity (source hash) mutations.
+EID = ROOT / "scripts/lib/engine-id.ts"
+EID_SUITE = ("tests/unit/engine-id.test.ts tests/unit/server.test.ts tests/unit/headless.test.ts", 150)
+BA_FILE = ROOT / "src/engines/bdd/analyze.ts"
+
+
+def em(name: str, old: str, new: str, f: pathlib.Path = EID) -> tuple:
+    return (f"engine id: {name}", f, old, new, EID_SUITE)
+
+
+MUTATIONS += [
+    em("line endings change the identity", ".replace(/\\r\\n/g, '\\n')", ""),
+    em("the order of the files matters", "[...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map(", "[...files].map("),
+    em("the path is not part of the identity", "`${f.path}\\n${sha256(normalise(f.content))}\\n`", "`${sha256(normalise(f.content))}\\n`"),
+    em("the separator is missing", "`${f.path}\\n${sha256(normalise(f.content))}\\n`", "`${f.path}${sha256(normalise(f.content))}`"),
+    em("the shared result checks are not covered", "export const EXTRA_SOURCE_FILES = ['src/core/result.ts', 'src/core/canonical.ts'];", "export const EXTRA_SOURCE_FILES: string[] = [];"),
+    em("only some solver files are covered", ".filter((f) => f.endsWith('.ts'))", ".filter((f) => f.endsWith('solve.ts'))"),
+    em("the generated file hashes itself", "    .filter((f) => f !== BUILD_ID_FILE);", "    .filter(() => true);"),
+    em("the file list is not sorted", "const list = files.map((f) => f.path).sort();", "const list = files.map((f) => f.path);"),
+    em("a record names no build", "sha256: BDD_SOURCE_SHA256, runtime: null };", "sha256: null, runtime: null };", BA_FILE),
+    em("reuse ignores the build", " && r.engine_sha256 === wantSha);", ");", SA),
+    em("reuse matches a record with no build", "let wantSha: string | null = BDD_SOURCE_SHA256;", "let wantSha: string | null = null;", SA),
+    em("the runner does not show the build", "version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 } },", "version: BDD_ENGINE_VERSION } },", HL),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -671,6 +696,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("scrub:")]
     if only == "importance":  # just the importance measure mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("importance:")]
+    if only == "engineid":  # just the built-in engine identity mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("engine id:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

@@ -15,6 +15,7 @@
     "build:web": "vite build",
     "build:cli": "node scripts/build-cli.mjs",
     "gen:seed-oracles": "tsx scripts/gen-seed-oracles.ts",
+    "gen:engine-id": "tsx scripts/gen-engine-id.ts",
     "e2e": "vite build && playwright test -c e2e/playwright.config.ts",
     "build": "tsc --noEmit && vite build",
     "dev:server": "tsx src/server/main.ts --dev",

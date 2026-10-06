@@ -12,6 +12,7 @@ import { reachableEvents } from '../../core/bounds.js';
 import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
+import { BDD_SOURCE_SHA256 } from './build-id.js';
 import type { BddLimits } from './bdd.js';
 
 export interface BuiltinOptions {
@@ -85,7 +86,8 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
     if (opts.signal?.aborted) throw new AssessAborted('cancelled');
     if (now() > deadline) throw new AssessAborted('timeout');
   };
-  const engine = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null };
+  // the identity of this engine is the hash of its source files (build-id.ts, generated and checked by a test): the same field SCRAM fills with its binary's hash
+  const engine = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null };
   const base = { model, settings, engine, expectedVersion: BDD_ENGINE_VERSION, expectedName: BDD_ENGINE_NAME, hashes, exportedEvents: events, check };
   const idle = { exit: 0, timedOut: false, cancelled: false, stderr: '' };
   const finish = (record: ResultRecord, extra: Record<string, unknown> = {}): AnalyzeOutcome => {
