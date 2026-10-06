@@ -18,6 +18,7 @@ import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../r
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
+import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
 import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
 export const SERVER_NAME = 'sneed';
@@ -227,6 +228,18 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     }
   };
 
+  /** A saved fault-tree model by name, as an event tree sees it: its text and what the validator needs to know. Null for anything that is not a valid saved model. */
+  const loadFaultTree = (name: string): { text: string; ref: ModelRef } | null => {
+    try {
+      const text = readModel(opts.projectDir, name);
+      if (!validateModelText(text).valid) return null;
+      const model = JSON.parse(text) as NativeModel;
+      return { text, ref: { hash: modelHash(model), events: new Set(model.events.map((e) => e.id)), gates: new Set(model.gates.map((g) => g.id)) } };
+    } catch {
+      return null; // no such model, an unreadable one, or a name that is not a model name: all "not found" to the validator
+    }
+  };
+
   async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
     const method = req.method ?? 'GET';
     const p = url.pathname;
@@ -243,17 +256,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     if (p === '/api/event-trees' && method === 'GET') return send(res, 200, { trees: listModels(eventTreeDir) });
     if (p === '/api/event-tree/validate' && method === 'POST') {
       const text = needText(await readJson(req));
-      const resolveModel = (name: string): ModelRef | null => {
-        try {
-          const modelText = readModel(opts.projectDir, name);
-          if (!validateModelText(modelText).valid) return null;
-          const model = JSON.parse(modelText) as NativeModel;
-          return { hash: modelHash(model), events: new Set(model.events.map((e) => e.id)), gates: new Set(model.gates.map((g) => g.id)) };
-        } catch {
-          return null; // no such model, an unreadable one, or a name that is not a model name: all "not found" to the validator
-        }
-      };
-      const v = validateEventTreeText(text, { resolveModel });
+      const v = validateEventTreeText(text, { resolveModel: (name) => loadFaultTree(name)?.ref ?? null });
       let tree_hash: string | null = null;
       if (v.valid) {
         try {
@@ -263,6 +266,32 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         }
       }
       return send(res, 200, { ...v, tree_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+    }
+    if (p === '/api/event-tree/run' && method === 'POST') {
+      // Analyse an event tree against the saved fault-tree model it names (plan 13, S2). Checked first, outside the queue; then it takes its
+      // turn like a run, can be cancelled by request_id, and writes a run folder with its result record (kind sneed.event-tree-result).
+      const body = await readJson(req);
+      const text = needText(body);
+      const requestId = optRequestId(body.request_id);
+      if (body.approximation !== undefined && typeof body.approximation !== 'boolean') throw new HttpError(400, 'E_FIELD', 'approximation must be true or false');
+      let named = '';
+      try {
+        named = String((JSON.parse(text) as { fault_tree_model?: { name?: unknown } }).fault_tree_model?.name ?? '');
+      } catch {
+        /* not JSON: the validator reports it */
+      }
+      const loaded = loadFaultTree(named);
+      const v = validateEventTreeText(text, { resolveModel: (n) => (loaded && n === named ? loaded.ref : null) });
+      if (!v.valid || !loaded) return send(res, 200, { kind: 'refused', errors: v.errors, warnings: v.warnings });
+      const job = await takeTurn(res, requestId);
+      if (!job) return;
+      try {
+        const out = await analyzeEventTreeBuiltin(text, loaded.text, { runsDir: opts.runsDir, signal: job.abort.signal, approximation: body.approximation === true });
+        if (out.kind === 'refused') return send(res, 200, out);
+        return send(res, 200, { kind: 'ran', run_id: path.basename(out.runDir), record: out.record });
+      } finally {
+        release(job);
+      }
     }
     const em = /^\/api\/event-trees\/([^/]+)$/.exec(p);
     if (em) {
