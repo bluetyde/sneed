@@ -129,6 +129,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [x] 2026-10-05 Engine route: WSL2 via argument list (user).
 - [x] 2026-10-05 SCRAM licensing and install: the PRA app never bundles SCRAM; SEED's dedicated installer fetches and builds the pinned source (user). The app publishes a SCRAM runtime recipe; SEED executes it ([SEED plan 11](../experiment-studio/docs/plans/11-runtime-and-shared-acceptance.md) model: staged, hash-checked, isolated versioned location, native smoke check, atomic activation). Distribution license of the app itself and the repo name remain open.
 - [x] 2026-10-05 Repo: private `bluetyde/sneed` (user said go ahead; name chosen as the obvious one and found free).
+- [x] 2026-10-06 Publication repo: `bluetyde/sneed-pra`, created from the scrubbed tree as ONE commit with no earlier history (the working repo `bluetyde/sneed` keeps the full history, which names a home folder and account; see docs/PUBLICATION.md). Created private; making it public is the owner's step.
 - [x] 2026-10-05 Use the installed runtime by default instead of the development build (user); implemented: `analyze()` resolves the installed runtime and fails with a typed `E_SETUP_REQUIRED` if none is installed. Run `npm run runtime -- install` once before using or testing the engine.
 - [x] 2026-10-05 Rare-event sum above 1: show it labelled, do not fail (user); implemented, see Known engine defects.
 - [x] 2026-10-05 Upstream report of the SCRAM `atleast` defect: no, not now (user); tracked under Known engine defects.
