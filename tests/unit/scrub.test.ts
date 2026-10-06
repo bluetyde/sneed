@@ -71,6 +71,7 @@ describe('account names with spaces, encoded names, case and file URLs', () => {
     expect(scrubText('C:/Users/Zed Smith/work', { usernames: ['Zed Smith'] })).toBe('C:/Users/<user>/work');
     expect(scrubText('file:///C:/Users/Zed%20Smith/work', { usernames: ['Zed Smith'] })).toBe('file:///C:/Users/<user>/work');
     expect(scrubText('by zed smith', { usernames: ['Zed Smith'] })).toBe('by <user>');
+    expect(scrubText('name=Zed%20Smith&x=1', { usernames: ['Zed Smith'] })).toBe('name=<user>&x=1'); // encoded, outside any path
     expect(findLeaks('file:///C:/Users/Zed%20Smith/work', { usernames: ['Zed Smith'] }).length).toBeGreaterThan(0);
   });
 
