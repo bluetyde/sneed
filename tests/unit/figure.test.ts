@@ -143,3 +143,47 @@ describe('text wrapping and file names', () => {
     expect(figureFileStem(D.setModelName(base(), 'x'.repeat(100)), null).length).toBe(64);
   });
 });
+
+describe('gaps closed by mutation checks', () => {
+  it('every special character of a name is escaped, in order', () => {
+    const svg = figureSvg(D.setName(base(), 'E1', '<b>"x"&y</b>'));
+    expect(svg).toContain('E1 &lt;b&gt;&quot;x&quot;&amp;y&lt;/b&gt;');
+    expect(svg).not.toContain('&amp;amp;');
+  });
+
+  it('the reasons of an incomplete run are listed, and the status and the completeness each decide', () => {
+    expect(resultLines({ record: record({ status: 'truncated', completeness: 'truncated', reasons: ['timeout'] }), stale: false })[1]).toContain('took too long');
+    expect(resultLines({ record: record({ status: 'failed', completeness: 'complete' }), stale: false })[0]).toContain('DIAGNOSTIC ONLY');
+    expect(resultLines({ record: record({ status: 'completed', completeness: 'truncated' }), stale: false })[0]).toContain('DIAGNOSTIC ONLY');
+    expect(resultLines({ record: record(), stale: false })[0]).not.toContain('DIAGNOSTIC');
+  });
+
+  it('exactly the repeated uses are dashed: their boxes and their edges, not the gates', () => {
+    const doc = ORACLE_MODELS['pra-shared'] as unknown as D.Doc;
+    const v = buildVisual(doc);
+    const refs = v.nodes.filter((n) => n.kind === 'reference' || n.kind === 'missing').length;
+    expect(refs).toBeGreaterThan(0);
+    expect((figureSvg(doc).match(/stroke-dasharray="5 3"/g) ?? []).length).toBe(2 * refs);
+    expect(figureSvg(base())).not.toContain('stroke-dasharray');
+  });
+
+  it('long caption lines are wrapped to the width of the figure', () => {
+    const svg = figureSvg(base(), { result: { record: record({ method: 'rare-event', top_event_probability: 1, caveats: ['approximation-exceeds-1'] }), stale: false } });
+    const width = Number(/width="(\d+)" height/.exec(svg)![1]);
+    const lines = [...svg.matchAll(/xml:space="preserve">([^<]*)</g)].map((m) => m[1]!);
+    expect(lines.length).toBeGreaterThan(6);
+    for (const l of lines) expect(l.length * 6.6).toBeLessThanOrEqual(width - 48 + 6.6);
+  });
+
+  it('a wide drawing makes a wide figure, and the tree starts just below the caption', () => {
+    let d = base();
+    for (let i = 0; i < 9; i++) d = D.addEvent(d, { parent: 'G1' }).doc;
+    const v = buildVisual(d);
+    expect(v.bounds.w).toBeGreaterThan(700);
+    const svg = figureSvg(d);
+    expect(Number(/width="(\d+)" height/.exec(svg)![1])).toBeGreaterThanOrEqual(v.bounds.w + 48);
+    const ty = Number(/<g transform="translate\(([-\d.]+) ([-\d.]+)\)">/.exec(svg)![2]);
+    expect(v.bounds.y + ty).toBeCloseTo(24 + 20 + 2 * 16 + 10, 5); // margin + caption block
+  });
+});
+
