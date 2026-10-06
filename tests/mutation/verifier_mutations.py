@@ -639,6 +639,63 @@ MUTATIONS += [
     em("the runner does not show the build", "version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 } },", "version: BDD_ENGINE_VERSION } },", HL),
 ]
 
+# Event tree (plan 13, stage S1) mutations.
+ET = ROOT / "src/core/event-tree.ts"
+ET_SUITE = ("tests/unit/event-tree.test.ts tests/unit/server.test.ts", 200)
+
+
+def tm(name: str, old: str, new: str, f: pathlib.Path = ET) -> tuple:
+    return (f"event tree: {name}", f, old, new, ET_SUITE)
+
+
+MUTATIONS += [
+    tm("a heading with a condition is always asked", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = true;"),
+    tm("a condition on a heading that was not asked is satisfied", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier === undefined || earlier.branch === h.asked_only_if.branch;"),
+    tm("a condition ignores the branch taken", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier !== undefined;"),
+    tm("only the works branch is walked", "    walk(i + 1, [...path, { heading: h.id, branch: 'fails' }]);\n", ""),
+    tm("the path count is not capped", "    if (out.length > MAX_SEQUENCES) return;\n", ""),
+    tm("too many headings are enumerated", "  if (headings.length > MAX_HEADINGS) return out;\n", ""),
+    tm("the heading limit is off by one", "export const MAX_HEADINGS = 12;", "export const MAX_HEADINGS = 13;"),
+    tm("the sequence limit is off by one", "export const MAX_SEQUENCES = 4096;", "export const MAX_SEQUENCES = 4097;"),
+    tm("no frequency is not refused as that", "if (path === '/initiating_event' && missing === 'frequency') return issue('E_NO_FREQUENCY'", "if (false as boolean) return issue('E_NO_FREQUENCY'"),
+    tm("no unit is not refused as that", "if (path === '/initiating_event' && missing === 'unit') return issue('E_NO_UNIT'", "if (false as boolean) return issue('E_NO_UNIT'"),
+    tm("a frequency in range is mapped wrongly", "if (path === '/initiating_event/frequency') return issue('E_FREQUENCY_RANGE'", "if (false as boolean) return issue('E_FREQUENCY_RANGE'"),
+    tm("a zero frequency is not noted", "if (ie.frequency === 0) warnings.push(", "if (false as boolean) warnings.push("),
+    tm("a repeated heading is accepted", "    if (headingIndex.has(h.id)) errors.push(issue('E_DUP_HEADING'", "    if (false as boolean) errors.push(issue('E_DUP_HEADING'"),
+    tm("a repeated end state is accepted", "    if (endIds.has(e.id)) errors.push(issue('E_DUP_ID'", "    if (false as boolean) errors.push(issue('E_DUP_ID'"),
+    tm("a condition on a later heading is accepted", "if (at === undefined || at >= i) {", "if (at === undefined) {"),
+    tm("a condition on itself is accepted", "if (at === undefined || at >= i) {", "if (at === undefined || at > i) {"),
+    tm("a condition on an unknown heading is accepted", "if (at === undefined || at >= i) {", "if (at >= i) {"),
+    tm("the model is not looked up", "  if (ctx.resolveModel) {\n    modelChecked = true;", "  if (false as boolean) {\n    modelChecked = true;"),
+    tm("a missing model is accepted", "    if (!m) errors.push(issue('E_MODEL_NOT_FOUND'", "    if (false as boolean) errors.push(issue('E_MODEL_NOT_FOUND'"),
+    tm("a stale model is accepted", "      if (m.hash !== ref.model_hash) errors.push(", "      if (false as boolean) errors.push("),
+    tm("an unknown heading event is accepted", "if (!m.events.has(h.event) && !m.gates.has(h.event)) errors.push(", "if (false as boolean) errors.push("),
+    tm("a heading may only name a gate", "if (!m.events.has(h.event) && !m.gates.has(h.event)) errors.push(", "if (!m.gates.has(h.event)) errors.push("),
+    tm("a heading may only name a basic event", "if (!m.events.has(h.event) && !m.gates.has(h.event)) errors.push(", "if (!m.events.has(h.event)) errors.push("),
+    tm("sequences are not checked when a condition is wrong", "const headingsUsable = headings.length <= MAX_HEADINGS && conditionsOk && headingIndex.size === headings.length;", "const headingsUsable = headings.length <= MAX_HEADINGS;"),
+    tm("an unknown heading in a path is accepted", "      if (unknown) {", "      if (false as boolean) {"),
+    tm("a path that is not allowed is accepted", "      } else if (!allowed.has(key)) {", "      } else if (false as boolean) {"),
+    tm("the order of the steps is not explained", "const reason = !ordered ?", "const reason = false as boolean ?"),
+    tm("a repeated sequence is accepted", "      } else if (seen.has(key)) {", "      } else if (false as boolean) {"),
+    tm("a missing sequence is accepted", "    if (missing.length) {", "    if (false as boolean) {"),
+    tm("missing sequences are not counted", "`${missing.length} of the ${complete.length} possible path", "`${missing.length} of the ${missing.length} possible path"),
+    tm("an empty end state is accepted", "    if (s.end_state === '') errors.push(", "    if (false as boolean) errors.push("),
+    tm("an undefined end state is accepted", "    else if (!endIds.has(s.end_state)) errors.push(", "    else if (false as boolean) errors.push("),
+    tm("an unused end state is not noted", "    if (!used.has(e.id)) warnings.push(", "    if (false as boolean) warnings.push("),
+    tm("unknown fields are not noted", "for (const k of Object.keys(doc)) if (!KNOWN_TOP.includes(k)) warnings.push(", "for (const k of [] as string[]) if (!KNOWN_TOP.includes(k)) warnings.push("),
+    tm("the rules run on a document with a bad structure", "  } else modelChecked = semantic(doc, ctx, errors, warnings);", "  }\n  if (isObj(doc.headings) || true) {\n    try {\n      modelChecked = semantic(doc, ctx, errors, warnings);\n    } catch {\n      /* nothing */\n    }\n  }"),
+    tm("the hash includes names", "    end_states: doc.end_states.map((e) => e.id).sort(),", "    end_states: doc.end_states.map((e) => e.id + (e as { name?: string }).name).sort(),"),
+    tm("the hash depends on the order of the sequences", "  for (const s of doc.sequences) ends[pathKey(s.path)] = s.end_state;", "  for (const s of doc.sequences) ends[doc.sequences.indexOf(s) + pathKey(s.path)] = s.end_state;"),
+    tm("the hash ignores the end state of a sequence", "  for (const s of doc.sequences) ends[pathKey(s.path)] = s.end_state;", "  for (const s of doc.sequences) ends[pathKey(s.path)] = '';"),
+    tm("the hash ignores the model it points at", "    fault_tree_model: { name: doc.fault_tree_model.name, model_hash: doc.fault_tree_model.model_hash },", "    fault_tree_model: { name: doc.fault_tree_model.name },"),
+    tm("the hash ignores a condition", "...(h.asked_only_if ? { asked_only_if: { heading: h.asked_only_if.heading, branch: h.asked_only_if.branch } } : {})", ""),
+    tm("event trees share the model folder", "  const eventTreeDir = path.join(opts.projectDir, 'event-trees');", "  const eventTreeDir = opts.projectDir;", SA),
+    tm("a tree name is not checked as a name", "      const name = safeDecode(em[1]!);\n      if (method === 'GET') {", "      const name = safeDecode(em[1]!).replace(/[.][.]/g, '');\n      if (method === 'GET') {", SA),
+    tm("a missing tree is reported as a model", "throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);", "throw e;", SA),
+    tm("a saved model is trusted without validation", "          if (!validateModelText(modelText).valid) return null;\n          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", "          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", SA),
+    tm("a valid tree has no hash", "      if (v.valid) tree_hash = eventTreeHash(JSON.parse(text));", "      void 0;", SA),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -710,6 +767,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("importance:")]
     if only == "engineid":  # just the built-in engine identity mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("engine id:")]
+    if only == "eventtree":  # just the event tree mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
