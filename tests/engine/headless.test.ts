@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:f
 import path from 'node:path';
 import { analyze, type AnalyzeOptions, type AnalyzeOutcome } from '../../src/core/analyze.js';
 import { documentHash, modelHash } from '../../src/core/canonical.js';
-import { engineIdentity } from '../../src/core/engine.js';
+import { engineIdentity, toWslPath } from '../../src/core/engine.js';
+import { accountNames, findLeaks } from '../../src/core/scrub.js';
 import { ENGINE, FROM_RUNTIME } from './engine.js';
 import type { ResultRecord } from '../../src/core/result.js';
 import { enumerate } from '../oracle/enumerate.js';
@@ -144,6 +145,24 @@ describe('refusals happen before any run exists', () => {
   }, 120000);
 });
 
+/** No text file in the run folder names the run folder's real location, the account, or a home folder. */
+function expectNoMachineDetails(runDir: string): void {
+  const names = accountNames();
+  const real = [runDir, toWslPath(runDir), toWslPath(runDir).replace(/ /g, '%20')];
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f);
+      else {
+        const text = readFileSync(f, 'utf8');
+        for (const r of real) expect(text.includes(r), `${path.relative(runDir, f)} contains ${r}`).toBe(false);
+        expect(findLeaks(text, { usernames: names }), path.relative(runDir, f)).toEqual([]);
+      }
+    }
+  };
+  walk(runDir);
+}
+
 describe('engine-side failures are never a success', () => {
   const doc = ORACLE_MODELS['pra-and']!;
 
@@ -151,14 +170,19 @@ describe('engine-side failures are never a success', () => {
     const { record, runDir } = await run(doc, { transformXml: (x) => x.replace('<float value="0.1"/>', '<float value="1.2"/>') });
     expect(record).toMatchObject({ status: 'failed', completeness: 'unknown', top_event_probability: null });
     expect(record.reasons).toEqual(['engine-exit-1', 'engine-error:scram::mef::DomainError']);
-    expect(readFileSync(path.join(runDir, 'log/stderr.txt'), 'utf8')).toContain('DomainError');
+    const stderr = readFileSync(path.join(runDir, 'log/stderr.txt'), 'utf8');
+    expect(stderr).toContain('DomainError');
+    expectNoMachineDetails(runDir);
     expect(existsSync(path.join(runDir, 'native/report.xml'))).toBe(false);
   }, 120000);
 
   it('malformed XML fails', async () => {
-    const { record } = await run(doc, { transformXml: (x) => x.slice(0, x.length - 30) });
+    const { record, runDir } = await run(doc, { transformXml: (x) => x.slice(0, x.length - 30) });
     expect(record.status).toBe('failed');
     expect(record.reasons).toContain('engine-error:scram::xml::ParseError');
+    // this engine message names the input file by its full path: the run folder in it is <run> in the saved log
+    expect(readFileSync(path.join(runDir, 'log/stderr.txt'), 'utf8')).toContain('File: <run>/inputs/model.xml');
+    expectNoMachineDetails(runDir);
   }, 120000);
 
   it('a reference to an undefined event fails', async () => {
@@ -270,6 +294,10 @@ describe('the run directory is a faithful record', () => {
     expect(settings.argv.join(' ')).not.toContain('--cut-off');
     for (const f of ['native/report.xml', 'log/stdout.txt', 'log/stderr.txt']) expect(existsSync(path.join(runDir, f)), f).toBe(true);
     expect(readFileSync(path.join(runDir, 'native/report.xml'), 'utf8')).toContain('<software name="SCRAM" version="0.16.2"');
+    // publication scrub: the folders of this machine are not in the run files, the run folder is <run>
+    expect(settings.argv).toContain('<run>/inputs/model.xml');
+    expect(settings.argv).toContain('<run>/native/report.xml');
+    expectNoMachineDetails(runDir);
   }, 120000);
 
   it('refuses to reuse a run directory and rejects a weak run id', async () => {

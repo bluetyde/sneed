@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { accountNames, scrubText } from './scrub.js';
 import { reachableEvents } from './bounds.js';
 import { documentHash, modelHash } from './canonical.js';
 import { engineIdentity, execInWsl, toWslPath, type EngineConfig } from './engine.js';
@@ -94,7 +95,9 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   const inputPath = path.join(runDir, 'inputs', 'model.xml');
   const reportPath = path.join(runDir, 'native', 'report.xml');
   const argv = ['env', `LD_LIBRARY_PATH=${engineCfg.libs}`, engineCfg.binary, ...METHOD_ARGS[settings.method], '-l', String(settings.limitOrder), toWslPath(inputPath), '-o', toWslPath(reportPath)];
-  writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, argv, export_mapping: exported.mapping }, null, 2) + '\n');
+  // what is written into the run folder never names this machine's folders or account (publication scrub, src/core/scrub.ts); the engine still gets the real argv
+  const scrub = (t: string): string => scrubText(t, { prefixes: [[toWslPath(runDir), '<run>'], [runDir, '<run>']], usernames: accountNames() });
+  writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, argv: argv.map(scrub), export_mapping: exported.mapping }, null, 2) + '\n');
 
   const finish = (record: ResultRecord): AnalyzeOutcome => {
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(record, null, 2) + '\n');
@@ -113,7 +116,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     identity = { ...(await engineIdentity(engineCfg)), runtime: engineCfg.runtime ?? null };
   } catch (e) {
     identity = { name: 'unknown', version: 'unknown', sha256: null };
-    writeFileSync(path.join(runDir, 'log', 'stderr.txt'), `identity check failed: ${(e as Error).message}\n`);
+    writeFileSync(path.join(runDir, 'log', 'stderr.txt'), scrub(`identity check failed: ${(e as Error).message}\n`));
     return assessWith(identity, { exit: null, timedOut: false, cancelled: false, stderr: 'engine identity unavailable' }, null);
   }
   if (engineCfg.expectedSha256 && identity.sha256 !== engineCfg.expectedSha256) {
@@ -128,8 +131,8 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     return assessWith(identity, { exit: null, timedOut: !opts.signal?.aborted, cancelled: opts.signal?.aborted === true, stderr: '' }, null);
   }
   const result = await execInWsl(engineCfg.distro, argv, { timeoutMs: remaining, ...(opts.signal ? { signal: opts.signal } : {}), ownerTag: toWslPath(runDir) });
-  writeFileSync(path.join(runDir, 'log', 'stdout.txt'), result.stdout, 'utf8');
-  writeFileSync(path.join(runDir, 'log', 'stderr.txt'), result.stderr, 'utf8');
+  writeFileSync(path.join(runDir, 'log', 'stdout.txt'), scrub(result.stdout), 'utf8');
+  writeFileSync(path.join(runDir, 'log', 'stderr.txt'), scrub(result.stderr), 'utf8');
   const reportTooLarge = existsSync(reportPath) && statSync(reportPath).size > MAX_REPORT_BYTES; // never read into memory
   const reportText = existsSync(reportPath) && !reportTooLarge ? readFileSync(reportPath, 'utf8') : null;
   return finish(assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: result.exit, timedOut: result.timedOut, cancelled: result.cancelled, stderr: result.stderr }, reportText, reportTooLarge, hashes, exportedEvents: exported.mapping.events, check }));
