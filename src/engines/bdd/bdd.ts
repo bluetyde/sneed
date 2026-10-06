@@ -122,6 +122,26 @@ export class Bdd {
   }
 
   /**
+   * Can the function be true for some assignment that respects `forced` (a variable index to 0 or 1, or undefined for a free variable)?
+   * A yes or no about structure, with no probabilities in it: a product of many probabilities can underflow to 0, a path through the diagram cannot.
+   */
+  satisfiable(root: number, forced: (variable: number) => 0 | 1 | undefined): boolean {
+    const memo = new Map<number, boolean>();
+    const go = (n: number): boolean => {
+      if (n === FALSE) return false;
+      if (n === TRUE) return true;
+      const hit = memo.get(n);
+      if (hit !== undefined) return hit;
+      this.charge();
+      const f = forced(this.v[n]!);
+      const r = f === 0 ? go(this.lo[n]!) : f === 1 ? go(this.hi[n]!) : go(this.lo[n]!) || go(this.hi[n]!);
+      memo.set(n, r);
+      return r;
+    };
+    return go(root);
+  }
+
+  /**
    * The function that is true exactly when `a` is false. A negation is not coherent: the result is for evaluating probabilities of
    * conditions such as "this heading worked", never for cut sets (`minimalCutSets` is defined for coherent functions only).
    */

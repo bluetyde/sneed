@@ -444,3 +444,26 @@ describe('a product-order limit is honoured like SCRAM honours it (found when SE
   }, 120_000);
 });
 
+describe('Bdd.satisfiable: a yes or no about structure, with no probabilities in it', () => {
+  it('follows forced variables and tries both branches of free ones, and does not underflow on a long AND', () => {
+    const bdd = new Bdd({ maxNodes: 100000, maxCutSets: 1000, maxCached: 100000 });
+    const v = [0, 1, 2].map((i) => bdd.variable(i));
+    const f = bdd.and(v[0]!, bdd.or(v[1]!, v[2]!)); // x0 and (x1 or x2)
+    const free = (): undefined => undefined;
+    expect(bdd.satisfiable(f, free)).toBe(true);
+    expect(bdd.satisfiable(f, (x) => (x === 0 ? 0 : undefined))).toBe(false); // x0 cannot fail
+    expect(bdd.satisfiable(f, (x) => (x === 1 || x === 2 ? 0 : undefined))).toBe(false); // neither x1 nor x2 can fail
+    expect(bdd.satisfiable(f, (x) => (x === 1 ? 0 : undefined))).toBe(true); // x2 can
+    expect(bdd.satisfiable(f, (x) => (x === 0 ? 1 : undefined))).toBe(true);
+    expect(bdd.satisfiable(bdd.not(f), (x) => (x === 0 ? 1 : x === 1 ? 1 : undefined))).toBe(false); // x0 and x1 failed: f is true, so not f is impossible
+    expect(bdd.satisfiable(0, free)).toBe(false);
+    expect(bdd.satisfiable(1, free)).toBe(true);
+    // 3000 events in an AND: the probability of all failing at one half each is 2^-3000 (zero as a double), but it is possible
+    let big = 1;
+    for (let i = 2999; i >= 0; i--) big = bdd.and(bdd.variable(i), big); // last variable first: one new node each
+    expect(bdd.probability(big, Array.from({ length: 3000 }, () => 0.5))).toBe(0);
+    expect(bdd.satisfiable(big, free)).toBe(true);
+    expect(bdd.satisfiable(big, (x) => (x === 2999 ? 0 : undefined))).toBe(false);
+  });
+});
+
