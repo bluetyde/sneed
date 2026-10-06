@@ -698,7 +698,7 @@ MUTATIONS += [
     tm("a valid tree has no hash", "          tree_hash = eventTreeHash(JSON.parse(text));", "          void 0;", SA),
 ]
 
-# Event tree engine (plan 13, stage S2) mutations. Removed as equivalent, each with its reason: a non-finite probability (a valid model has probabilities in 0..1, so it cannot occur); an underflowed approximation (it is at least the exact path probability, so the exact check fires first); a partition error that is not a number (the finite checks come first); the order of the compensated sum (Neumaier summation is order-insensitive in practice, the sort is a second guard); the event-count check (the diagram builder refuses first, and that line was deleted); a cancel or an expired deadline before the worker starts (the worker and the last look give the same record); a missing model taking a turn (the validator already refuses it).
+# Event tree engine (plan 13, stage S2) mutations. Removed as equivalent, each with its reason: a non-finite probability (a valid model has probabilities in 0..1, so it cannot occur); an underflowed approximation (it is at least the exact path probability, so the exact check fires first); a partition error that is not a number (the finite checks come first); the order of the compensated sum (Neumaier summation is order-insensitive in practice, the sort is a second guard); the event-count check (the diagram builder refuses first, and that line was deleted); a cancel or an expired deadline before the worker starts (the worker and the last look give the same record); a missing model taking a turn (the validator already refuses it); an end-state total that overflows (it is a part of the total frequency, which is checked, so it is finite whenever that is); a single frequency that overflows (the total of all of them is checked too, and is infinite then).
 ETE = ROOT / "src/engines/bdd/event-tree.ts"
 ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
 ETB = ROOT / "src/engines/bdd/bdd.ts"
@@ -716,7 +716,6 @@ MUTATIONS += [
     ee("a free variable needs both branches", "      const r = f === 0 ? go(this.lo[n]!) : f === 1 ? go(this.hi[n]!) : go(this.lo[n]!) || go(this.hi[n]!);", "      const r = f === 0 ? go(this.lo[n]!) : f === 1 ? go(this.hi[n]!) : go(this.lo[n]!) && go(this.hi[n]!);", ETB),
     ee("a ratio that overflows is a table", "      if (ratio !== null && !Number.isFinite(ratio)) return range();", "      void 0;"),
     ee("an aggregate that overflows is a table", "  for (const x of [totalFrequency, approximationFrequencySum, ...endStates.flatMap((e) => [e.frequency, e.probability])]) if (x !== null && !Number.isFinite(x)) return range();", "  void 0;"),
-    ee("an end state total that overflows is a table", "...endStates.flatMap((e) => [e.frequency, e.probability])]) if (x !== null", "]) if (x !== null"),
     ee("possible is decided by a product of probabilities", "  const possible = (node: number): boolean => bdd.satisfiable(node, (v) => (p[v] === 0 ? 0 : p[v] === 1 ? 1 : undefined));", "  const possible = (node: number): boolean => bdd.probability(node, p.map((q) => (q === 0 ? 0 : q === 1 ? 1 : 0.5))) > 0;"),
     ee("a negation of false is false", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", "    if (a === FALSE) return FALSE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", ETB),
     ee("a negation of true is true", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return FALSE;\n    const hit = this.notMemo", "    if (a === FALSE) return TRUE;\n    if (a === TRUE) return TRUE;\n    const hit = this.notMemo", ETB),
@@ -732,7 +731,6 @@ MUTATIONS += [
     ee("an impossible path is an error", "    if (probability === 0 && possible(cond)) return range();", "    if (probability === 0) return range();"),
     ee("zero and certain events are free", "bdd.satisfiable(node, (v) => (p[v] === 0 ? 0 : p[v] === 1 ? 1 : undefined))", "bdd.satisfiable(node, () => undefined)"),
     ee("a frequency that underflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (!Number.isFinite(frequency)) return range();"),
-    ee("a frequency that overflows is a table", "    if (!Number.isFinite(frequency) || (frequency === 0 && probability > 0 && lambda > 0)) return range();", "    if (frequency === 0 && probability > 0 && lambda > 0) return range();"),
     ee("the partition is not checked", "  if (!(partitionError <= PARTITION_TOLERANCE)) throw new SolveAborted('sequences-do-not-partition');", "  void 0;"),
     ee("the partition tolerance is loose", "export const PARTITION_TOLERANCE = 1e-9;", "export const PARTITION_TOLERANCE = 0.5;"),
     ee("the sum is not compensated", "    c += Math.abs(sum) >= Math.abs(x) ? sum - t + x : x - t + sum;", "    c += 0;"),
