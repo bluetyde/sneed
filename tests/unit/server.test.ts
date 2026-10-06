@@ -741,3 +741,17 @@ describe('writeImport limits and the request body', () => {
     }
   });
 });
+
+describe('writeImport never overwrites or removes what it did not create', () => {
+  it('an existing note file of the name stops it and stays untouched; nothing of ours is left', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-wi2-'));
+    try {
+      writeFileSync(path.join(dir, 'wi.opsa.xml'), 'theirs');
+      expect(() => writeImport(dir, 'wi', { modelText: '{}', originalText: 'mine', report: 'r' })).toThrow(/already exists/);
+      expect(readFileSync(path.join(dir, 'wi.opsa.xml'), 'utf8')).toBe('theirs');
+      expect(readdirSync(dir)).toEqual(['wi.opsa.xml']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

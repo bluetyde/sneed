@@ -423,6 +423,14 @@ MUTATIONS += [
     im("an import replaces a note file", "if (existsSync(file)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
     im("a failed import leaves its files", "for (const f of written) {", "for (const f of [] as string[]) {", ST),
     im("an import is not size checked", "for (const t of [files.modelText, files.originalText, files.report]) {", "for (const t of [] as string[]) {", ST),
+    im("a generated name loses its suffix", "const id = `${base.slice(0, 64 - suffix.length)}${suffix}`;", "const id = `${base}${suffix}`.slice(0, 64);"),
+    im("a generated name may be referred to from the file", "if (gateDefs.has(id)) return 'gate';", "if (gateDefs.has(id) || generatedIds.has(id)) return 'gate';"),
+    im("a loop apart from the top is not looked for", "else resolve({ name: nm, kind: 'gate', line: lineOf(nm), column: 1 });", "else void 0;"),
+    im("an alias is followed whatever it was called", "if (r.kind === 'basic-event') err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate", "if (false as boolean) err({ code: 'E_MISSING_REF', line: r.line, column: r.column, message: `${JSON.stringify(r.name)} is a gate"),
+    im("an import overwrites an existing file", "linkSync(tmp, file);", "renameSync(tmp, file);", ST),
+    im("a rollback removes files that are not ours", "      written.push(file);
+    } finally {", "    } finally {
+      written.push(file);", ST),
     im("an existing model is a bad request", "e.code === 'E_EXISTS' ? 409 : 400", "e.code === 'E_EXISTS' ? 400 : 400", SA),
     im("the import name is not checked as text", "if (typeof name !== 'string') throw new HttpError(400, 'E_FIELD', 'name must be a string');", "void 0;", SA),
     im("the original is not kept as sent", "originalText: text, report", "originalText: text.trim(), report", SA),
