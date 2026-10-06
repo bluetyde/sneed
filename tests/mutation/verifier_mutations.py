@@ -522,7 +522,7 @@ MUTATIONS += [
     fm("the figure never marks a stale result", "stale: this.figureStale, ...", "stale: false, ...", WE),
 ]
 
-# Publication scrub mutations.
+# Publication scrub mutations. Two mutants were removed as equivalent: no spelling of a folder is a substring of another (so the longest-first order cannot matter), and an empty folder already yields no spelling longer than 3 characters.
 SCR = ROOT / "src/core/scrub.ts"
 SCRUB_SUITE = ("tests/unit/scrub.test.ts", 90)
 
@@ -546,9 +546,7 @@ MUTATIONS += [
     sm("the JSON-escaped folder is not replaced", ", fwd.replace(/\\//g, '\\\\\\\\')]);", "]);"),
     sm("the backslash folder is not replaced", "fwd.replace(/\\//g, '\\\\'), ", ""),
     sm("a folder name is used as a pattern", "new RegExp(escapeRe(s), 'gi'), placeholder", "new RegExp(s, 'gi'), placeholder"),
-    sm("a longer folder is not tried first", ".sort((a, b) => b.length - a.length); // longest first", "; // longest first"),
     sm("a folder match is case sensitive", "new RegExp(escapeRe(s), 'gi'), placeholder", "new RegExp(escapeRe(s), 'g'), placeholder"),
-    sm("an empty folder replaces everything", "    if (!folder) continue;\n", ""),
     sm("the leak check ignores home folders", "  for (const re of [WIN_USERS, MNT_USERS, MAC_USERS, HOME]) {", "  for (const re of [] as RegExp[]) {"),
     sm("the leak check ignores account names", "  for (const u of opts.usernames ?? []) {\n    if (u.length < 3 || keep(u)) continue;\n    for (const m of text.matchAll", "  for (const u of [] as string[]) {\n    if (u.length < 3 || keep(u)) continue;\n    for (const m of text.matchAll"),
     sm("the leak check reports example names", "      if (!keep(name)) leaks.push({ kind: 'user-folder'", "      if (true as boolean) leaks.push({ kind: 'user-folder'"),

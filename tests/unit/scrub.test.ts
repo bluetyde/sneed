@@ -19,6 +19,12 @@ describe('scrubText', () => {
     expect(scrubText('no folder here', opts)).toBe('no folder here');
   });
 
+  it('finds a folder given in one style when the text uses another, and ignores case as Windows does', () => {
+    const opts = { prefixes: [['C:/Users/frank/proj', '<repo>']] as [string, string][] };
+    expect(scrubText(`in C:${B}Users${B}frank${B}proj${B}x.xml`, opts)).toBe(`in <repo>${B}x.xml`);
+    expect(scrubText(`in c:${B}users${B}FRANK${B}Proj${B}x.xml`, opts)).toBe(`in <repo>${B}x.xml`);
+  });
+
   it('a folder with characters special to regular expressions is replaced literally', () => {
     const odd = 'C:/work/a.b (copy)/[x]+y';
     expect(scrubText(`in ${odd}/z and C:/work/aXb (copy)/[x]+y`, { prefixes: [[odd, '<repo>']] })).toBe('in <repo>/z and C:/work/aXb (copy)/[x]+y');
