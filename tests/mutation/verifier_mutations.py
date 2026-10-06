@@ -351,6 +351,86 @@ MUTATIONS = [
     ("smoke: refused model counts as passed", SM, "out.push({ id: c.id, passed: false, reason: `refused:", "out.push({ id: c.id, passed: true, reason: `refused:", SMOKE),
 ]
 
+# Importer mutations: run against the importer's own tests and the server tests.
+IMPORT_SUITE = ("tests/unit/import.test.ts tests/unit/server.test.ts", 150)
+IM = ROOT / "src/core/import.ts"
+OFF = "if (false as boolean)"
+
+
+def im(name: str, old: str, new: str, f: pathlib.Path = IM) -> tuple:
+    return (f"import: {name}", f, old, new, IMPORT_SUITE)
+
+
+MUTATIONS += [
+    im("depth limit is off by one", "if (stack.length >= MAX_DEPTH)", "if (stack.length > MAX_DEPTH)"),
+    im("element count limit is off by one", "++elements > MAX_ELEMENTS", "++elements > MAX_ELEMENTS + 1"),
+    im("attribute value limit is off by one", "raw.length > MAX_ATTR_VALUE", "raw.length > MAX_ATTR_VALUE + 1"),
+    im("attribute count limit is off by one", "el.attrs.size >= MAX_ATTRS", "el.attrs.size > MAX_ATTRS"),
+    im("name length limit is gone", "if (j - i > MAX_NAME)", OFF),
+    im("size limit is off by one", "> MAX_IMPORT_BYTES) return", "> MAX_IMPORT_BYTES + 1) return"),
+    im("a DOCTYPE is skipped", "xmlFail(line, col, 'a DTD, DOCTYPE or entity declaration is not accepted');", "adv(input.indexOf('>', i) + 1 - i);"),
+    im("a CDATA section is skipped", "xmlFail(line, col, 'a CDATA section is not accepted');", "adv(input.indexOf(']]>', i) + 3 - i);"),
+    im("a processing instruction is skipped", "xmlFail(line, col, 'a processing instruction is not accepted');", "adv(input.indexOf('?>', i) + 2 - i);"),
+    im("an unknown entity in an attribute is accepted", "checkNoAmp(raw, raw, aLine, aCol);", "void 0;"),
+    im("an unknown entity in text is accepted", "checkNoAmp(decode(text, line, col), text, line, col);", "decode(text, line, col);"),
+    im("a second root element is accepted", "if (root && stack.length === 0) xmlFail(", OFF + " xmlFail("),
+    im("a mismatched end tag is accepted", "if (!top || top.name !== nm) xmlFail(", "if (!top) xmlFail("),
+    im("a repeated attribute is accepted", "if (el.attrs.has(an)) xmlFail(", OFF + " xmlFail("),
+    im("a < in an attribute value is accepted", "if (raw.includes('<')) xmlFail(", OFF + " xmlFail("),
+    im("an unclosed element is accepted", "if (stack.length) xmlFail(", OFF + " xmlFail("),
+    im("text outside the root is accepted", "if (!target) xmlFail(line, col, 'text outside the root element');", "void 0;"),
+    im("a forbidden character reference is accepted", "if (!(cp === 0x9 ||", "if (false && !(cp === 0x9 ||"),
+    im("lines are not counted", "line++;\n        col = 1;", "col = 1;"),
+    im("a comment with -- is accepted", "if (input.slice(i + 4, end).includes('--')) xmlFail(", OFF + " xmlFail("),
+    im("a byte order mark is not skipped", "input.charCodeAt(0) === 0xfeff ? 1 : 0", "0"),
+    im("another root element name is accepted", "if (root.name !== 'opsa-mef') {", OFF + " {"),
+    im("an unknown root attribute is accepted", "if (!(a === 'version' || a === 'name' || a.startsWith('xmlns') || a.startsWith('xsi:'))) unsupported(", OFF + " unsupported("),
+    im("a second fault tree is accepted", "if (trees.length > 1) unsupported(", OFF + " unsupported("),
+    im("a second model-data is accepted", "if (dataBlocks.length > 1) unsupported(", OFF + " unsupported("),
+    im("an unnamed fault tree is accepted", "if (treeName === undefined) err(", OFF + " err("),
+    im("an unknown child of the root is ignored", "    unsupported(`<${c.name}>`, c, KNOWN_OUTSIDE.has(c.name) ? 'it has no meaning in a V1 static fault tree' : 'it is not part of the documented subset');", "    void 0;"),
+    im("a gate in model-data is accepted", "else if (c.name === 'define-gate' && !dataSet.has(c)) {", "else if (c.name === 'define-gate') {"),
+    im("a bad name is accepted", "if (!ID.test(nm)) {", OFF + " {"),
+    im("a repeated name is accepted", "if (prior) {", OFF + " {"),
+    im("a basic event without a probability is accepted", "if (kids.length === 0) err(", OFF + " err("),
+    im("an expression in place of a float is accepted", "if (k.name !== 'float') {", OFF + " {"),
+    im("a second float is accepted", "if (p !== null) {\n        unsupported('a second <float>'", OFF + " {\n        unsupported('a second <float>'"),
+    im("a float attribute other than value is accepted", "for (const a of k.attrs.keys()) if (a !== 'value') unsupported(", "for (const a of [] as string[]) if (a !== 'value') unsupported("),
+    im("any text is a number", "!FLOAT.test(raw.trim())", "Number.isNaN(Number(raw.trim()))"),
+    im("zero is not a probability", "v < 0 || v > 1", "v <= 0 || v > 1"),
+    im("one is not a probability", "v < 0 || v > 1", "v < 0 || v >= 1"),
+    im("a probability above one is accepted", "v < 0 || v > 1", "v < 0"),
+    im("a generated gate may take a defined name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!generatedIds.has(id)) {"),
+    im("a generated gate may repeat a generated name", "if (!defined.has(id) && !generatedIds.has(id)) {", "if (!defined.has(id)) {"),
+    im("a generated name is not shortened", "const id = `${base}_${k}`.slice(0, 64);", "const id = `${base}_${k}`;"),
+    im("any min is a number", "!/^[0-9]{1,6}$/.test(raw)", "Number.isNaN(Number(raw))"),
+    im("a reference may carry more than a name", "for (const a of el.attrs.keys()) if (a !== 'name') unsupported(`attribute ${a}`, el, `on <${el.name}>`);", "void 0;"),
+    im("a reference may hold content", "if (el.children.length || el.textLine) unsupported(`content inside <${el.name}>`", OFF + " unsupported(`content inside <${el.name}>`"),
+    im("a gate with no formula is accepted", "if (el.children.length !== 1) {", "if (el.children.length < 1) {"),
+    im("a pass-through gate is not recorded", "aliases.set(nm, r);", "void 0;"),
+    im("a pass-through loop is not noticed", "if (seen.has(r.name)) {", OFF + " {"),
+    im("a basic event naming a gate is accepted", "if (r.kind === 'basic-event' && k !== 'event') err(", OFF + " err("),
+    im("a gate naming a basic event is accepted", "else if (r.kind === 'gate' && k !== 'gate') err(", "else if (false as boolean) err("),
+    im("the top is any unreferenced gate", "else if (unreferenced.length === 1) {", "else if (unreferenced.length >= 1) {"),
+    im("a loop of gates has a top", "} else if (unreferenced.length === 0) {", "} else if (false as boolean) {"),
+    im("several events with no gate have a top", "if (events.size === 1) top =", "if (events.size >= 1) top ="),
+    im("validator errors are ignored", "for (const issue of v.errors) {", "for (const issue of [] as typeof v.errors) {"),
+    im("the source hash is of different text", ".update(text, 'utf8')", ".update(text.trim(), 'utf8')"),
+    im("notes are not ordered", "notes.sort((a, b) => a.line - b.line);", "void 0;"),
+    im("errors are not capped", "if (errors.length < MAX_ERRORS) errors.push(e);", "errors.push(e);"),
+    im("formula errors do not stop before resolving", "  if (errors.length) return { ok: false, errors };\n\n  // ---- resolve names", "\n  // ---- resolve names"),
+    im("the model name is not bounded", ".slice(0, 200) || 'Imported model'", " || 'Imported model'"),
+    im("an import replaces a model", "if (existsSync(model)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
+    im("an import replaces a note file", "if (existsSync(file)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
+    im("a failed import leaves its files", "for (const f of written) {", "for (const f of [] as string[]) {", ST),
+    im("an import is not size checked", "for (const t of [files.modelText, files.originalText, files.report]) {", "for (const t of [] as string[]) {", ST),
+    im("an import writes over a file in between", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      renameSync(tmp, file);\n      written", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      renameSync(tmp, file);\n      void 0; written", ST),
+    im("an existing model is a bad request", "e.code === 'E_EXISTS' ? 409 : 400", "e.code === 'E_EXISTS' ? 400 : 400", SA),
+    im("the import name is not checked as text", "if (typeof name !== 'string') throw new HttpError(400, 'E_FIELD', 'name must be a string');", "void 0;", SA),
+    im("the original is not kept as sent", "originalText: text, report", "originalText: text.trim(), report", SA),
+    im("a refusal is an error status", "return send(res, 200, { kind: 'refused', errors: result.errors });", "return send(res, 400, { kind: 'refused', errors: result.errors });", SA),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -403,6 +483,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith(("analyze:", "result: a result is accepted", "result: an unread", "result: the report size", "result: an over-long", "result: too many", "result: the minimality", "result: sets of", "result: a subset", "result: a timeout", "result: non-minimal", "analyze: report read"))]
     if only == "seed":  # just the SEED-side mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process", "analyze:"))]
+    if only == "import":  # just the importer mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("import:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
