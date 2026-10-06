@@ -923,4 +923,45 @@ describe('saved runs offered, and the queue', () => {
       Editor.queuePollMs = 700;
     }
   });
+
+  it('pressing Run twice while the lookup is pending makes one run, not two', async () => {
+    let releaseLookup!: () => void;
+    const lookupGate = new Promise<void>((r) => (releaseLookup = r));
+    const api = fakeApi({ lookupRun: async () => { await lookupGate; return { found: false }; } });
+    const { ed } = await ready(api);
+    const a = ed.run();
+    const b = ed.run(); // ignored: the first press is still looking
+    await new Promise((r) => setTimeout(r, 20));
+    releaseLookup();
+    await Promise.all([a, b]);
+    expect(api.calls.filter((c) => c.startsWith('run:')).length).toBe(1);
+    expect(ed.running).toBe(false);
+  });
+
+  it('an offer is not shown for a model that was edited after it was found, even before the edit is validated', async () => {
+    const api = fakeApi({ lookupRun: async (text, method) => ({ found: true, run_id: 'old-run', saved_at: 'x', record: recordFor(text, method) }) });
+    const { ed } = await ready(api);
+    await ed.run();
+    expect(ed.reuseOffer).not.toBeNull();
+    ed.setProbability('E1', 0.3); // validation of this edit has not come back yet
+    expect(ed.reuseOffer).toBeNull();
+    ed.useSaved();
+    expect(ed.result).toBeNull();
+  });
+
+  it('showing a saved result clears an error from an earlier failed run', async () => {
+    let failing = true;
+    const api = fakeApi({
+      run: async () => { throw new ApiError(500, 'E_INTERNAL', 'boom'); },
+      lookupRun: async (text, method) => (failing ? { found: false } : { found: true, run_id: 'old-run', saved_at: 'x', record: recordFor(text, method) }),
+    });
+    const { ed } = await ready(api);
+    await ed.run();
+    expect(ed.runError).toContain('boom');
+    failing = false;
+    await ed.run();
+    ed.useSaved();
+    expect(ed.runError).toBeNull();
+    expect(ed.result?.kind).toBe('ran');
+  });
 });

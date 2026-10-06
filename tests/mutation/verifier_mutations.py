@@ -246,7 +246,7 @@ MUTATIONS = [
     ("compare: a ratio is given for a zero earlier value", CM, "ratio: pa !== null && pb !== null && pa !== 0 ? pb / pa : null", "ratio: pa !== null && pb !== null ? pb / pa : null"),
     # (no mutation for the dirname check in runs.ts runDir: RUN_ID and the ".." test already refuse every path, so removing it changes nothing; it stays as defence in depth)
     ("runs: a damaged run is listed", SR, "if (!isObj(rec) || rec.schema_version !== 1) continue;", ""),
-    ("runs: listing is oldest first", SR, ".sort().reverse().slice(0, MAX_LISTED_RUNS * 2)", ".sort().slice(0, MAX_LISTED_RUNS * 2)"),
+    ("runs: listing is oldest first", SR, ".sort().reverse().slice(0, limit * 2)", ".sort().slice(0, limit * 2)"),
     ("editor: a failed comparison keeps showing the old one", WE, "      this.comparison = null;\n      this.compareError = `Could not load the runs:", "      this.compareError = `Could not load the runs:"),
     ("ui compare: the choice follows new runs after the student picked", WK, "if (!this.chosen || !ids.includes(this.a) || !ids.includes(this.b)) {", "if (!ids.includes(this.a) || !ids.includes(this.b)) {", E2E),
     ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
@@ -442,6 +442,10 @@ def qm(name: str, old: str, new: str, f: pathlib.Path = SA) -> tuple:
 
 
 MUTATIONS += [
+    qm("a second press during the lookup also runs", "if (this.running || this.starting) return;", "if (this.running) return;", WE),
+    qm("an offer is shown for an edited model", " && this.offer.text === this.text ? this.offer : null;", " ? this.offer : null;", WE),
+    qm("showing a saved result keeps an old error", "    this.runError = null; // a failed earlier run must not hide the result being shown\n", "", WE),
+    qm("lookup searches only the listed runs", "listRuns(opts.runsDir, MAX_LOOKUP_RUNS)", "listRuns(opts.runsDir)"),
     qm("the queue limit is off by one", "if (queue.length >= MAX_QUEUE)", "if (queue.length > MAX_QUEUE)"),
     qm("a finished run does not start the next", "      running = next;\n      next.start();", "      running = next;"),
     qm("a dequeued job is not marked dropped", "    job.dropped = true;\n    job.start();", "    job.start();"),

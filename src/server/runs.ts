@@ -6,6 +6,8 @@ import path from 'node:path';
 export const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 export const MAX_LISTED_RUNS = 100;
+/** How many of the newest runs a lookup for an identical saved run searches (the Compare list shows fewer). */
+export const MAX_LOOKUP_RUNS = 1000;
 
 export class RunsError extends Error {
   constructor(
@@ -27,6 +29,7 @@ export interface RunInfo {
   model_hash: string | null;
   engine_name: string | null;
   engine_version: string | null;
+  engine_sha256: string | null;
 }
 
 export const isValidRunId = (id: string): boolean => typeof id === 'string' && RUN_ID.test(id) && !id.includes('..') && !id.endsWith('.');
@@ -84,12 +87,12 @@ function readJsonFile(dir: string, parts: string[], afterCheck?: () => void): un
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** The newest saved runs. A run whose files cannot be read is left out, never an error for the rest. */
-export function listRuns(dir: string): RunInfo[] {
+export function listRuns(dir: string, limit = MAX_LISTED_RUNS): RunInfo[] {
   if (!existsSync(dir)) return [];
-  const ids = readdirSync(dir).filter(isValidRunId).sort().reverse().slice(0, MAX_LISTED_RUNS * 2);
+  const ids = readdirSync(dir).filter(isValidRunId).sort().reverse().slice(0, limit * 2);
   const out: RunInfo[] = [];
   for (const id of ids) {
-    if (out.length >= MAX_LISTED_RUNS) break;
+    if (out.length >= limit) break;
     const d = path.join(dir, id);
     try {
       const rec = readJsonFile(dir, [id, 'results.json']);
@@ -114,6 +117,7 @@ export function listRuns(dir: string): RunInfo[] {
         model_hash: typeof hashes.model_hash === 'string' ? hashes.model_hash : null,
         engine_name: typeof eng.name === 'string' ? eng.name : null,
         engine_version: typeof eng.version === 'string' ? eng.version : null,
+        engine_sha256: typeof eng.sha256 === 'string' ? eng.sha256 : null,
       });
     } catch {
       /* not a readable run */
