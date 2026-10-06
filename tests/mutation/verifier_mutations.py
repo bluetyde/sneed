@@ -639,7 +639,7 @@ MUTATIONS += [
     em("the runner does not show the build", "version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256 } },", "version: BDD_ENGINE_VERSION } },", HL),
 ]
 
-# Event tree (plan 13, stage S1) mutations. One mutant was removed as equivalent: with at most 12 headings there are at most 4096 paths, so the cap inside enumeratePaths (a second guard) cannot fire.
+# Event tree (plan 13, stage S1) mutations. One mutant was removed as equivalent: with at most 12 headings there are at most 4096 paths, so the cap inside enumeratePaths (a second guard) cannot fire. A second one was removed: the hash only reads known fields, so it cannot throw and the route's catch around it is a guard that cannot fire.
 ET = ROOT / "src/core/event-tree.ts"
 ET_SUITE = ("tests/unit/event-tree.test.ts tests/unit/server.test.ts", 200)
 
@@ -691,7 +691,6 @@ MUTATIONS += [
     tm("a missing end state field is a generic schema error", "  if (/^\\/sequences\\/\\d+$/.test(path) && missing === 'end_state') return issue(", "  if (false as boolean) return issue("),
     tm("extra fields in schema change the hash", "schema: { id: sch.id, version: sch.version },", "schema: doc.schema,"),
     tm("extra fields in assumptions change the hash", "assumptions: { frequency_unit: as.frequency_unit, probability_basis: as.probability_basis, independence: as.independence, ie_independent_of_events: as.ie_independent_of_events, success_branches: as.success_branches },", "assumptions: doc.assumptions,"),
-    tm("a hash failure is a server error", "        } catch {\n          return send(res, 200, { ...v, valid: false,", "        } catch (e) {\n          throw e;\n          return send(res, 200, { ...v, valid: false,", SA),
     tm("event trees share the model folder", "  const eventTreeDir = path.join(opts.projectDir, 'event-trees');", "  const eventTreeDir = opts.projectDir;", SA),
     tm("a tree name is not checked as a name", "      const name = safeDecode(em[1]!);\n      if (method === 'GET') {", "      const name = safeDecode(em[1]!).replace(/[.][.]/g, '');\n      if (method === 'GET') {", SA),
     tm("a missing tree is reported as a model", "throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);", "throw e;", SA),
