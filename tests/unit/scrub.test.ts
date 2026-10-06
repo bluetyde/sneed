@@ -140,6 +140,7 @@ describe('the repository itself is fit to publish', () => {
     const names = accountNames();
     const found: string[] = [];
     for (const f of files) {
+      if (f === 'tests/unit/scrub.test.ts') continue; // its fixtures are deliberate fake leaks (made-up names), the only file allowed to hold them
       const full = path.join(ROOT, f);
       if (!existsSync(full)) continue;
       const bytes = readFileSync(full);

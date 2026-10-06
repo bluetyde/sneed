@@ -21,7 +21,7 @@ export function accountNames(): string[] {
 /** Account names that are examples, not people: never reported, never replaced. */
 const EXAMPLE_NAMES = new Set(['student', 'user', 'you', 'name', 'username', '<user>', 'alice', 'bob', 'example', 'x']);
 
-const NAME = '[^\\\\/\\s"\'<>:*?|%]+'; // an account name in a path: no separators, spaces or markup
+const NAME = '[^\\\\/\\s"\'<>:*?|%$(){}\\[\\],;`]+'; // an account name in a path: no separators, spaces, markup or code punctuation
 // drive-letter user folder in its several spellings (C:\Users\x, C:/Users/x, JSON-escaped C:\\Users\\x), and the WSL spelling
 const WIN_USERS = new RegExp(`([A-Za-z]:(?:\\\\{1,2}|/)Users(?:\\\\{1,2}|/))(${NAME})`, 'g');
 const MNT_USERS = new RegExp(`(/mnt/[a-z]/Users/)(${NAME})`, 'g');
