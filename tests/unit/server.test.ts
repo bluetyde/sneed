@@ -993,3 +993,97 @@ describe('finding an identical saved run', () => {
     }
   });
 });
+
+describe('importance measures over the API', () => {
+  const ids = (j: any): string[] => j.events.map((e: { id: string }) => e.id);
+
+  it('gives the exact measures of the model on screen, names the engine and the assumptions, and writes nothing', async () => {
+    const before = readdirSync(path.join(tmp, 'runs'), { withFileTypes: true }).length;
+    const model = { ...ORACLE_MODELS['pra-or'], events: (ORACLE_MODELS['pra-or']!.events as { id: string; probability: number }[]).map((e, i) => (i === 0 ? { ...e, name: 'Pump A' } : e)) };
+    const r = await post('/api/importance', { text: JSON.stringify(model) });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ kind: 'ok', engine: { name: 'sneed-bdd' } });
+    expect(r.json.model_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(r.json.assumptions).toContain('independent');
+    expect(r.json.top).toBeCloseTo(0.28, 12);
+    const a = r.json.events.find((e: { id: string }) => e.id === 'A');
+    expect(a).toMatchObject({ name: 'Pump A', birnbaum: expect.closeTo(0.8, 12), rrwInfinite: false });
+    expect(r.json.events.find((e: { id: string }) => e.id === 'B').name).toBeUndefined();
+    expect(readdirSync(path.join(tmp, 'runs'), { withFileTypes: true }).length).toBe(before); // nothing saved
+  });
+
+  it('refuses an invalid model with the validator errors, and a request that is not a model text as a bad request', async () => {
+    const bad = { ...ORACLE_MODELS['pra-or'], top: 'NOPE' };
+    const r = await post('/api/importance', { text: JSON.stringify(bad) });
+    expect(r.status).toBe(200);
+    expect(r.json.kind).toBe('refused');
+    expect(r.json.errors.length).toBeGreaterThan(0);
+    expect((await post('/api/importance', {})).status).toBe(400);
+    expect((await post('/api/importance', { text: 5 })).status).toBe(400);
+    expect((await post('/api/importance', { text: text('pra-or'), request_id: '../x' })).status).toBe(400);
+    const noHeader = await request('POST', '/api/importance', { body: JSON.stringify({ text: text('pra-or') }), headers: { 'content-type': 'application/json' } });
+    expect(noHeader.status).toBe(403);
+  });
+
+  it('says why a table is not made (too many events) instead of a partial table', async () => {
+    const events = Array.from({ length: 301 }, (_, i) => ({ id: `E${i}`, probability: 0.01 }));
+    const doc = { ...ORACLE_MODELS['pra-or'], top: 'T', events, gates: [{ id: 'T', type: 'or', inputs: events.map((e) => e.id) }] };
+    const r = await post('/api/importance', { text: JSON.stringify(doc) });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ kind: 'failed', why: 'too-many-events' });
+    expect(r.json.message).toContain('300');
+    expect(r.json.events).toBeUndefined();
+  });
+
+  it('takes its turn behind a run, can be cancelled while it waits, and the status lists it', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const hasStarted = new Promise<void>((r) => (started = r));
+    analyzeImpl = async () => {
+      started();
+      await gate;
+      return { kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never };
+    };
+    const run = post('/api/run', { text: text('pra-and'), engine: 'scram', request_id: 'req-run' });
+    await hasStarted;
+    const waiting = post('/api/importance', { text: text('pra-or'), request_id: 'req-imp' });
+    const doomed = post('/api/importance', { text: text('pra-or'), request_id: 'req-doomed' });
+    for (let i = 0; i < 100 && ((await request('GET', '/api/run/status')).json.queued as unknown[]).length < 2; i++) await new Promise((r) => setTimeout(r, 20));
+    expect((await request('GET', '/api/run/status')).json.queued).toEqual([{ request_id: 'req-imp' }, { request_id: 'req-doomed' }]);
+    expect((await post('/api/run/cancel', { request_id: 'req-doomed' })).json).toEqual({ cancelled: true });
+    expect((await doomed).json).toEqual({ kind: 'dequeued' });
+    release();
+    await run;
+    const done = await waiting;
+    expect(done.json.kind).toBe('ok');
+    expect(ids(done.json).sort()).toEqual(['A', 'B']);
+    analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
+  });
+
+  it('a client that goes away while waiting never gets a table computed', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const hasStarted = new Promise<void>((r) => (started = r));
+    analyzeImpl = async () => {
+      started();
+      await gate;
+      return { kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never };
+    };
+    const run = post('/api/run', { text: text('pra-and'), engine: 'scram' });
+    await hasStarted;
+    const u = new URL('/api/importance', server.url);
+    const req = http.request({ method: 'POST', hostname: u.hostname, port: u.port, path: u.pathname, headers: JSON_HEADERS });
+    req.on('error', () => undefined);
+    req.end(JSON.stringify({ text: text('pra-or'), request_id: 'req-gone' }));
+    for (let i = 0; i < 100 && ((await request('GET', '/api/run/status')).json.queued as unknown[]).length < 1; i++) await new Promise((r) => setTimeout(r, 20));
+    req.destroy();
+    for (let i = 0; i < 100 && ((await request('GET', '/api/run/status')).json.queued as unknown[]).length > 0; i++) await new Promise((r) => setTimeout(r, 20));
+    expect((await request('GET', '/api/run/status')).json.queued).toEqual([]);
+    release();
+    await run;
+    analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
+  });
+});
+

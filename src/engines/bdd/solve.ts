@@ -50,7 +50,16 @@ export function defaultOrder(model: NativeModel): string[] {
   return order;
 }
 
-export function solve(model: NativeModel, opts: SolveOptions = {}): Solution {
+/** The diagram of the top event, with the variable order and each event's probability by position. */
+export interface Diagram {
+  bdd: Bdd;
+  root: number;
+  order: string[];
+  p: number[];
+}
+
+/** Builds the reduced ordered diagram of the top event. Throws SolveAborted past a limit, RangeError for a top that is always or never true. */
+export function buildDiagram(model: NativeModel, opts: SolveOptions = {}): Diagram {
   const limits: BddLimits = { ...DEFAULT_LIMITS, ...opts.limits };
   const gates = new Map<string, Gate>(model.gates.map((g) => [g.id, g]));
   const probability = new Map(model.events.map((e) => [e.id, e.probability]));
@@ -109,7 +118,12 @@ export function solve(model: NativeModel, opts: SolveOptions = {}): Solution {
   const root = fn(model.top);
   if (root === FALSE || root === TRUE) throw new RangeError('the top event is always or never true; a valid model cannot do that');
 
-  const p = order.map((e) => probability.get(e)!);
+  return { bdd, root, order, p: order.map((e) => probability.get(e)!) };
+}
+
+export function solve(model: NativeModel, opts: SolveOptions = {}): Solution {
+  const { bdd, root, order, p } = buildDiagram(model, opts);
+  const probability = new Map(model.events.map((e) => [e.id, e.probability]));
   const top = bdd.probability(root, p);
   const sets = bdd.minimalCutSets(root).map((s) => {
     const ids = s.map((i) => order[i]!).sort();

@@ -5,7 +5,7 @@ import { loadLesson, type OracleEntry } from '../../src/core/lesson.js';
 import { documentHash, modelHash } from '../../src/core/canonical.js';
 import { validateModelText } from '../../src/core/validate.js';
 import type { ResultRecord } from '../../src/core/result.js';
-import { ApiError, type Api, type Method, type ModelInfo, type RunResponse, type ValidateResponse } from '../../src/web/api.js';
+import { ApiError, type Api, type ImportanceResponse, type Method, type ModelInfo, type RunResponse, type ValidateResponse } from '../../src/web/api.js';
 import { Editor } from '../../src/web/model/editor.js';
 import * as D from '../../src/web/model/doc.js';
 
@@ -33,6 +33,7 @@ function fakeApi(over: Partial<Api> = {}): Api & { calls: string[]; files: Map<s
     cancel: async () => ({ cancelled: true }),
     lookupRun: async () => ({ found: false }),
     runStatus: async () => ({ running: null, queued: [] }),
+    importance: async () => ({ kind: 'ok', model_hash: 'h', engine: { name: 'sneed-bdd', version: '0.1.0' }, top: 0.19, assumptions: 'a', events: [{ id: 'E1', probability: 0.1, birnbaum: 0.9, raw: 1.5, rrw: 1.2, rrwInfinite: false, fv: 0.4 }] }),
     lessons: async () => [],
     importModel: async () => ({ kind: 'refused', errors: [] }),
     listRuns: async () => [],
@@ -990,6 +991,82 @@ describe('the figure of the editor', () => {
     const { ed } = await ready(api);
     await ed.run();
     expect(ed.figureSvg()).toContain('CROSS-CHECK DISAGREEMENT');
+  });
+});
+
+describe('the importance table in the editor', () => {
+  it('is asked for, shown for the model on screen, and hidden by any change to the document', async () => {
+    const api = fakeApi();
+    const { ed } = await ready(api);
+    expect(ed.importance).toBeNull();
+    expect(ed.canComputeImportance).toBe(true);
+    await ed.computeImportance();
+    expect(ed.importance).toMatchObject({ kind: 'ok', top: 0.19 });
+    expect(ed.importanceBusy).toBe(false);
+    ed.setProbability('E1', 0.3); // even before the edit is validated
+    expect(ed.importance).toBeNull();
+    expect(ed.canComputeImportance).toBe(false); // an unchecked edit: not until it has been checked
+    await ed.settle();
+    expect(ed.importance).toBeNull();
+    expect(ed.canComputeImportance).toBe(true);
+    ed.undo();
+    await ed.settle();
+    expect(ed.importance).toMatchObject({ kind: 'ok' }); // back to the text it was computed for
+  });
+
+  it('a model with problems is not sent, and says why', async () => {
+    let asked = 0;
+    const api = fakeApi({ importance: async () => { asked++; return { kind: 'refused', errors: [] }; } });
+    const { ed } = await ready(api);
+    ed.setProbability('E1', 2); // invalid
+    await ed.settle();
+    expect(ed.validation?.valid).toBe(false);
+    await ed.computeImportance();
+    expect(asked).toBe(0);
+    expect(ed.notice?.text).toMatch(/needs a valid model/);
+  });
+
+  it('a refusal, a failure and a thrown error are each kept as that, never a table', async () => {
+    const responses: (() => Promise<never> | Promise<ImportanceResponse>)[] = [
+      async () => ({ kind: 'refused', errors: [{ code: 'E_X', message: 'bad' }] }),
+      async () => ({ kind: 'failed', why: 'timeout', message: 'too slow' }),
+      async () => { throw new Error('network down'); },
+    ];
+    let i = 0;
+    const api = fakeApi({ importance: () => responses[i++]!() as Promise<ImportanceResponse> });
+    const { ed } = await ready(api);
+    await ed.computeImportance();
+    expect(ed.importance).toMatchObject({ kind: 'refused' });
+    await ed.computeImportance();
+    expect(ed.importance).toMatchObject({ kind: 'failed', message: 'too slow' });
+    await ed.computeImportance();
+    expect(ed.importance).toMatchObject({ kind: 'failed' });
+    expect((ed.importance as { message: string }).message).toContain('network down');
+    expect(ed.importanceBusy).toBe(false);
+  });
+
+  it('presses while it is computing are ignored, and a table that arrives for an older model is not shown', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    const api = fakeApi({
+      importance: async () => {
+        calls++;
+        await gate;
+        return { kind: 'ok', model_hash: 'old', engine: { name: 'sneed-bdd', version: '0.1.0' }, top: 0.5, assumptions: 'a', events: [] };
+      },
+    });
+    const { ed } = await ready(api);
+    const a = ed.computeImportance();
+    const b = ed.computeImportance();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ed.importanceBusy).toBe(true);
+    ed.setProbability('E1', 0.3); // the model changes while the answer is on its way
+    release();
+    await Promise.all([a, b]);
+    expect(calls).toBe(1);
+    expect(ed.importance).toBeNull(); // the answer was for the text before the edit
+    expect(ed.importanceBusy).toBe(false);
   });
 });
 
