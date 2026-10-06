@@ -476,6 +476,47 @@ MUTATIONS += [
     qm("the queue poll never stops", "      clearInterval(poll);\n", "", WE),
 ]
 
+# Figure (SVG/PNG/print) mutations.
+FG = ROOT / "src/web/model/figure.ts"
+EXPORT_SUITE = ("tests/unit/figure.test.ts tests/unit/web-editor.test.ts", 120)
+
+
+def fm(name: str, old: str, new: str, f: pathlib.Path = FG) -> tuple:
+    return (f"figure: {name}", f, old, new, EXPORT_SUITE)
+
+
+MUTATIONS += [
+    fm("an ampersand is not escaped", ".replace(/&/g, '&amp;')", ""),
+    fm("a less-than is not escaped", ".replace(/</g, '&lt;')", ""),
+    fm("a quote is not escaped", ".replace(/\"/g, '&quot;')", ""),
+    fm("a stale result still shows numbers", "if (!r.stale) {\n    out.push(`Method:", "if (true as boolean) {\n    out.push(`Method:"),
+    fm("a stale result is not announced", "if (r.stale) out.push('NO CURRENT RESULT", "if (false as boolean) out.push('NO CURRENT RESULT"),
+    fm("an incomplete result is not labelled", "else if (!ok) {", "else if (false as boolean) {"),
+    fm("the reasons are not listed", "for (const reason of rec.reasons) out.push(`  ${reasonText(reason)}`);", "void 0;"),
+    fm("an approximation is not labelled", "rec.method === 'exact' ? '' : ' (approximation)'", "''"),
+    fm("caveats are dropped", "for (const c of rec.caveats) out.push(CAVEAT_TEXT[c] ?? c);", "void 0;"),
+    fm("a status other than completed passes", "const ok = rec.status === 'completed' && rec.completeness === 'complete';", "const ok = rec.completeness === 'complete';"),
+    fm("a truncated completeness passes", "const ok = rec.status === 'completed' && rec.completeness === 'complete';", "const ok = rec.status === 'completed';"),
+    fm("no result is not said", "if (!r) return ['No result for this drawing: the model has not been run.'];", "if (!r) return [];"),
+    fm("repeated uses are not dashed", "${n.kind === 'gate' ? '' : ' stroke-dasharray=\"5 3\"'}", ""),
+    fm("references are not dashed edges", "v.byKey.get(e.to)!.kind === 'reference' || v.byKey.get(e.to)!.kind === 'missing' ? ' stroke-dasharray=\"5 3\"' : ''", "''"),
+    fm("the top badge is missing", "const top = isTop ?", "const top = false as boolean ?"),
+    fm("events are not ellipses", "n.kind === 'event'\n      ? `<ellipse", "false as boolean\n      ? `<ellipse"),
+    fm("a probability is shown with float noise", "p >= 0.001 && p < 1 ? String(Number(p.toPrecision(6)))", "p >= 0.001 && p < 1 ? String(p)"),
+    fm("a tiny probability is not in exponent form", ": p.toExponential(5));", ": String(p));"),
+    fm("the model hash is not given", "out.push(`Model hash ${rec.input_hashes.model_hash.slice(0, 12)}.`);", "void 0;"),
+    fm("a date is always printed", "${opts.generated ? ` · ${opts.generated}` : ''}", " · 2026-01-01"),
+    fm("long lines are not wrapped", ".flatMap((t) => wrapText(t, Math.floor(contentW / CHAR_W)));", ";"),
+    fm("a continuation loses its indent", "out.push(cur);\n      cur = indent + w;", "out.push(cur);\n      cur = w;"),
+    fm("the figure is narrower than the drawing", "const contentW = Math.max(treeW, 640);", "const contentW = 640;"),
+    fm("the tree is not centred below the caption", "const ty = m + headH - v.bounds.y;", "const ty = m - v.bounds.y;"),
+    fm("a file name may hold a path", ".replace(/[^A-Za-z0-9._-]+/g, '-')", ""),
+    fm("a file name may be long", ".slice(0, 64);\n  return stem", ";\n  return stem"),
+    fm("an empty file name stays empty", "return stem || 'fault-tree';", "return stem;"),
+    fm("the figure pairs old numbers with an unchecked edit", "return this.stale || this.validatedText !== this.text;", "return this.stale;", WE),
+    fm("the figure never marks a stale result", "stale: this.figureStale } : null }", "stale: false } : null }", WE),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -532,6 +573,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("import:")]
     if only == "queue":  # just the queue and saved-run reuse mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("queue:")]
+    if only == "export":  # just the figure and print mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("figure:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
