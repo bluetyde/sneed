@@ -32,6 +32,7 @@ function fakeApi(over: Partial<Api> = {}): Api & { calls: string[]; files: Map<s
     },
     cancel: async () => ({ cancelled: true }),
     lessons: async () => [],
+    importModel: async () => ({ kind: 'refused', errors: [] }),
     listRuns: async () => [],
     loadRun: async (id) => {
       throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);

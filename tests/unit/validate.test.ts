@@ -38,7 +38,7 @@ describe('fixtures', () => {
     }
   });
 
-  it.todo('E_UNSUPPORTED: raised by the Open-PSA importer, which does not exist yet (docs/OPEN-PSA-SUBSET.md)');
+  // E_UNSUPPORTED is raised by the Open-PSA importer (src/core/import.ts), tested in tests/unit/import.test.ts
 });
 
 describe('behaviour beyond the fixtures', () => {

@@ -27,6 +27,22 @@ export interface RuntimeInfo {
   message?: string;
 }
 
+export interface ImportErrorInfo {
+  code: string;
+  line: number;
+  column: number;
+  message: string;
+  construct?: string;
+}
+export interface ImportNoteInfo {
+  kind: string;
+  line: number;
+  message: string;
+}
+export type ImportResponse =
+  | { kind: 'refused'; errors: ImportErrorInfo[] }
+  | { kind: 'imported'; name: string; notes: ImportNoteInfo[]; summary: { top: string; events: number; gates: number }; source_sha256: string };
+
 export type Engine = 'builtin' | 'scram' | 'both';
 
 /** The second engine's answer when both were asked for, or why there is none. */
@@ -69,6 +85,7 @@ export interface Api {
   loadModel(name: string): Promise<string>;
   saveModel(name: string, text: string): Promise<ModelInfo>;
   lessons(): Promise<Lesson[]>;
+  importModel(text: string, name: string): Promise<ImportResponse>;
   listRuns(): Promise<RunInfo[]>;
   loadRun(id: string): Promise<SavedRun>;
 }
@@ -101,6 +118,7 @@ export function httpApi(base = ''): Api {
     loadModel: async (name) => (await call<{ text: string }>('GET', `/api/models/${encodeURIComponent(name)}`)).text,
     listRuns: async () => (await call<{ runs: RunInfo[] }>('GET', '/api/runs')).runs,
     loadRun: (id) => call('GET', `/api/runs/${encodeURIComponent(id)}`),
+    importModel: (text, name) => call('POST', '/api/import', { text, name }),
     lessons: async () => (await call<{ lessons: Lesson[] }>('GET', '/api/lessons')).lessons,
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
   };

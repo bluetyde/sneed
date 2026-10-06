@@ -181,4 +181,16 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('cross-check')).toHaveAttribute('data-agree', 'true');
     await audit(page, 'cross-check: the engines agree');
   });
+
+  test('the import dialog (empty, with a refusal listed) has no axe violations', async ({ app, page }) => {
+    await app.open();
+    await app.action('import').click();
+    await audit(page, 'import dialog, nothing chosen');
+    const bad = '<opsa-mef><define-fault-tree name="F"><define-house-event name="H"/><define-basic-event name="A"><float value="3"/></define-basic-event></define-fault-tree></opsa-mef>';
+    await page.locator('#imp-file').setInputFiles({ name: 'bad.xml', mimeType: 'text/xml', buffer: Buffer.from(bad) });
+    await page.locator('#imp-name').fill('a11y-bad');
+    await page.getByTestId('import-confirm').click();
+    await expect(page.getByTestId('import-results')).toContainText('Not imported');
+    await audit(page, 'import dialog, a refusal listed');
+  });
 });

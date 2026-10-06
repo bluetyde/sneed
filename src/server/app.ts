@@ -13,7 +13,8 @@ import type { Method, NativeModel } from '../core/model.js';
 import { validateModelText } from '../core/validate.js';
 import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import type { RuntimeEnv } from '../runtime/install.js';
-import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeModel } from './storage.js';
+import { importOpenPsa } from '../core/import.js';
+import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
 export const SERVER_NAME = 'sneed';
 const MAX_BODY = MAX_MODEL_BYTES + 64 * 1024;
@@ -179,6 +180,19 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     const rm = /^\/api\/runs\/([^/]+)$/.exec(p);
     if (rm && method === 'GET') return send(res, 200, readRun(opts.runsDir, safeDecode(rm[1]!)));
 
+    if (p === '/api/import' && method === 'POST') {
+      const body = await readJson(req);
+      const text = needText(body);
+      const name = body.name;
+      if (typeof name !== 'string') throw new HttpError(400, 'E_FIELD', 'name must be a string');
+      const result = importOpenPsa(text);
+      if (!result.ok) return send(res, 200, { kind: 'refused', errors: result.errors });
+      const doc = result.doc as { top: string; events: unknown[]; gates: unknown[] };
+      const report = JSON.stringify({ importer: result.importer, source_sha256: result.sourceSha256, notes: result.notes }, null, 2) + '\n';
+      writeImport(opts.projectDir, name, { modelText: result.text, originalText: text, report });
+      return send(res, 200, { kind: 'imported', name, notes: result.notes, summary: { top: doc.top, events: doc.events.length, gates: doc.gates.length }, source_sha256: result.sourceSha256 });
+    }
+
     if (p === '/api/models' && method === 'GET') return send(res, 200, { models: listModels(opts.projectDir) });
     const m = /^\/api\/models\/([^/]+)$/.exec(p);
     if (m) {
@@ -262,7 +276,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       } catch (e) {
         if (res.headersSent) return void res.end();
         if (e instanceof HttpError) return send(res, e.status, { error: { code: e.code, message: e.message } }, e.status === 413 ? { connection: 'close' } : {});
-        if (e instanceof StorageError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_TOO_LARGE' ? 413 : 400, { error: { code: e.code, message: e.message } });
+        if (e instanceof StorageError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_TOO_LARGE' ? 413 : e.code === 'E_EXISTS' ? 409 : 400, { error: { code: e.code, message: e.message } });
         if (e instanceof RunsError) return send(res, e.code === 'E_NOT_FOUND' ? 404 : e.code === 'E_NAME' ? 400 : 422, { error: { code: e.code, message: e.message } });
         if (e instanceof LessonsUnavailable) return send(res, 503, { error: { code: e.code, message: e.message } });
         if (e instanceof RuntimeNotInstalledError) return send(res, 503, { error: { code: e.code, message: e.message } });
