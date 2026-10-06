@@ -33,12 +33,12 @@ export interface Solution {
 
 type Gate = NativeModel['gates'][number];
 
-/** Basic events in the order a depth-first walk from the top first meets them. */
-export function defaultOrder(model: NativeModel): string[] {
+/** Basic events in the order a depth-first walk from the top (or from each of the given roots, first root first) first meets them. */
+export function defaultOrder(model: NativeModel, roots: string[] = [model.top]): string[] {
   const gates = new Map(model.gates.map((g) => [g.id, g]));
   const seen = new Set<string>();
   const order: string[] = [];
-  const stack = [model.top];
+  const stack = [...roots].reverse(); // reversed so the first root is walked first
   while (stack.length) {
     const id = stack.pop()!;
     if (seen.has(id)) continue;
@@ -58,13 +58,22 @@ export interface Diagram {
   p: number[];
 }
 
-/** Builds the reduced ordered diagram of the top event. Throws SolveAborted past a limit, RangeError for a top that is always or never true. */
-export function buildDiagram(model: NativeModel, opts: SolveOptions = {}): Diagram {
+/** Several events of one model in ONE diagram: a basic event that appears under more than one of them is the same variable. */
+export interface MultiDiagram {
+  bdd: Bdd;
+  order: string[];
+  p: number[];
+  /** The function that is true when the gate or basic event `id` (one of the roots, or anything reachable from them) occurs. */
+  nodeOf(id: string): number;
+}
+
+/** Builds the diagram of each of the given gates or basic events in one manager. Throws SolveAborted past a limit. */
+export function buildNodes(model: NativeModel, roots: string[], opts: SolveOptions = {}): MultiDiagram {
   const limits: BddLimits = { ...DEFAULT_LIMITS, ...opts.limits };
   const gates = new Map<string, Gate>(model.gates.map((g) => [g.id, g]));
   const probability = new Map(model.events.map((e) => [e.id, e.probability]));
 
-  const reachable = defaultOrder(model);
+  const reachable = defaultOrder(model, roots);
   if (reachable.length > MAX_EVENTS) throw new SolveAborted('too-many-events');
   let order = reachable;
   if (opts.order) {
@@ -80,7 +89,7 @@ export function buildDiagram(model: NativeModel, opts: SolveOptions = {}): Diagr
   const built = new Map<string, number>();
   const ordered: string[] = [];
   const state = new Map<string, 1 | 2>();
-  const stack: string[] = [model.top];
+  const stack: string[] = [...roots].reverse();
   while (stack.length) {
     const id = stack[stack.length - 1]!;
     const g = gates.get(id);
@@ -115,10 +124,16 @@ export function buildDiagram(model: NativeModel, opts: SolveOptions = {}): Diagr
     else node = bdd.atLeast(g.threshold ?? ins.length, ins);
     built.set(id, node);
   }
-  const root = fn(model.top);
-  if (root === FALSE || root === TRUE) throw new RangeError('the top event is always or never true; a valid model cannot do that');
+  const p = order.map((e) => probability.get(e)!);
+  return { bdd, order, p, nodeOf: fn };
+}
 
-  return { bdd, root, order, p: order.map((e) => probability.get(e)!) };
+/** Builds the reduced ordered diagram of the top event. Throws SolveAborted past a limit, RangeError for a top that is always or never true. */
+export function buildDiagram(model: NativeModel, opts: SolveOptions = {}): Diagram {
+  const d = buildNodes(model, [model.top], opts);
+  const root = d.nodeOf(model.top);
+  if (root === FALSE || root === TRUE) throw new RangeError('the top event is always or never true; a valid model cannot do that');
+  return { bdd: d.bdd, root, order: d.order, p: d.p };
 }
 
 export function solve(model: NativeModel, opts: SolveOptions = {}): Solution {

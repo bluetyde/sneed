@@ -5,6 +5,8 @@ import type { NativeModel } from '../../core/model.js';
 import type { BddLimits } from './bdd.js';
 import type { WorkerInput, WorkerMessage } from './worker.js';
 import type { ImportanceMessage, ImportanceWorkerInput } from './importance-worker.js';
+import type { EventTreeMessage, EventTreeWorkerInput } from './event-tree-worker.js';
+import type { EventTreeInput } from './event-tree.js';
 
 export type IsolatedResult = WorkerMessage;
 
@@ -21,7 +23,7 @@ export interface IsolatedOptions {
 const GRACE_MS = 500;
 
 /** Under tsx or a test runner the worker is the .ts file and needs the loader; built (dist) it is plain JavaScript. */
-function workerTarget(name: 'worker' | 'importance-worker'): { url: URL; execArgv: string[] } {
+function workerTarget(name: 'worker' | 'importance-worker' | 'event-tree-worker'): { url: URL; execArgv: string[] } {
   const ts = import.meta.url.endsWith('.ts');
   return { url: new URL(ts ? `./${name}.ts` : `./${name}.js`, import.meta.url), execArgv: ts ? ['--import', 'tsx'] : [] };
 }
@@ -37,9 +39,15 @@ export function importanceIsolated(model: NativeModel, opts: Omit<IsolatedOption
   return runWorker<ImportanceMessage>('importance-worker', data, opts);
 }
 
+/** The event-tree sequences, in their own thread with the same time limit, memory limit and cancel. */
+export function eventTreeIsolated(model: NativeModel, tree: EventTreeInput, opts: Omit<IsolatedOptions, 'order'> & { approximation?: boolean }): Promise<EventTreeMessage> {
+  const data: EventTreeWorkerInput = { model, tree, approximation: opts.approximation === true, ...(opts.limits ? { limits: opts.limits } : {}), timeoutMs: opts.timeoutMs };
+  return runWorker<EventTreeMessage>('event-tree-worker', data, opts);
+}
+
 type Failure = { ok: false; why: 'cancelled' | 'timeout' | 'too-much-memory' | 'internal' };
 
-function runWorker<R extends { ok: boolean }>(name: 'worker' | 'importance-worker', data: unknown, opts: Omit<IsolatedOptions, 'order'>): Promise<R> {
+function runWorker<R extends { ok: boolean }>(name: 'worker' | 'importance-worker' | 'event-tree-worker', data: unknown, opts: Omit<IsolatedOptions, 'order'>): Promise<R> {
   const { url, execArgv } = workerTarget(name);
   return new Promise<R>((resolve) => {
     const fail = (f: Failure): R => f as unknown as R;

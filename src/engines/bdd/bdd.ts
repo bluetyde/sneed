@@ -9,7 +9,7 @@ export const FALSE = 0;
 export const TRUE = 1;
 
 export class SolveAborted extends Error {
-  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events' | 'too-much-memory' | 'numeric-range') {
+  constructor(readonly why: 'timeout' | 'cancelled' | 'too-many-nodes' | 'too-many-cut-sets' | 'too-many-events' | 'too-much-memory' | 'numeric-range' | 'sequences-do-not-partition') {
     super(`solve stopped: ${why}`);
   }
 }
@@ -35,6 +35,7 @@ export class Bdd {
   private unique = new Map<string, number>();
   private andMemo = new Map<number, number>();
   private orMemo = new Map<number, number>();
+  private notMemo = new Map<number, number>();
   private steps = 0;
 
   constructor(
@@ -117,6 +118,22 @@ export class Bdd {
       this.or(va === top ? this.hi[a]! : a, vb === top ? this.hi[b]! : b),
     );
     this.orMemo.set(key, r);
+    return r;
+  }
+
+  /**
+   * The function that is true exactly when `a` is false. A negation is not coherent: the result is for evaluating probabilities of
+   * conditions such as "this heading worked", never for cut sets (`minimalCutSets` is defined for coherent functions only).
+   */
+  not(a: number): number {
+    if (a === FALSE) return TRUE;
+    if (a === TRUE) return FALSE;
+    const hit = this.notMemo.get(a);
+    if (hit !== undefined) return hit;
+    this.charge();
+    const r = this.mk(this.v[a]!, this.not(this.lo[a]!), this.not(this.hi[a]!));
+    this.notMemo.set(a, r);
+    this.notMemo.set(r, a); // a negation undone is the original
     return r;
   }
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AnalyzeOptions, AnalyzeOutcome } from '../../src/core/analyze.js';
@@ -1208,6 +1208,109 @@ describe('event trees over the API (plan 13, stage S1)', () => {
     const r = await post('/api/event-tree/validate', { text: '{nope' });
     expect(r.status).toBe(200);
     expect(r.json).toMatchObject({ valid: false, errors: [{ code: 'E_SCHEMA' }], tree_hash: null });
+  });
+});
+
+describe('analysing an event tree over the API (plan 13, stage S2)', () => {
+  const put = (url: string, body: unknown): Promise<Reply> => request('PUT', url, { body: JSON.stringify(body), headers: JSON_HEADERS });
+  const ASSUME = { frequency_unit: 'per-year', probability_basis: 'per-demand', independence: 'declared-independent', ie_independent_of_events: true, success_branches: 'exact' };
+  // pra-shared: TOP = AB OR AC, AB = A AND B, AC = A AND C (A shared): the two headings are AB and AC
+  const treeFor = (modelName: string, hash: string): Record<string, any> => ({
+    schema: { id: 'sneed.event-tree', version: 1 },
+    tree: { id: 'et', name: 'Shared supply (example)', created: '2026-10-06T00:00:00Z', updated: '2026-10-06T00:00:00Z' },
+    fault_tree_model: { name: modelName, model_hash: hash },
+    initiating_event: { name: 'Transient (example)', description: 'An example.', frequency: 2, unit: 'per-year' },
+    headings: [{ id: 'H1', name: 'First function', event: 'AB' }, { id: 'H2', name: 'Second function', event: 'AC' }],
+    end_states: [{ id: 'OK', name: 'Fine (example)', description: 'Nothing lost (example).', synthetic: true }, { id: 'BAD', name: 'Lost (example)', description: 'Something lost (example).', synthetic: true }],
+    sequences: [
+      { path: [{ heading: 'H1', branch: 'works' }, { heading: 'H2', branch: 'works' }], end_state: 'OK' },
+      { path: [{ heading: 'H1', branch: 'works' }, { heading: 'H2', branch: 'fails' }], end_state: 'BAD' },
+      { path: [{ heading: 'H1', branch: 'fails' }, { heading: 'H2', branch: 'works' }], end_state: 'BAD' },
+      { path: [{ heading: 'H1', branch: 'fails' }, { heading: 'H2', branch: 'fails' }], end_state: 'BAD' },
+    ],
+    assumptions: ASSUME,
+  });
+  const setup = async (name: string): Promise<{ doc: Record<string, any>; text: string }> => {
+    const modelText = text('pra-shared');
+    await put(`/api/models/${name}`, { text: modelText });
+    const hash = (await post('/api/validate', { text: modelText })).json.model_hash;
+    const doc = treeFor(name, hash);
+    return { doc, text: JSON.stringify(doc) };
+  };
+
+  it('runs the saved model\'s heading events jointly and answers with a record of its own kind, written to a run folder', async () => {
+    const { text: tree } = await setup('etrun-model');
+    const before = readdirSync(path.join(tmp, 'runs')).length;
+    const r = await post('/api/event-tree/run', { text: tree });
+    expect(r.status).toBe(200);
+    expect(r.json.kind).toBe('ran');
+    const rec = r.json.record;
+    expect(rec).toMatchObject({ schema: { id: 'sneed.event-tree-result' }, status: 'completed', completeness: 'complete', approximation: null });
+    // A = 0.1 (pra-shared), B = 0.2, C = 0.3: AB = 0.02, AC = 0.03, both = A and B and C = 0.006
+    const p = (k: string): number => rec.sequences.find((s: { key: string }) => s.key === k).probability;
+    expect(p('H1:fails,H2:fails')).toBeCloseTo(0.006, 14);
+    expect(p('H1:fails,H2:works')).toBeCloseTo(0.014, 14);
+    expect(p('H1:works,H2:fails')).toBeCloseTo(0.024, 14);
+    expect(p('H1:works,H2:works')).toBeCloseTo(0.956, 14);
+    expect(rec.total.frequency).toBeCloseTo(2, 14);
+    expect(rec.sequences.find((s: { key: string }) => s.key === 'H1:fails,H2:fails').frequency).toBeCloseTo(0.012, 14); // 2 per year x 0.006
+    expect(readdirSync(path.join(tmp, 'runs')).length).toBe(before + 1);
+    expect(existsSync(path.join(tmp, 'runs', r.json.run_id, 'event-tree-results.json'))).toBe(true);
+    // an event-tree run is not a fault-tree run: the saved-run list for Compare and reuse does not list it
+    expect((await request('GET', '/api/runs')).json.runs.map((x: { id: string }) => x.id)).not.toContain(r.json.run_id);
+  });
+
+  it('the labelled approximation only when asked, and only as a true or false', async () => {
+    const { text: tree } = await setup('etrun-model2');
+    expect((await post('/api/event-tree/run', { text: tree })).json.record.approximation).toBeNull();
+    const asked = await post('/api/event-tree/run', { text: tree, approximation: true });
+    expect(asked.json.record.approximation).toMatchObject({ method: 'success-branches-ignored' });
+    for (const bad of ['yes', 1, null]) {
+      const r = await post('/api/event-tree/run', { text: tree, approximation: bad });
+      expect(r.status, String(bad)).toBe(400);
+      expect(r.json.error.code).toBe('E_FIELD');
+    }
+  });
+
+  it('a tree that does not check out is refused before anything is queued or written', async () => {
+    const { doc } = await setup('etrun-model3');
+    const before = readdirSync(path.join(tmp, 'runs')).length;
+    const bad = { ...doc, sequences: doc.sequences.slice(1) };
+    const r = await post('/api/event-tree/run', { text: JSON.stringify(bad) });
+    expect(r.json).toMatchObject({ kind: 'refused', errors: [{ code: 'E_SEQUENCES_MISSING' }] });
+    const stale = { ...doc, fault_tree_model: { ...doc.fault_tree_model, model_hash: 'e'.repeat(64) } };
+    expect((await post('/api/event-tree/run', { text: JSON.stringify(stale) })).json.errors.map((e: { code: string }) => e.code)).toEqual(['E_STALE_MODEL']);
+    expect((await post('/api/event-tree/run', { text: JSON.stringify({ ...doc, fault_tree_model: { ...doc.fault_tree_model, name: 'no-such-model' } }) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
+    expect((await post('/api/event-tree/run', { text: '{nope' })).json.errors[0].code).toBe('E_SCHEMA');
+    expect(readdirSync(path.join(tmp, 'runs')).length).toBe(before);
+    expect((await post('/api/event-tree/run', {})).status).toBe(400);
+    const noHeader = await request('POST', '/api/event-tree/run', { body: JSON.stringify({ text: '{}' }), headers: { 'content-type': 'application/json' } });
+    expect(noHeader.status).toBe(403);
+  });
+
+  it('takes its turn behind a run, can be cancelled while it waits by request id, and the status lists it', async () => {
+    const { text: tree } = await setup('etrun-model4');
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const hasStarted = new Promise<void>((r) => (started = r));
+    analyzeImpl = async () => {
+      started();
+      await gate;
+      return { kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never };
+    };
+    const run = post('/api/run', { text: text('pra-and'), engine: 'scram', request_id: 'req-run' });
+    await hasStarted;
+    const waiting = post('/api/event-tree/run', { text: tree, request_id: 'req-et' });
+    const doomed = post('/api/event-tree/run', { text: tree, request_id: 'req-doomed' });
+    for (let i = 0; i < 100 && ((await request('GET', '/api/run/status')).json.queued as unknown[]).length < 2; i++) await new Promise((r) => setTimeout(r, 20));
+    expect((await request('GET', '/api/run/status')).json.queued).toEqual([{ request_id: 'req-et' }, { request_id: 'req-doomed' }]);
+    expect((await post('/api/run/cancel', { request_id: 'req-doomed' })).json).toEqual({ cancelled: true });
+    expect((await doomed).json).toEqual({ kind: 'dequeued' });
+    release();
+    await run;
+    expect((await waiting).json.kind).toBe('ran');
+    analyzeImpl = async () => ({ kind: 'ran', runDir: path.join(tmp, 'runs', 'run-1'), record: fakeRecord as never });
   });
 });
 
