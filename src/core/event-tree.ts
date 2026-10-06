@@ -144,6 +144,7 @@ function mapAjvError(e: ErrorObject): EtIssue | null {
   if (path === '/initiating_event/unit') return issue('E_NO_UNIT', path, 'the frequency unit must be "per-year" (the only unit this version knows)');
   if (path === '' && missing === 'fault_tree_model') return issue('E_NO_MODEL', '/fault_tree_model', 'the document names no fault-tree model for its headings');
   if (path === '/fault_tree_model' && missing) return issue('E_NO_MODEL', `/fault_tree_model/${missing}`, `the fault-tree model reference has no ${q(missing)}`);
+  if (/^\/sequences\/\d+$/.test(path) && missing === 'end_state') return issue('E_NO_END_STATE', `${path}/end_state`, 'the sequence has no end state: choose the condition it ends in');
   if (path === '/headings' && e.keyword === 'maxItems') return issue('E_TOO_MANY_HEADINGS', path, `an event tree has at most ${MAX_HEADINGS} headings in this version`);
   if (/^\/(headings|end_states)\/\d+\/id$/.test(path) && e.keyword === 'pattern') return issue('E_ID_FORMAT', path, 'the id does not match the identifier pattern (1 to 64 letters, digits, underscores and inner dashes)');
   const where = missing ? `${path}/${missing}` : path;
@@ -294,14 +295,18 @@ export function eventTreeHash(doc: {
 }): string {
   const ends: Record<string, string> = {};
   for (const s of doc.sequences) ends[pathKey(s.path)] = s.end_state;
+  // only the fields this version knows: an extra field inside `schema` or `assumptions` (allowed, and kept in the file) can neither change the
+  // hash nor make it throw (a non-finite number, a structure too deep to walk)
+  const sch = doc.schema as { id: unknown; version: unknown };
+  const as = doc.assumptions as Record<string, unknown>;
   const projection = {
-    schema: doc.schema,
+    schema: { id: sch.id, version: sch.version },
     fault_tree_model: { name: doc.fault_tree_model.name, model_hash: doc.fault_tree_model.model_hash },
     initiating_event: { frequency: doc.initiating_event.frequency, unit: doc.initiating_event.unit },
     headings: doc.headings.map((h) => ({ id: h.id, event: h.event, ...(h.asked_only_if ? { asked_only_if: { heading: h.asked_only_if.heading, branch: h.asked_only_if.branch } } : {}) })),
     end_states: doc.end_states.map((e) => e.id).sort(),
     sequences: ends,
-    assumptions: doc.assumptions,
+    assumptions: { frequency_unit: as.frequency_unit, probability_basis: as.probability_basis, independence: as.independence, ie_independent_of_events: as.ie_independent_of_events, success_branches: as.success_branches },
   };
   return createHash('sha256').update(canon(projection), 'utf8').digest('hex');
 }
