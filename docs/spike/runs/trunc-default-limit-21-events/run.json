@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/trunc-default-limit-21-events.xml",
+    "<repo>/docs/spike/inputs/trunc-default-limit-21-events.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/trunc-default-limit-21-events/report.xml"
+    "<repo>/docs/spike/runs/trunc-default-limit-21-events/report.xml"
   ],
   "exit": 0,
   "stdout": "",

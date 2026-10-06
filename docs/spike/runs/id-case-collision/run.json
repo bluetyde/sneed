@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-case-collision.xml",
+    "<repo>/docs/spike/inputs/id-case-collision.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-case-collision/report.xml"
+    "<repo>/docs/spike/runs/id-case-collision/report.xml"
   ],
   "exit": 0,
   "stdout": "",

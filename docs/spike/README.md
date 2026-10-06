@@ -22,7 +22,7 @@ Build record: `build-env-and-scram.sh`, `build-cli-target.sh`. Built with `-DBUI
 - Boost 1.78 still needs one flag, no source edit: `-DCMAKE_CXX_FLAGS=-DBOOST_THROW_EXCEPTION_CURRENT_FUNCTION=BOOST_CURRENT_FUNCTION`.
 - The test target needs the Catch v1 header `catch.hpp`, which was not installed; only `bin/scram` was built.
 - SCRAM loads its schemas from `<build>/share/scram/*.rng`. The build tree has none, so a symlink `build/share/scram -> src/share` was made. A packaged install needs that layout, plus `LD_LIBRARY_PATH` for `libscram.so`.
-- Windows route: the engine runs in WSL. Paths with spaces work when passed as an argument list through `wsl --exec` (no shell); the working path here is `C:\Users\jwncr\Claude Code Test\...`. Some error messages show the path URL-encoded (`%20`), so the adapter must not match on message path text. `\\wsl$` paths were not tested.
+- Windows route: the engine runs in WSL. Paths with spaces work when passed as an argument list through `wsl --exec` (no shell); the working path here was a Windows path with spaces under the account's home folder. Some error messages show the path URL-encoded (`%20`), so the adapter must not match on message path text. `\\wsl$` paths were not tested.
 
 ## Invocation
 

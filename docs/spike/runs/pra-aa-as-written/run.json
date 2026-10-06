@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-aa-as-written.xml",
+    "<repo>/docs/spike/inputs/pra-aa-as-written.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-aa-as-written/report.xml"
+    "<repo>/docs/spike/runs/pra-aa-as-written/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::mef::DuplicateArgumentError\n\nFile: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/pra-aa-as-written.xml\nLine: 4\n\nDuplicate argument A\n",
+  "stderr": "scram::mef::DuplicateArgumentError\n\nFile: <repo>/docs/spike/inputs/pra-aa-as-written.xml\nLine: 4\n\nDuplicate argument A\n",
   "report_exists": false
 }

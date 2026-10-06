@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/atleast-min4-of3.xml",
+    "<repo>/docs/spike/inputs/atleast-min4-of3.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/atleast-min4-of3/report.xml"
+    "<repo>/docs/spike/runs/atleast-min4-of3/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::mef::ValidityError\n\nFile: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min4-of3.xml\nLine: 4\n\n\"atleast\" formula must have more arguments than its vote number 4.\n",
+  "stderr": "scram::mef::ValidityError\n\nFile: <repo>/docs/spike/inputs/atleast-min4-of3.xml\nLine: 4\n\n\"atleast\" formula must have more arguments than its vote number 4.\n",
   "report_exists": false
 }

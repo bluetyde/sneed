@@ -12,7 +12,7 @@
   "pra-missing": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/pra-missing.xml Line: 4 Undefined basic-event ZZ with base path FT"
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/pra-missing.xml Line: 4 Undefined basic-event ZZ with base path FT"
   },
   "pra-cycle": {
     "exit": 1,
@@ -22,16 +22,16 @@
   "malformed-xml": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ParseError File: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/malformed-xml.xml Line: 1 Premature end of data in tag opsa-mef line 1"
+    "stderr": "scram::xml::ParseError File: <repo>/docs/spike/inputs/malformed-xml.xml Line: 1 Premature end of data in tag opsa-mef line 1"
   },
   "empty-file": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ParseError File: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/empty-file.xml Line: 1 Document is empty"
+    "stderr": "scram::xml::ParseError File: <repo>/docs/spike/inputs/empty-file.xml Line: 1 Document is empty"
   },
   "nonexistent": {
     "exit": 1,
-    "stderr": "scram::IOError File: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/does-not-exist.xml Input file doesn't exist."
+    "stderr": "scram::IOError File: <repo>/docs/spike/inputs/does-not-exist.xml Input file doesn't exist."
   },
   "hostile-entity-expansion": {
     "exit": 0,
@@ -52,7 +52,7 @@
   "hostile-external-entity": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/hostile-external-entity.xml Line: 1 Did not expect element label there"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/hostile-external-entity.xml Line: 1 Did not expect element label there"
   },
   "trunc-limit-order-2": {
     "exit": 0,
@@ -139,32 +139,32 @@
   "atleast-min1-of3": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min1-of3.xml Line: 4 Vote number cannot be less than 2."
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/atleast-min1-of3.xml Line: 4 Vote number cannot be less than 2."
   },
   "atleast-min3-of3": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min3-of3.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 3."
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/atleast-min3-of3.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 3."
   },
   "atleast-min4-of3": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min4-of3.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 4."
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/atleast-min4-of3.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 4."
   },
   "atleast-min2-of2": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min2-of2.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 2."
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/atleast-min2-of2.xml Line: 4 \"atleast\" formula must have more arguments than its vote number 2."
   },
   "atleast-min0-of3": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-min0-of3.xml Line: 4 Vote number cannot be less than 2."
+    "stderr": "scram::mef::ValidityError File: <repo>/docs/spike/inputs/atleast-min0-of3.xml Line: 4 Vote number cannot be less than 2."
   },
   "atleast-dup-arg": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::DuplicateArgumentError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/atleast-dup-arg.xml Line: 4 Duplicate argument A"
+    "stderr": "scram::mef::DuplicateArgumentError File: <repo>/docs/spike/inputs/atleast-dup-arg.xml Line: 4 Duplicate argument A"
   },
   "id-case-collision": {
     "exit": 0,
@@ -183,27 +183,27 @@
   "id-leading-digit": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-leading-digit.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-leading-digit.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-dot-dash-underscore": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-dot-dash-underscore.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-dot-dash-underscore.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-space": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-space.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-space.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-unicode": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ParseError File: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-unicode.xml Line: 4 Input is not proper UTF-8, indicate encoding ! Bytes: 0xE9 0x22 0x2F 0x3E"
+    "stderr": "scram::xml::ParseError File: <repo>/docs/spike/inputs/id-unicode.xml Line: 4 Input is not proper UTF-8, indicate encoding ! Bytes: 0xE9 0x22 0x2F 0x3E"
   },
   "id-event-gate-same-name": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::mef::RedefinitionError File: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-event-gate-same-name.xml Line: 4 Redefinition of event: X"
+    "stderr": "scram::mef::RedefinitionError File: <repo>/docs/spike/inputs/id-event-gate-same-name.xml Line: 4 Redefinition of event: X"
   },
   "id-gate-named-TOP-lower": {
     "exit": 0,
@@ -250,7 +250,7 @@
   "id-dot": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-dot.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-dot.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-underscore": {
     "exit": 0,
@@ -283,7 +283,7 @@
   "id-trailing-dash": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-trailing-dash.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-trailing-dash.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-leading-underscore": {
     "exit": 0,
@@ -302,12 +302,12 @@
   "id-leading-dash": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-leading-dash.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-leading-dash.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-leading-dot": {
     "exit": 1,
     "report": false,
-    "stderr": "scram::xml::ValidityError File: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-leading-dot.xml Line: 5 Element define-basic-event failed to validate attributes"
+    "stderr": "scram::xml::ValidityError File: <repo>/docs/spike/inputs/id-leading-dot.xml Line: 5 Element define-basic-event failed to validate attributes"
   },
   "id-unicode-utf8": {
     "exit": 0,

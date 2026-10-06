@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-upper-lower-digit.xml",
+    "<repo>/docs/spike/inputs/id-upper-lower-digit.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-upper-lower-digit/report.xml"
+    "<repo>/docs/spike/runs/id-upper-lower-digit/report.xml"
   ],
   "exit": 0,
   "stdout": "",

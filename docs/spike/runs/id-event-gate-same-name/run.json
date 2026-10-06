@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-event-gate-same-name.xml",
+    "<repo>/docs/spike/inputs/id-event-gate-same-name.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-event-gate-same-name/report.xml"
+    "<repo>/docs/spike/runs/id-event-gate-same-name/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::mef::RedefinitionError\n\nFile: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-event-gate-same-name.xml\nLine: 4\n\nRedefinition of event: X\n",
+  "stderr": "scram::mef::RedefinitionError\n\nFile: <repo>/docs/spike/inputs/id-event-gate-same-name.xml\nLine: 4\n\nRedefinition of event: X\n",
   "report_exists": false
 }

@@ -12,9 +12,9 @@
     "true",
     "-l",
     "2",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/trunc-limit-order-2.xml",
+    "<repo>/docs/spike/inputs/trunc-limit-order-2.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/trunc-limit-order-2/report.xml"
+    "<repo>/docs/spike/runs/trunc-limit-order-2/report.xml"
   ],
   "exit": 0,
   "stdout": "",

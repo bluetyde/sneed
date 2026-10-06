@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-pump3-separate.xml",
+    "<repo>/docs/spike/inputs/pra-pump3-separate.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/determinism-2/report.xml"
+    "<repo>/docs/spike/runs/determinism-2/report.xml"
   ],
   "exit": 0,
   "stdout": "",

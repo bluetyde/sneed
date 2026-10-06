@@ -11,9 +11,9 @@
     "--probability",
     "true",
     "--rare-event",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-vote-rare.xml",
+    "<repo>/docs/spike/inputs/pra-vote-rare.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-vote-rare/report.xml"
+    "<repo>/docs/spike/runs/pra-vote-rare/report.xml"
   ],
   "exit": 0,
   "stdout": "",

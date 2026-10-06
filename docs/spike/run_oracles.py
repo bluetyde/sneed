@@ -24,6 +24,15 @@ def wsl_path(p: Path) -> str:
     return "/mnt/" + s[0].lower() + s[2:]
 
 
+def publishable(text):
+    """The run files are published: the project folder becomes <repo> (also URL-encoded, as some engine messages write it), so
+    no account name or absolute folder appears in them (publication scrub, docs/PUBLICATION.md)."""
+    root = wsl_path(HERE.parent.parent)
+    for spelling in (root, root.replace(" ", "%20")):
+        text = text.replace(spelling, "<repo>")
+    return text
+
+
 def ev(name):
     return f'<basic-event name="{name}"/>'
 
@@ -90,7 +99,7 @@ def run_scram(tag, input_path, args, tolerate=False):
         "stderr": p.stderr.decode("utf-8", "replace").replace("\x00", ""),
         "report_exists": out.exists(),
     }
-    (d / "run.json").write_text(json.dumps(rec, indent=2), newline="\n")
+    (d / "run.json").write_text(publishable(json.dumps(rec, indent=2)), newline="\n")
     return rec, out
 
 

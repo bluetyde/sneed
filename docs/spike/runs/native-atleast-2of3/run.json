@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/native-atleast-2of3.xml",
+    "<repo>/docs/spike/inputs/native-atleast-2of3.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/native-atleast-2of3/report.xml"
+    "<repo>/docs/spike/runs/native-atleast-2of3/report.xml"
   ],
   "exit": 0,
   "stdout": "",

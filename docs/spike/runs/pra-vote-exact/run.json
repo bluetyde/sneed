@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-vote-exact.xml",
+    "<repo>/docs/spike/inputs/pra-vote-exact.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-vote-exact/report.xml"
+    "<repo>/docs/spike/runs/pra-vote-exact/report.xml"
   ],
   "exit": 0,
   "stdout": "",

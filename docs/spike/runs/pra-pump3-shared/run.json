@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-pump3-shared.xml",
+    "<repo>/docs/spike/inputs/pra-pump3-shared.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-pump3-shared/report.xml"
+    "<repo>/docs/spike/runs/pra-pump3-shared/report.xml"
   ],
   "exit": 0,
   "stdout": "",

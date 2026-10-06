@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-neg-prob.xml",
+    "<repo>/docs/spike/inputs/pra-neg-prob.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-neg-prob/report.xml"
+    "<repo>/docs/spike/runs/pra-neg-prob/report.xml"
   ],
   "exit": 1,
   "stdout": "",

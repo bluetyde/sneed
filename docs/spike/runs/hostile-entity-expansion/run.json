@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/hostile-entity-expansion.xml",
+    "<repo>/docs/spike/inputs/hostile-entity-expansion.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/hostile-entity-expansion/report.xml"
+    "<repo>/docs/spike/runs/hostile-entity-expansion/report.xml"
   ],
   "exit": 0,
   "stdout": "",

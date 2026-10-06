@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-dot.xml",
+    "<repo>/docs/spike/inputs/id-dot.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-dot/report.xml"
+    "<repo>/docs/spike/runs/id-dot/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::xml::ValidityError\n\nFile: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/id-dot.xml\nLine: 5\n\nElement define-basic-event failed to validate attributes\n\n",
+  "stderr": "scram::xml::ValidityError\n\nFile: <repo>/docs/spike/inputs/id-dot.xml\nLine: 5\n\nElement define-basic-event failed to validate attributes\n\n",
   "report_exists": false
 }

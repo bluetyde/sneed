@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/malformed-xml.xml",
+    "<repo>/docs/spike/inputs/malformed-xml.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/malformed-xml/report.xml"
+    "<repo>/docs/spike/runs/malformed-xml/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::xml::ParseError\n\nFile: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/malformed-xml.xml\nLine: 1\n\nPremature end of data in tag opsa-mef line 1\n\n",
+  "stderr": "scram::xml::ParseError\n\nFile: <repo>/docs/spike/inputs/malformed-xml.xml\nLine: 1\n\nPremature end of data in tag opsa-mef line 1\n\n",
   "report_exists": false
 }

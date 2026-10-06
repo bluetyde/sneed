@@ -25,7 +25,7 @@ afterAll(async () => {
 
 describe('toWslPath', () => {
   it('keeps spaces and converts drive letters and separators', () => {
-    expect(toWslPath('C:\\Users\\jwncr\\Claude Code Test\\runs\\a')).toBe('/mnt/c/Users/jwncr/Claude Code Test/runs/a');
+    expect(toWslPath('C:\\Users\\alice\\Course Files\\runs\\a')).toBe('/mnt/c/Users/alice/Course Files/runs/a');
     expect(toWslPath('D:/OpenMC/x')).toBe('/mnt/d/OpenMC/x');
   });
   it('refuses anything that is not a drive path', () => {

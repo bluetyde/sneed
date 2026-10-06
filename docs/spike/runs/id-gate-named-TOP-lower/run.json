@@ -10,9 +10,9 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-gate-named-TOP-lower.xml",
+    "<repo>/docs/spike/inputs/id-gate-named-TOP-lower.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-gate-named-TOP-lower/report.xml"
+    "<repo>/docs/spike/runs/id-gate-named-TOP-lower/report.xml"
   ],
   "exit": 0,
   "stdout": "",

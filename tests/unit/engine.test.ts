@@ -29,7 +29,7 @@ describe('regexEscape (pkill -f takes an extended regular expression)', () => {
 
 describe('toWslPath', () => {
   it('converts drive paths, keeps spaces and rejects anything else', () => {
-    expect(toWslPath('C:\\Users\\jwncr\\Claude Code Test\\runs\\a')).toBe('/mnt/c/Users/jwncr/Claude Code Test/runs/a');
+    expect(toWslPath('C:\\Users\\alice\\Course Files\\runs\\a')).toBe('/mnt/c/Users/alice/Course Files/runs/a');
     expect(toWslPath('D:/OpenMC/x')).toBe('/mnt/d/OpenMC/x');
     expect(() => toWslPath('\\\\wsl$\\Ubuntu\\root')).toThrow();
   });

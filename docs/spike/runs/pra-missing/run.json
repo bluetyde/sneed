@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-missing.xml",
+    "<repo>/docs/spike/inputs/pra-missing.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-missing/report.xml"
+    "<repo>/docs/spike/runs/pra-missing/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::mef::ValidityError\n\nFile: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/pra-missing.xml\nLine: 4\n\nUndefined basic-event ZZ with base path FT\n",
+  "stderr": "scram::mef::ValidityError\n\nFile: <repo>/docs/spike/inputs/pra-missing.xml\nLine: 4\n\nUndefined basic-event ZZ with base path FT\n",
   "report_exists": false
 }

@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/hostile-external-entity.xml",
+    "<repo>/docs/spike/inputs/hostile-external-entity.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/hostile-external-entity/report.xml"
+    "<repo>/docs/spike/runs/hostile-external-entity/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::xml::ValidityError\n\nFile: /mnt/c/Users/jwncr/Claude%20Code%20Test/pra-studio/docs/spike/inputs/hostile-external-entity.xml\nLine: 1\n\nDid not expect element label there\n\n",
+  "stderr": "scram::xml::ValidityError\n\nFile: <repo>/docs/spike/inputs/hostile-external-entity.xml\nLine: 1\n\nDid not expect element label there\n\n",
   "report_exists": false
 }

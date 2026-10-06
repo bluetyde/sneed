@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/empty-file.xml",
+    "<repo>/docs/spike/inputs/empty-file.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/empty-file/report.xml"
+    "<repo>/docs/spike/runs/empty-file/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::xml::ParseError\n\nFile: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/empty-file.xml\nLine: 1\n\nDocument is empty\n\n",
+  "stderr": "scram::xml::ParseError\n\nFile: <repo>/docs/spike/inputs/empty-file.xml\nLine: 1\n\nDocument is empty\n\n",
   "report_exists": false
 }

@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-unicode.xml",
+    "<repo>/docs/spike/inputs/id-unicode.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/id-unicode/report.xml"
+    "<repo>/docs/spike/runs/id-unicode/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::xml::ParseError\n\nFile: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/id-unicode.xml\nLine: 4\n\nInput is not proper UTF-8, indicate encoding !\nBytes: 0xE9 0x22 0x2F 0x3E\n\n",
+  "stderr": "scram::xml::ParseError\n\nFile: <repo>/docs/spike/inputs/id-unicode.xml\nLine: 4\n\nInput is not proper UTF-8, indicate encoding !\nBytes: 0xE9 0x22 0x2F 0x3E\n\n",
   "report_exists": false
 }

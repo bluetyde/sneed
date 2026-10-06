@@ -11,9 +11,9 @@
     "--probability",
     "true",
     "--mcub",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/pra-vote-mcub.xml",
+    "<repo>/docs/spike/inputs/pra-vote-mcub.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/pra-vote-mcub/report.xml"
+    "<repo>/docs/spike/runs/pra-vote-mcub/report.xml"
   ],
   "exit": 0,
   "stdout": "",

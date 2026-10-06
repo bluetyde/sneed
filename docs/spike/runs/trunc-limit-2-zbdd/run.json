@@ -12,9 +12,9 @@
     "true",
     "-l",
     "2",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/trunc-limit-2-zbdd.xml",
+    "<repo>/docs/spike/inputs/trunc-limit-2-zbdd.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/trunc-limit-2-zbdd/report.xml"
+    "<repo>/docs/spike/runs/trunc-limit-2-zbdd/report.xml"
   ],
   "exit": 0,
   "stdout": "",

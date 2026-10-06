@@ -10,12 +10,12 @@
     "--bdd",
     "--probability",
     "true",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/does-not-exist.xml",
+    "<repo>/docs/spike/inputs/does-not-exist.xml",
     "-o",
-    "/mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/runs/nonexistent/report.xml"
+    "<repo>/docs/spike/runs/nonexistent/report.xml"
   ],
   "exit": 1,
   "stdout": "",
-  "stderr": "scram::IOError\n\nFile: /mnt/c/Users/jwncr/Claude Code Test/pra-studio/docs/spike/inputs/does-not-exist.xml\n\nInput file doesn't exist.\n",
+  "stderr": "scram::IOError\n\nFile: <repo>/docs/spike/inputs/does-not-exist.xml\n\nInput file doesn't exist.\n",
   "report_exists": false
 }
