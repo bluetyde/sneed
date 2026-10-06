@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
-import { listRuns, readRun, RunsError } from './runs.js';
+import { listRuns, MAX_LOOKUP_RUNS, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
@@ -303,11 +303,21 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       } catch {
         return send(res, 200, none);
       }
-      const rt = engine === 'scram' ? runtimeInfo() : null;
+      // the engine build must be the same: for SCRAM the version AND the hash of the binary the installed runtime resolves to
+      let wantSha: string | null = null;
+      let wantVersion: string | null = BDD_ENGINE_VERSION;
+      if (engine === 'scram') {
+        try {
+          const e = resolveEngine(env);
+          wantVersion = e.expectedVersion;
+          wantSha = e.expectedSha256 ?? null;
+        } catch {
+          return send(res, 200, none); // no runtime: there is no build to match
+        }
+        if (wantSha === null) return send(res, 200, none);
+      }
       const wantName = engine === 'scram' ? 'SCRAM' : BDD_ENGINE_NAME;
-      const wantVersion = engine === 'scram' ? (rt?.installed === true ? String(rt.engine_version) : null) : BDD_ENGINE_VERSION;
-      if (wantVersion === null) return send(res, 200, none);
-      const hit = listRuns(opts.runsDir).find((r) => r.model_hash === hash && r.method === chosen && r.status === 'completed' && r.completeness === 'complete' && r.engine_name === wantName && r.engine_version === wantVersion);
+      const hit = listRuns(opts.runsDir, MAX_LOOKUP_RUNS).find((r) => r.model_hash === hash && r.method === chosen && r.status === 'completed' && r.completeness === 'complete' && r.engine_name === wantName && r.engine_version === wantVersion && r.engine_sha256 === wantSha);
       if (!hit) return send(res, 200, none);
       try {
         const saved = readRun(opts.runsDir, hit.id);

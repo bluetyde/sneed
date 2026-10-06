@@ -49,7 +49,9 @@ export class Editor {
   queueAhead = 0;
   private runRequestId: string | null = null;
   /** A saved result for exactly this run, offered instead of running it again. It is only shown while the model, method and engine are the ones it was found for. */
-  private offer: { key: string; run_id: string; saved_at: string; result: RanResponse } | null = null;
+  private offer: { key: string; text: string; run_id: string; saved_at: string; result: RanResponse } | null = null;
+  /** True from the press of Run until the run is under way (the lookup for a saved run is in between), so a second press is ignored. */
+  private starting = false;
   /** Set when the result on show is a saved one that was reused (nothing was run). */
   reused: { run_id: string; saved_at: string } | null = null;
   result: RunResponse | null = null;
@@ -155,7 +157,7 @@ export class Editor {
   }
   /** The saved result on offer for the run Run would make now, or null. */
   get reuseOffer(): { run_id: string; saved_at: string; result: RanResponse } | null {
-    return this.offer && this.offer.key === this.offerKey() ? this.offer : null;
+    return this.offer && this.offer.key === this.offerKey() && this.offer.text === this.text ? this.offer : null; // the text too: a change not yet validated must not show a result for the old model
   }
   /** True when the shown result is for an earlier version of the model or another method. */
   get stale(): boolean {
@@ -362,26 +364,33 @@ export class Editor {
    * While the engine is busy with another run, this one waits in the server's queue and `queueAhead` says how far back it is.
    */
   async run(opts: { fresh?: boolean } = {}): Promise<void> {
-    if (this.running) return;
-    await this.settle(); // run exactly the text that was just checked
-    const blocked = this.runBlockedReason;
-    if (blocked) return this.setNotice('warning', `Run blocked: ${blocked}.`);
-    if (!opts.fresh && this.engine !== 'both') {
-      const key = this.offerKey();
-      try {
-        const hit = await this.api.lookupRun(this.text, this.method, this.engine);
-        if (hit.found && key === this.offerKey()) {
-          this.offer = { key, run_id: hit.run_id, saved_at: hit.saved_at, result: { kind: 'ran', run_id: hit.run_id, record: hit.record } };
-          this.setNotice(null);
-          this.emit();
-          return;
+    if (this.running || this.starting) return;
+    this.starting = true;
+    try {
+      await this.settle(); // run exactly the text that was just checked
+      const blocked = this.runBlockedReason;
+      if (blocked) return this.setNotice('warning', `Run blocked: ${blocked}.`);
+      if (!opts.fresh && this.engine !== 'both') {
+        const key = this.offerKey();
+        const text = this.text;
+        try {
+          const hit = await this.api.lookupRun(text, this.method, this.engine);
+          if (hit.found && key === this.offerKey() && text === this.text) {
+            this.offer = { key, text, run_id: hit.run_id, saved_at: hit.saved_at, result: { kind: 'ran', run_id: hit.run_id, record: hit.record } };
+            this.setNotice(null);
+            this.emit();
+            return;
+          }
+        } catch {
+          /* no lookup: run it */
         }
-      } catch {
-        /* no lookup: run it */
+        if (key !== this.offerKey() || text !== this.text) return; // the model changed while we looked: nothing to run for it
       }
+      this.running = true; // from here `running` guards, not `starting`
+    } finally {
+      this.starting = false;
     }
     this.offer = null;
-    this.running = true;
     this.queueAhead = 0;
     const requestId = `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     this.runRequestId = requestId;
@@ -430,6 +439,7 @@ export class Editor {
     const o = this.reuseOffer;
     if (!o) return;
     this.result = o.result;
+    this.runError = null; // a failed earlier run must not hide the result being shown
     this.resultEngine = this.engine;
     this.reused = { run_id: o.run_id, saved_at: o.saved_at };
     this.highlight = [];

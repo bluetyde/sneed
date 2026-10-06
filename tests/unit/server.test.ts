@@ -940,6 +940,22 @@ describe('finding an identical saved run', () => {
     }
   });
 
+  it('searches beyond the newest 100 runs, and does not offer a SCRAM run when no runtime says which build it was', async () => {
+    const s = await makeServer();
+    try {
+      const t = text('pra-and');
+      const h = await hashOf(s.url, t);
+      const eng = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION };
+      save(s.runs, '2020-01-01T00-00-00-oldest-aaaaaaaa', { input_hashes: { model_hash: h }, engine: eng });
+      for (let i = 0; i < 120; i++) save(s.runs, `2026-01-${String(i).padStart(3, '0')}-other-bbbbbbbb`, { input_hashes: { model_hash: 'f'.repeat(64) }, engine: eng });
+      expect((await lookup(s.url, { text: t, method: 'exact', engine: 'builtin' })).json).toMatchObject({ found: true, run_id: '2020-01-01T00-00-00-oldest-aaaaaaaa' });
+      save(s.runs, '2027-01-01T00-00-00-scram-cccccccc', { input_hashes: { model_hash: h }, engine: { name: 'SCRAM', version: '0.16.2', sha256: 'a'.repeat(64) } });
+      expect((await lookup(s.url, { text: t, method: 'exact', engine: 'scram' })).json).toEqual({ found: false }); // no runtime installed here
+    } finally {
+      await s.close();
+    }
+  });
+
   it('does not offer a run that is truncated, failed, from another engine version, or whose files cannot be read', async () => {
     const s = await makeServer();
     try {
