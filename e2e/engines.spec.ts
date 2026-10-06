@@ -9,6 +9,9 @@ test.describe('the two engines', () => {
     expect(await app.cutSets()).toEqual(['E1', 'E2']);
     await expect(page.getByTestId('results')).toContainText('sneed-bdd');
     await expect(page.getByTestId('results')).toContainText('built into the app, nothing to install');
+    await expect(page.getByTestId('results')).toContainText('Engine build'); // the hash of the engine's source files, so a changed solver is a different build
+    const build = await page.getByTestId('results').locator('dd code').first().textContent();
+    expect(build).toMatch(/^[0-9a-f]{16}$/);
     await expect(page.getByTestId('cross-check')).toHaveCount(0); // a second opinion only when asked for
   });
 
