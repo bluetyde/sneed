@@ -1193,6 +1193,17 @@ describe('event trees over the API (plan 13, stage S1)', () => {
     expect((await post('/api/event-tree/validate', { text: JSON.stringify(treeFor('../secret', hash)) })).json.errors[0].code).toBe('E_MODEL_NOT_FOUND');
   });
 
+  it('extra fields that cannot be hashed do not make the route fail: a normal answer, with a hash', async () => {
+    const modelText = text('pra-shared');
+    await put('/api/models/et-model3', { text: modelText });
+    const hash = await modelHashOf(modelText);
+    const odd = JSON.stringify(treeFor('et-model3', hash)).replace('"schema":{', '"schema":{"extra":1e400,');
+    const r = await post('/api/event-tree/validate', { text: odd });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ valid: true });
+    expect(r.json.tree_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it('text that is not a document is reported as E_SCHEMA, not as a server error', async () => {
     const r = await post('/api/event-tree/validate', { text: '{nope' });
     expect(r.status).toBe(200);

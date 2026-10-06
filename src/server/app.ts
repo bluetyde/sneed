@@ -255,7 +255,13 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       };
       const v = validateEventTreeText(text, { resolveModel });
       let tree_hash: string | null = null;
-      if (v.valid) tree_hash = eventTreeHash(JSON.parse(text));
+      if (v.valid) {
+        try {
+          tree_hash = eventTreeHash(JSON.parse(text));
+        } catch {
+          return send(res, 200, { ...v, valid: false, errors: [...v.errors, { code: 'E_SCHEMA', severity: 'error', path: '/', message: 'the document could not be reduced to what it means (a number or structure the hash cannot hold)' }], tree_hash: null, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+        }
+      }
       return send(res, 200, { ...v, tree_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });
     }
     const em = /^\/api\/event-trees\/([^/]+)$/.exec(p);

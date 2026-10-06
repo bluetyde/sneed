@@ -172,6 +172,13 @@ describe('each rule, broken on its own, is refused with its code and its place',
     expect(codes(d)).toEqual(['E_NO_FREQUENCY']);
   });
 
+  it('a sequence with no end_state field at all is E_NO_END_STATE too, at the place of the field', () => {
+    const d = sharedDoc();
+    delete d.sequences[2].end_state;
+    const r = validateEventTree(d, CTX);
+    expect(r.errors.map((e) => [e.code, e.path])).toEqual([['E_NO_END_STATE', '/sequences/2/end_state']]);
+  });
+
   it('the missing-sequences message counts them and shows examples', () => {
     const d = sharedDoc();
     d.sequences = d.sequences.slice(0, 1);
@@ -308,6 +315,24 @@ describe('random valid trees and what breaks them', () => {
       expect(c.length, `bend ${s}`).toBeGreaterThan(0);
       expect(c.every((x) => x === 'E_SEQUENCE_DUP' || x === 'E_SEQUENCES_MISSING' || x === 'E_PATH_INCOMPLETE'), `bend ${s}: ${c}`).toBe(true);
     }
+  });
+});
+
+describe('extra fields inside schema and assumptions are kept but can neither change the hash nor break it', () => {
+  it('a non-finite number and a very deep structure there give the same hash as without them', () => {
+    const d = bypassDoc();
+    const base = eventTreeHash(d as never);
+    d.schema.extra = Infinity;
+    let deep: Doc = {};
+    for (let i = 0; i < 50000; i++) deep = { next: deep }; // far deeper than a recursive walk could take
+    d.assumptions.deep = deep;
+    expect(() => eventTreeHash(d as never)).not.toThrow();
+    expect(eventTreeHash(d as never)).toBe(base);
+  });
+
+  it('as text, an extra non-finite number is accepted by the validator', () => {
+    const r = validateEventTreeText(JSON.stringify(bypassDoc()).replace('"schema":{', '"schema":{"extra":1e400,'), CTX);
+    expect(r.valid).toBe(true);
   });
 });
 

@@ -688,11 +688,15 @@ MUTATIONS += [
     tm("the hash ignores the end state of a sequence", "  for (const s of doc.sequences) ends[pathKey(s.path)] = s.end_state;", "  for (const s of doc.sequences) ends[pathKey(s.path)] = '';"),
     tm("the hash ignores the model it points at", "    fault_tree_model: { name: doc.fault_tree_model.name, model_hash: doc.fault_tree_model.model_hash },", "    fault_tree_model: { name: doc.fault_tree_model.name },"),
     tm("the hash ignores a condition", "...(h.asked_only_if ? { asked_only_if: { heading: h.asked_only_if.heading, branch: h.asked_only_if.branch } } : {})", ""),
+    tm("a missing end state field is a generic schema error", "  if (/^\\/sequences\\/\\d+$/.test(path) && missing === 'end_state') return issue(", "  if (false as boolean) return issue("),
+    tm("extra fields in schema change the hash", "schema: { id: sch.id, version: sch.version },", "schema: doc.schema,"),
+    tm("extra fields in assumptions change the hash", "assumptions: { frequency_unit: as.frequency_unit, probability_basis: as.probability_basis, independence: as.independence, ie_independent_of_events: as.ie_independent_of_events, success_branches: as.success_branches },", "assumptions: doc.assumptions,"),
+    tm("a hash failure is a server error", "        } catch {\n          return send(res, 200, { ...v, valid: false,", "        } catch (e) {\n          throw e;\n          return send(res, 200, { ...v, valid: false,", SA),
     tm("event trees share the model folder", "  const eventTreeDir = path.join(opts.projectDir, 'event-trees');", "  const eventTreeDir = opts.projectDir;", SA),
     tm("a tree name is not checked as a name", "      const name = safeDecode(em[1]!);\n      if (method === 'GET') {", "      const name = safeDecode(em[1]!).replace(/[.][.]/g, '');\n      if (method === 'GET') {", SA),
     tm("a missing tree is reported as a model", "throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);", "throw e;", SA),
     tm("a saved model is trusted without validation", "          if (!validateModelText(modelText).valid) return null;\n          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", "          const model = JSON.parse(modelText) as NativeModel;\n          return { hash:", SA),
-    tm("a valid tree has no hash", "      if (v.valid) tree_hash = eventTreeHash(JSON.parse(text));", "      void 0;", SA),
+    tm("a valid tree has no hash", "          tree_hash = eventTreeHash(JSON.parse(text));", "          void 0;", SA),
 ]
 
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
