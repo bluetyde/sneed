@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { AnalyzeOptions, AnalyzeOutcome } from '../../src/core/analyze.js';
 import { startServer, type RunningServer } from '../../src/server/app.js';
 import { readRun } from '../../src/server/runs.js';
-import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeModel, StorageError } from '../../src/server/storage.js';
+import { MAX_MODEL_BYTES, isValidModelName, listModels, readModel, writeImport, writeModel, StorageError } from '../../src/server/storage.js';
 import { RuntimeNotInstalledError } from '../../src/runtime/resolve.js';
 import { ORACLE_MODELS } from '../oracle/models.js';
 
@@ -706,7 +706,9 @@ describe('import over the API (Open-PSA)', () => {
       expect(r.status, name).toBe(400);
       expect(r.json.error.code, name).toBe('E_NAME');
     }
-    expect((await post('/api/import', { text: GOOD })).status).toBe(400);
+    const noName = await post('/api/import', { text: GOOD });
+    expect(noName.status).toBe(400);
+    expect(noName.json.error.code).toBe('E_FIELD');
     expect(readdirSync(path.dirname(projectDir)).filter((f) => f.includes('escape'))).toEqual([]);
   });
 
@@ -722,5 +724,20 @@ describe('import over the API (Open-PSA)', () => {
     const big = await post('/api/import', { text: 'x'.repeat(2.5 * 1024 * 1024), name: 'imp-big' });
     expect([400, 413]).toContain(big.status);
     expect(files().filter((f) => f.startsWith('imp-x') || f.startsWith('imp-big'))).toEqual([]);
+  });
+});
+
+describe('writeImport limits and the request body', () => {
+  it('refuses a model, original or note over the size limit, writing nothing', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sneed-wi-'));
+    try {
+      const big = 'x'.repeat(MAX_MODEL_BYTES + 1);
+      for (const f of [{ modelText: big, originalText: 'a', report: 'b' }, { modelText: 'a', originalText: big, report: 'b' }, { modelText: 'a', originalText: 'b', report: big }]) {
+        expect(() => writeImport(dir, 'wi', f)).toThrow(StorageError);
+      }
+      expect(readdirSync(dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
