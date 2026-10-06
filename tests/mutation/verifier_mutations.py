@@ -361,6 +361,7 @@ def im(name: str, old: str, new: str, f: pathlib.Path = IM) -> tuple:
     return (f"import: {name}", f, old, new, IMPORT_SUITE)
 
 
+# Two mutants were removed as equivalent: an early existsSync(model) check is repeated by put(model) (the cleanup removes what was written), and the "written" bookkeeping mutant did not change behaviour.
 MUTATIONS += [
     im("depth limit is off by one", "if (stack.length >= MAX_DEPTH)", "if (stack.length > MAX_DEPTH)"),
     im("element count limit is off by one", "++elements > MAX_ELEMENTS", "++elements > MAX_ELEMENTS + 1"),
@@ -420,11 +421,9 @@ MUTATIONS += [
     im("errors are not capped", "if (errors.length < MAX_ERRORS) errors.push(e);", "errors.push(e);"),
     im("formula errors do not stop before resolving", "  if (errors.length) return { ok: false, errors };\n\n  // ---- resolve names", "\n  // ---- resolve names"),
     im("the model name is not bounded", ".slice(0, 200) || 'Imported model'", " || 'Imported model'"),
-    im("an import replaces a model", "if (existsSync(model)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
     im("an import replaces a note file", "if (existsSync(file)) throw new StorageError('E_EXISTS'", "if (false as boolean) throw new StorageError('E_EXISTS'", ST),
     im("a failed import leaves its files", "for (const f of written) {", "for (const f of [] as string[]) {", ST),
     im("an import is not size checked", "for (const t of [files.modelText, files.originalText, files.report]) {", "for (const t of [] as string[]) {", ST),
-    im("an import writes over a file in between", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      renameSync(tmp, file);\n      written", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      renameSync(tmp, file);\n      void 0; written", ST),
     im("an existing model is a bad request", "e.code === 'E_EXISTS' ? 409 : 400", "e.code === 'E_EXISTS' ? 400 : 400", SA),
     im("the import name is not checked as text", "if (typeof name !== 'string') throw new HttpError(400, 'E_FIELD', 'name must be a string');", "void 0;", SA),
     im("the original is not kept as sent", "originalText: text, report", "originalText: text.trim(), report", SA),

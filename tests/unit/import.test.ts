@@ -340,3 +340,97 @@ describe('fuzz: whatever the bytes, the answer is a result, and an accepted file
     expect(accepted).toBeGreaterThan(0); // some mutations are harmless (a changed name, a comment...)
   });
 });
+
+describe('gaps closed by mutation checks: exact limits and each refusal for its own reason', () => {
+  const A = be('A', '0.1');
+  const topOr = '    <define-gate name="TOP"><or><basic-event name="A"/><gate name="G"/></or></define-gate>\n    <define-gate name="G"><and><basic-event name="A"/><basic-event name="B"/></and></define-gate>';
+  const B = be('B', '0.2');
+  const base = file([A, B, topOr].join('\n'));
+
+  it('the element limit: exactly the limit is read, one more is refused', () => {
+    const make = (count: number): string => {
+      // root + tree + 1 gate + 1 or + count references: count + 4 elements
+      const refs = Array.from({ length: count }, () => '<basic-event name="A"/>').join('');
+      return `<opsa-mef><define-fault-tree name="F"><define-gate name="T"><or>${refs}</or></define-gate>${A}</define-fault-tree></opsa-mef>`;
+    };
+    // elements: opsa-mef, define-fault-tree, define-gate, or, define-basic-event, float = 6, plus the references
+    expect(first(make(100_000 - 6 + 1)).code).toBe('E_IMPORT_LIMIT');
+    const atLimit = imp(make(100_000 - 6));
+    expect(atLimit.ok || atLimit.errors.every((e) => e.code !== 'E_IMPORT_LIMIT')).toBe(true);
+  });
+
+  it('the size limit: exactly the limit is not refused for size, one byte more is', () => {
+    const pad = (n: number): string => `<opsa-mef><!--${'x'.repeat(n)}--></opsa-mef>`;
+    const exact = MAX_IMPORT_BYTES - '<opsa-mef><!---->'.length - '</opsa-mef>'.length + 0;
+    const atLimit = pad(exact);
+    expect(Buffer.byteLength(atLimit, 'utf8')).toBe(MAX_IMPORT_BYTES);
+    expect(first(atLimit).code).not.toBe('E_IMPORT_LIMIT');
+    expect(first(pad(exact + 1)).code).toBe('E_IMPORT_LIMIT');
+  });
+
+  it('a DOCTYPE is refused as a DOCTYPE, even a bare one', () => {
+    const e = first('<!DOCTYPE opsa-mef>' + base);
+    expect(e.code).toBe('E_XML');
+    expect(e.message).toMatch(/DOCTYPE/);
+  });
+
+  it('an unknown entity in text is an XML error, not just unsupported text', () => {
+    const e = first(base.replace('<opsa-mef>', '<opsa-mef>&nbsp;'));
+    expect(e.code).toBe('E_XML');
+    expect(e.message).toMatch(/entities/);
+  });
+
+  it('a mismatched end tag says so and names where the element was opened', () => {
+    const e = first('<opsa-mef><define-fault-tree name="F"></opsa-mef>');
+    expect(e.code).toBe('E_XML');
+    expect(e.message).toMatch(/does not match/);
+  });
+
+  it('a byte order mark in front of the XML declaration is accepted', () => {
+    expect(imp('﻿' + base).ok).toBe(true);
+  });
+
+  it('an unknown attribute on the root element, a second <model-data> and an unnamed tree are each refused for that reason', () => {
+    const r1 = first(base.replace('<opsa-mef>', '<opsa-mef flavour="x">'));
+    expect(r1).toMatchObject({ code: 'E_UNSUPPORTED', construct: 'attribute flavour' });
+    const r2 = bad(base.replace('</opsa-mef>', '<model-data/><model-data/></opsa-mef>'));
+    expect(r2.errors.some((e) => e.code === 'E_UNSUPPORTED' && /second <model-data>/.test(e.construct ?? ''))).toBe(true);
+    const r3 = first(base.replace('<define-fault-tree name="FT">', '<define-fault-tree>'));
+    expect(r3).toMatchObject({ code: 'E_UNSUPPORTED', construct: '<define-fault-tree>' });
+    expect(r3.message).toMatch(/no name/);
+  });
+
+  it('a <float> with an attribute other than value, and content inside a reference, are refused', () => {
+    const f = first(base.replace('<float value="0.1"/>', '<float value="0.1" unit="x"/>'));
+    expect(f).toMatchObject({ code: 'E_UNSUPPORTED', construct: 'attribute unit' });
+    const c = first(base.replace('<gate name="G"/>', '<gate name="G"><label>x</label></gate>'));
+    expect(c.code).toBe('E_UNSUPPORTED');
+    expect(c.construct).toMatch(/content inside <gate>/);
+  });
+
+  it('a gate referred to as a basic event, and an event referred to as a gate, are different mistakes', () => {
+    const a = first(base.replace('<gate name="G"/>', '<basic-event name="G"/>'));
+    expect(a.message).toMatch(/is a gate, but it is referred to as a basic event/);
+    const b = first(base.replace('<gate name="G"/>', '<gate name="A"/>'));
+    expect(b.message).toMatch(/is a basic event, but it is referred to as a gate/);
+  });
+
+  it('a generated gate name never exceeds 64 characters', () => {
+    const long = 'G'.repeat(63);
+    const xml = file([A, B, `    <define-gate name="${long}"><or><and><basic-event name="A"/><basic-event name="B"/></and><basic-event name="A"/></or></define-gate>`].join('\n'));
+    const r = ok(xml);
+    for (const g of (r.doc as { gates: { id: string }[] }).gates) expect(g.id.length).toBeLessThanOrEqual(64);
+  });
+
+  it('notes come in the order of the lines they are about', () => {
+    const xml = file([A, B, '    <define-gate name="Z"><basic-event name="A"/></define-gate>', '    <define-gate name="TOP"><or><and><basic-event name="A"/><basic-event name="B"/></and><gate name="Z"/></or></define-gate>'].join('\n'));
+    const lines = ok(xml).notes.map((n) => n.line);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines).toEqual([...lines].sort((a, b) => a - b));
+  });
+
+  it('a long tree name is cut to 200 characters', () => {
+    const r = ok(file([A, B, topOr].join('\n'), 'N'.repeat(300)));
+    expect(((r.doc as { model: { name: string } }).model.name).length).toBe(200);
+  });
+});
