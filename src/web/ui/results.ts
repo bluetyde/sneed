@@ -24,6 +24,19 @@ export class ResultsPanel {
     rerender(this.el, () => this.content());
   }
 
+  /** What the second engine said. A difference is shown as a difference, with the words it was found in. */
+  private crossCheck(c: NonNullable<Extract<NonNullable<Editor['result']>, { kind: 'ran' }>['cross']>): HTMLElement {
+    if ('unavailable' in c) {
+      return h('div', { class: 'caveat', role: 'status', 'data-testid': 'cross-check', 'data-agree': 'unavailable' }, h('strong', {}, 'No second opinion. '), `The second engine could not be run: ${c.reason}.`);
+    }
+    if (c.agree) {
+      return h('div', { class: 'success', role: 'status', 'data-testid': 'cross-check', 'data-agree': 'true' }, h('strong', {}, 'The two engines agree. '), `${c.engine.name} ${c.engine.version} gives the same probability and the same minimal cut sets.`);
+    }
+    return h('div', { class: 'caveat', role: 'alert', 'data-testid': 'cross-check', 'data-agree': 'false' },
+      h('strong', {}, 'The two engines differ. '), 'Treat the numbers as unverified until this is explained.',
+      h('ul', {}, ...c.differences.map((d) => h('li', {}, d))));
+  }
+
   private content(): Child[] {
     const ed = this.editor;
     if (ed.running) return [h('p', { class: 'empty-state', role: 'status' }, 'Running the engine…')];
@@ -71,10 +84,11 @@ export class ResultsPanel {
       }))));
     if (ed.highlight.length) out.push(h('p', { class: 'explain', role: 'status', 'data-testid': 'explain' }, ed.describeCutSet(ed.highlight)));
 
+    if (r.cross) out.push(this.crossCheck(r.cross));
     out.push(h('h2', {}, 'How this was produced'));
     out.push(h('dl', { class: 'kv' },
       h('dt', {}, 'Engine'), h('dd', {}, `${rec.engine.name} ${rec.engine.version}`),
-      h('dt', {}, 'Runtime'), h('dd', {}, rec.engine.runtime ? `installed, ${rec.engine.runtime.install_id}` : 'not a managed install'),
+      h('dt', {}, 'Runtime'), h('dd', {}, rec.engine.name === 'sneed-bdd' ? 'built into the app, nothing to install' : rec.engine.runtime ? `installed, ${rec.engine.runtime.install_id}` : 'not a managed install'),
       h('dt', {}, 'Model hash'), h('dd', {}, h('code', {}, rec.input_hashes.model_hash.slice(0, 16))),
       h('dt', {}, 'Method'), h('dd', {}, `${METHOD_TEXT[rec.method] ?? rec.method}, product-order limit ${rec.settings.limitOrder}`),
       h('dt', {}, 'Assumptions'), h('dd', {}, Object.entries(rec.assumptions).map(([k, v]) => `${k}: ${String(v)}`).join('; '))));

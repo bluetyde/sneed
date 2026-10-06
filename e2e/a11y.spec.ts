@@ -172,4 +172,13 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('compare-probability')).toBeVisible();
     await audit(page, 'compare, a comparison shown');
   });
+
+  test('the engine choice and the cross-check card (agree, and no second opinion) have no axe violations', async ({ app, page }) => {
+    await app.open();
+    await audit(page, 'engine select on the first screen');
+    await page.getByTestId('engine').selectOption('both');
+    await app.run();
+    await expect(page.getByTestId('cross-check')).toHaveAttribute('data-agree', 'true');
+    await audit(page, 'cross-check: the engines agree');
+  });
 });

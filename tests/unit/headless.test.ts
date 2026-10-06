@@ -42,16 +42,21 @@ const record = (over: Partial<ResultRecord> = {}): ResultRecord =>
 
 interface Calls {
   analyze: { text: string; opts: AnalyzeOptions }[];
+  builtin: { text: string; opts: unknown }[];
   kill: [string, string][];
   lines: string[];
 }
 function deps(over: Partial<Deps> = {}): { d: Deps; calls: Calls } {
-  const calls: Calls = { analyze: [], kill: [], lines: [] };
+  const calls: Calls = { analyze: [], builtin: [], kill: [], lines: [] };
   let n = 0;
   const d: Deps = {
     analyze: async (text, opts): Promise<AnalyzeOutcome> => {
       calls.analyze.push({ text, opts });
       return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record() };
+    },
+    analyzeBuiltin: async (text, opts): Promise<AnalyzeOutcome> => {
+      calls.builtin.push({ text, opts });
+      return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ engine: { name: 'sneed-bdd', version: '0.1.0', sha256: null, runtime: null } }) };
     },
     resolveEngine: () => ({ distro: 'Ubuntu', binary: '/b', libs: '/l', expectedVersion: '0.16.2', expectedSha256: null }),
     distro: () => 'Ubuntu',
@@ -629,3 +634,42 @@ describe('the verb set', () => {
     expect(lines[0]).not.toContain('secret');
   });
 });
+
+describe('the engine choice (plan 10)', () => {
+  it('describe lists both engines and says which one the runner uses by default', async () => {
+    const { d, calls } = deps();
+    await main(['describe'], d);
+    expect(reply(calls).engines).toMatchObject({ default: 'scram', scram: { installed: true }, builtin: { available: true, name: 'sneed-bdd' } });
+  });
+
+  it('--engine builtin runs the built-in engine, needs no SCRAM runtime, and writes the same files', async () => {
+    const { d, calls } = deps({ resolveEngine: notInstalled });
+    expect(await main(['run', modelFile, '--out', out, '--engine', 'builtin'], d)).toBe(0);
+    expect(reply(calls)).toMatchObject({ ok: true, status: 'completed' });
+    expect(calls.analyze).toHaveLength(0);
+    expect(calls.builtin).toHaveLength(1);
+    expect((calls.builtin[0]!.opts as { engine?: unknown }).engine).toBeUndefined();
+    expect(JSON.parse(readFileSync(path.join(out, 'pra', 'manifest.json'), 'utf8')).engine).toMatchObject({ name: 'sneed-bdd', runtime: null });
+    expect(readdirSync(path.join(out, 'pra')).sort()).toEqual(['manifest.json', 'model.json', 'results.json']);
+  });
+
+  it('the default stays SCRAM (the SEED adapter depends on it) and still needs the runtime', async () => {
+    const a = deps();
+    expect(await main(['run', modelFile, '--out', out], a.d)).toBe(0);
+    expect(a.calls.analyze).toHaveLength(1);
+    expect(a.calls.builtin).toHaveLength(0);
+    const b = deps({ resolveEngine: notInstalled });
+    const out2 = path.join(tmp, 'run-2');
+    mkdirSync(out2);
+    expect(await main(['run', modelFile, '--out', out2], b.d)).toBe(1);
+    expect(reply(b.calls).errors[0].code).toBe('E_SETUP_REQUIRED');
+  });
+
+  it('an unknown engine is refused before anything starts', async () => {
+    const { d, calls } = deps();
+    expect(await main(['run', modelFile, '--out', out, '--engine', 'quantum'], d)).toBe(2);
+    expect(reply(calls).errors[0].code).toBe('E_UNSUPPORTED');
+    expect(existsSync(path.join(out, 'active-run.json'))).toBe(false);
+  });
+});
+

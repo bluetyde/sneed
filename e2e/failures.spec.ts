@@ -25,18 +25,30 @@ const cancelledRecord = {
 };
 
 base.describe('failure paths', () => {
-  base('with no runtime installed the editor says so, explains the fix and never offers a doomed Run', async ({ page }) => {
+  base('with no SCRAM runtime installed the built-in engine still runs; choosing SCRAM says so, explains the fix and never offers a doomed Run', async ({ page }) => {
     const { server, dir } = await newServer({ runtimeEnv: emptyState });
     try {
       const app = new App(page);
       await page.goto(server.url);
       await app.ready();
       await expect(page.getByTestId('runtime-state')).toContainText('SCRAM runtime not installed');
+      await expect(page.getByTestId('engine')).toHaveValue('builtin');
+      await expect(page.getByTestId('run')).toBeEnabled(); // the default engine needs no install
+      await app.run();
+      expect(await app.topProbability()).toBeCloseTo(0.19, 12);
+      await app.tab('results');
+      await expect(page.getByTestId('results')).toContainText('built into the app, nothing to install');
+      await page.getByTestId('engine').selectOption('scram');
       await expect(page.getByTestId('run')).toBeDisabled();
       await expect(page.getByTestId('run-pill')).toContainText('npm run runtime -- install');
       await app.tab('results');
-      await expect(page.getByTestId('no-result')).toContainText('Run is unavailable');
+      await expect(page.getByTestId('stale')).toBeVisible(); // the shown result was made with the other engine
       await expect(app.win).toHaveAttribute('data-valid', 'true'); // editing and checking still work
+      await page.getByTestId('engine').selectOption('both');
+      await expect(page.getByTestId('run')).toBeEnabled(); // the built-in engine still answers
+      await page.getByTestId('run').click();
+      await expect(page.getByTestId('cross-check')).toHaveAttribute('data-agree', 'unavailable');
+      await expect(page.getByTestId('cross-check')).toContainText('No second opinion');
     } finally {
       await server.close();
       rmSync(dir, { recursive: true, force: true });
@@ -54,12 +66,14 @@ base.describe('failure paths', () => {
       const app = new App(page);
       await page.goto(server.url);
       await app.ready();
+      await page.getByTestId('engine').selectOption('scram'); // the stand-in engine is SCRAM's
       for (const how of ['button', 'escape'] as const) {
         await page.getByTestId('run').click();
         await expect(page.getByTestId('run-pill')).toHaveText('Running…');
         await expect(page.getByTestId('cancel')).toBeVisible();
         await expect(page.getByTestId('run')).toBeHidden();
         await expect(page.getByTestId('method')).toBeDisabled();
+        await expect(page.getByTestId('engine')).toBeDisabled();
         if (how === 'button') await page.getByTestId('cancel').click();
         else await page.keyboard.press('Escape');
         await expect(page.getByTestId('result-status')).toContainText('cancelled');
@@ -85,6 +99,7 @@ base.describe('failure paths', () => {
       const app = new App(page);
       await page.goto(server.url);
       await app.ready();
+      await page.getByTestId('engine').selectOption('scram'); // the stand-in engine is SCRAM's
       await page.getByTestId('run').click();
       await expect(page.getByTestId('results')).toContainText('refused before the engine started');
       await expect(page.getByTestId('results')).toContainText('E_EXPORT_LIMIT');

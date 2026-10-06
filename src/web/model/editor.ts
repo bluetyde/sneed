@@ -1,7 +1,7 @@
 // The editor's state and commands, with no DOM: what is selected, the undo history, validation, runs and what is stale.
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
-import { ApiError, type Api, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
+import { ApiError, type Api, type Engine, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
@@ -38,6 +38,10 @@ export class Editor {
   validation: ValidateResponse | null = null;
   runtime: RuntimeInfo | null = null;
   method: Method = 'exact';
+  /** Which engine Run uses. The built-in one is the default and needs no install. */
+  engine: Engine = 'builtin';
+  /** The engine choice the shown result was made with. */
+  private resultEngine: Engine = 'builtin';
   running = false;
   result: RunResponse | null = null;
   runError: string | null = null;
@@ -121,14 +125,18 @@ export class Editor {
   get errorCount(): number {
     return this.validation?.errors.length ?? 0;
   }
-  /** Run needs a known-valid model, an installed runtime and no run in progress. */
+  /** Run needs a known-valid model and no run in progress, and, for SCRAM alone, the installed runtime. */
   get canRun(): boolean {
-    return !this.running && this.validation?.valid === true && this.runtime?.installed === true;
+    return !this.running && this.validation?.valid === true && !this.scramMissing;
+  }
+  /** SCRAM is the chosen engine and it is not installed. (With "both", the built-in engine still answers.) */
+  get scramMissing(): boolean {
+    return this.engine === 'scram' && this.runtime !== null && !this.runtime.installed;
   }
   /** Why Run is unavailable, in words, or null when it is available. */
   get runBlockedReason(): string | null {
     if (this.running) return 'a run is in progress';
-    if (this.runtime && !this.runtime.installed) return 'the SCRAM runtime is not installed: run `npm run runtime -- install`';
+    if (this.scramMissing) return 'the SCRAM runtime is not installed: run `npm run runtime -- install`, or choose the built-in engine';
     if (!this.validation) return 'the model has not been checked yet';
     if (!this.validation.valid) return `${this.errorCount} problem${this.errorCount === 1 ? '' : 's'} to fix first`;
     return null;
@@ -137,7 +145,7 @@ export class Editor {
   get stale(): boolean {
     if (this.result?.kind !== 'ran') return false;
     const r = this.result.record;
-    return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method;
+    return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method || this.resultEngine !== this.engine;
   }
 
   // ---- history ----
@@ -327,6 +335,11 @@ export class Editor {
     this.method = method;
     this.emit();
   }
+  setEngine(engine: Engine): void {
+    if (engine === this.engine) return;
+    this.engine = engine;
+    this.emit();
+  }
   async run(): Promise<void> {
     if (this.running) return;
     await this.settle(); // run exactly the text that was just checked
@@ -337,7 +350,8 @@ export class Editor {
     this.setNotice(null);
     this.emit();
     try {
-      this.result = await this.api.run(this.text, this.method);
+      this.result = await this.api.run(this.text, this.method, this.engine);
+      this.resultEngine = this.engine;
       this.highlight = [];
       void this.refreshRuns();
     } catch (e) {

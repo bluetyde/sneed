@@ -47,6 +47,10 @@ LS = ROOT / "src/core/lesson.ts"
 SL = ROOT / "src/server/lessons.ts"
 HL = ROOT / "src/cli/headless.ts"
 SO = ROOT / "scripts/lib/seed-oracles.ts"
+BD = ROOT / "src/engines/bdd/bdd.ts"
+BV = ROOT / "src/engines/bdd/solve.ts"
+BA = ROOT / "src/engines/bdd/analyze.ts"
+XC = ROOT / "src/engines/crosscheck.ts"
 SA = ROOT / "src/server/app.ts"
 ST = ROOT / "src/server/storage.ts"
 
@@ -190,8 +194,8 @@ MUTATIONS = [
     ("web visual: a repeated id is drawn as a second node", WV, "} else if (placed.has(id)) {", "} else if (false as boolean) {"),
     ("web visual: stored positions ignored", WV, "if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) {", "if (false as boolean) {"),
     ("web visual: parents not centred over inputs", WV, "n.x = (first.x + last.x) / 2;", "n.x = first.x;"),
-    ("editor: a result never goes stale on a model change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method;", "return r.method !== this.method;"),
-    ("editor: a result never goes stale on a method change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method;", "return r.input_hashes.model_hash !== this.validation?.model_hash;"),
+    ("editor: a result never goes stale on a model change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method || this.resultEngine !== this.engine;", "return r.method !== this.method || this.resultEngine !== this.engine;"),
+    ("editor: a result never goes stale on a method change", WE, "return r.input_hashes.model_hash !== this.validation?.model_hash || r.method !== this.method || this.resultEngine !== this.engine;", "return r.input_hashes.model_hash !== this.validation?.model_hash || this.resultEngine !== this.engine;"),
     ("editor: run ignores problems", WE, "if (blocked) return this.setNotice('warning', `Run blocked: ${blocked}.`);", "if (false as boolean) return this.setNotice('warning', `Run blocked: ${blocked}.`);"),
     ("editor: an edit keeps the redo stack", WE, "    this.redoStack = [];\n    this.doc = next;", "    this.doc = next;"),
     ("editor: deleting a reference deletes the node it points at", WE, "if ((n.kind === 'reference' || n.kind === 'missing') && n.parent) {", "if (false as boolean) {"),
@@ -247,7 +251,7 @@ MUTATIONS = [
     ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
     # SEED side (plan 11): the headless runner and the generated oracle entries
     ("headless: a truncated result is written as a result", HL, "if (rec.status !== 'completed' || rec.completeness !== 'complete') {", "if (rec.status !== 'completed') {"),
-    ("headless: an invalid model reaches the engine", HL, "if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);\n    let engine: EngineConfig;", "let engine: EngineConfig;"),
+    ("headless: an invalid model reaches the engine", HL, "if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);\n    let engine: EngineConfig | null = null;", "let engine: EngineConfig | null = null;"),
     ("headless: model text is not labelled as app content", HL, "  source: 'app-content',\n", ""),
     ("headless: SEED's schema code is not used", HL, "code: i.code === 'E_SCHEMA' ? 'E_SCHEMA_INVALID' : i.code,", "code: i.code,"),
     ("headless: a run id with a path is accepted", HL, "if (!RUN_ID.test(runId))", "if (false as boolean)"),
@@ -303,6 +307,30 @@ MUTATIONS = [
     ("result: the report size cap is off", Rs, "if (input.reportText.length > MAX_REPORT_BYTES) return fail('result-too-large-to-verify');", ""),
     ("result: an over-long product is indexed", Rs, "ev.length > known.size || ", ""),
     ("analyze: the engine is started with no time left", AN, "if (remaining <= 0 || opts.signal?.aborted) {", "if (false as boolean) {", TIMEOUT),
+    ("bdd: nodes are not reduced", BD, "if (low === high) return low;", ""),
+    ("bdd: the probability formula swaps the branches", BD, "const r = q * go(this.hi[n]!) + (1 - q) * go(this.lo[n]!);", "const r = (1 - q) * go(this.hi[n]!) + q * go(this.lo[n]!);"),
+    ("bdd: K-of-N counts the wrong remainder", BD, "this.and(fs[i]!, go(i + 1, j - 1))", "this.and(fs[i]!, go(i + 1, j))"),
+    # (no mutation for AND with FALSE or OR with TRUE: the general recursion gives the same node, only slower; and no subset test exists, see bdd.ts minimalCutSets)
+    ("bdd: equal cut sets are not recognised as covered", BD, "return !lowKeys.has(s.join(','));", "return true;"),
+    ("bdd: the cut-set cap is off", BD, "if (result.length > this.limits.maxCutSets) throw new SolveAborted('too-many-cut-sets');", ""),
+    ("bdd: the node limit is off", BD, "if (this.v.length >= this.limits.maxNodes) throw new SolveAborted('too-many-nodes');", ""),
+    ("bdd: the event cap is off", BV, "if (reachable.length > MAX_EVENTS) throw new SolveAborted('too-many-events');", ""),
+    ("bdd: a K-of-N gate uses K = N", BV, "node = bdd.atLeast(g.threshold ?? ins.length, ins);", "node = bdd.atLeast(ins.length, ins);"),
+    ("bdd: a cancel is ignored", BA, "if (opts.signal?.aborted) throw new SolveAborted('cancelled');", ""),
+    ("bdd: the time limit is ignored", BA, "if (now() > deadline) throw new SolveAborted('timeout');", ""),
+    ("bdd: the product-order limit is reported as zero", BA, "productOrderLimit: sol.events.length,", "productOrderLimit: 0,"),
+    ("bdd: an approximation above 1 is not clamped", BA, "probability: Math.min(1, raw),", "probability: raw,"),
+    ("bdd: the rare-event sum is a product", BA, "method === 'rare-event' ? pc.reduce((a, x) => a + x, 0)", "method === 'rare-event' ? pc.reduce((a, x) => a * x, 1)"),
+    ("crosscheck: a probability difference is not reported", XC, "if (!close(pa, pb)) differences.push(", "if (false as boolean) differences.push("),
+    ("crosscheck: a result that is not complete is ignored", XC, "if (!solid(b)) differences.push(", "if (false as boolean) differences.push("),
+    ("crosscheck: the tolerance is far too wide", XC, "const REL_TOL = 5e-5;", "const REL_TOL = 1e-1;"),
+    ("crosscheck: cut sets only in the other engine are ignored", XC, "if (onlyB.length) differences.push(", "if (false as boolean) differences.push("),
+    ("engine choice: the server default is SCRAM", SA, "const engine = (body.engine ?? 'builtin') as EngineChoice;", "const engine = (body.engine ?? 'scram') as EngineChoice;"),
+    ("engine choice: an unknown engine is accepted", SA, "if (!ENGINES.includes(engine)) throw new HttpError(400, 'E_FIELD',", "if (false as boolean) throw new HttpError(400, 'E_FIELD',"),
+    ("engine choice: no runtime still means a cross-check", SA, "if (rt.installed !== true) cross =", "if (false as boolean) cross ="),
+    ("engine choice: a result of another engine stays current", WE, " || this.resultEngine !== this.engine;", ";"),
+    ("engine choice: both is blocked without SCRAM", WE, "return this.engine === 'scram' && this.runtime !== null && !this.runtime.installed;", "return this.engine !== 'builtin' && this.runtime !== null && !this.runtime.installed;"),
+    ("engine choice: the runner ignores --engine builtin", HL, "outcome = engine === null ? await deps.analyzeBuiltin(text, common) : await deps.analyze(text, { ...common, engine });", "outcome = await deps.analyze(text, { ...common, engine: engine! });"),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -355,6 +383,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[1] in web]
     if only == "compare":  # just the compare-runs mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:", "editor: a failed comparison", "editor: a slow older", "editor: clearing does not", "editor: a listing failure"))]
+    if only == "engines":  # just the built-in engine and engine-choice mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith(("bdd:", "crosscheck:", "engine choice:"))]
     if only == "timeout":  # just the time-limit and report-size mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("analyze:", "result: a result is accepted", "result: an unread", "result: the report size", "result: an over-long", "result: too many", "result: the minimality", "result: sets of", "result: a subset", "result: a timeout", "result: non-minimal", "analyze: report read"))]
     if only == "seed":  # just the SEED-side mutations

@@ -1,7 +1,7 @@
 // The page: title bar, ribbon, outline, drawing, side panels and status bar. It draws editor state and routes user actions
 // (buttons and keyboard shortcuts) to editor commands. Panels re-render only when their own inputs changed.
 
-import type { Method } from '../api.js';
+import type { Engine, Method } from '../api.js';
 import type { Editor } from '../model/editor.js';
 import { Canvas } from './canvas.js';
 import { confirmDiscard, openDialog, saveAsDialog } from './dialogs.js';
@@ -92,10 +92,12 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   // ---- title bar ----
   const docName = h('div', { class: 'doc-name', 'data-testid': 'doc-name' });
   const methodSelect = h('select', { id: 'method', 'data-testid': 'method', onchange: (e) => editor.setMethod((e.target as HTMLSelectElement).value as Method) }, ...(['exact', 'rare-event', 'mcub'] as Method[]).map((m) => h('option', { value: m }, METHOD_TEXT[m]))) as HTMLSelectElement;
+  const engineSelect = h('select', { id: 'engine', 'data-testid': 'engine', onchange: (e) => editor.setEngine((e.target as HTMLSelectElement).value as Engine) },
+    h('option', { value: 'builtin', title: 'The engine inside the app: nothing to install' }, 'Built-in'), h('option', { value: 'scram', title: 'The installed SCRAM runtime' }, 'SCRAM'), h('option', { value: 'both', title: 'Run both engines and say whether they agree' }, 'Both')) as HTMLSelectElement;
   const runBtn = h('button', { class: 'run', type: 'button', 'data-testid': 'run', 'aria-describedby': 'run-pill', onclick: run }, icon('run'), 'Run') as HTMLButtonElement;
   const stopBtn = h('button', { class: 'stop', type: 'button', 'data-testid': 'cancel', onclick: () => void editor.cancel() }, icon('stop'), 'Cancel') as HTMLButtonElement;
   const pill = h('span', { class: 'run-pill', id: 'run-pill', role: 'status', 'data-testid': 'run-pill' });
-  const titlebar = h('div', { class: 'titlebar' }, h('h1', { class: 'brand' }, 'SNEED', h('small', {}, 'fault-tree editor')), docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
+  const titlebar = h('div', { class: 'titlebar' }, h('h1', { class: 'brand' }, 'SNEED', h('small', {}, 'fault-tree editor')), docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'engine' }, 'Engine'), engineSelect, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
 
   // ---- notice ----
   const notice = h('div', { class: 'notice', role: 'status', hidden: true, 'data-testid': 'notice' });
@@ -175,6 +177,8 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     // run controls
     methodSelect.value = ed.method;
     methodSelect.disabled = ed.running;
+    engineSelect.value = ed.engine;
+    engineSelect.disabled = ed.running;
     runBtn.disabled = !ed.canRun;
     runBtn.hidden = ed.running;
     stopBtn.hidden = !ed.running;
