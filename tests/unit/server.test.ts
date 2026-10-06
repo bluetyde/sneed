@@ -655,3 +655,72 @@ describe('engine choice over the API (plan 10)', () => {
   });
 });
 
+describe('import over the API (Open-PSA)', () => {
+  const GOOD = ['<?xml version="1.0"?>', '<opsa-mef>', '  <define-fault-tree name="Pumps">', '    <define-gate name="TOP"><or><basic-event name="A"/><basic-event name="B"/></or></define-gate>', '    <define-basic-event name="A"><float value="0.1"/></define-basic-event>', '    <define-basic-event name="B"><float value="0.2"/></define-basic-event>', '  </define-fault-tree>', '</opsa-mef>', ''].join('\n');
+  const files = (): string[] => readdirSync(projectDir).filter((f) => f.startsWith('imp-')).sort();
+
+  it('imports a file: the model, the original byte for byte and the notes are saved beside each other', async () => {
+    const r = await post('/api/import', { text: GOOD, name: 'imp-good' });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ kind: 'imported', name: 'imp-good', summary: { top: 'TOP', events: 2, gates: 1 } });
+    expect(files()).toEqual(['imp-good.json', 'imp-good.opsa-import.log', 'imp-good.opsa.xml']);
+    expect(readFileSync(path.join(projectDir, 'imp-good.opsa.xml'), 'utf8')).toBe(GOOD);
+    const model = JSON.parse(readFileSync(path.join(projectDir, 'imp-good.json'), 'utf8'));
+    expect(model).toMatchObject({ top: 'TOP', model: { name: 'Pumps' } });
+    expect(JSON.parse(readFileSync(path.join(projectDir, 'imp-good.opsa-import.log'), 'utf8'))).toMatchObject({ importer: 'sneed-import-1', source_sha256: r.json.source_sha256 });
+    const listed = await request('GET', '/api/models');
+    expect(listed.json.models.map((m: { name: string }) => m.name)).toContain('imp-good');
+    expect(listed.json.models.map((m: { name: string }) => m.name)).not.toContain('imp-good.opsa-import'); // the notes are not a model
+    const again = await request('GET', '/api/models/imp-good');
+    expect(JSON.parse(again.json.text).events).toHaveLength(2);
+  });
+
+  it('a refusal lists every problem with its line, and writes nothing', async () => {
+    const bad = GOOD.replace('<float value="0.2"/>', '<float value="7"/>').replace('<define-gate name="TOP">', '<define-house-event name="H"/><define-gate name="TOP">');
+    const r = await post('/api/import', { text: bad, name: 'imp-bad' });
+    expect(r.status).toBe(200);
+    expect(r.json.kind).toBe('refused');
+    expect(r.json.errors.map((e: { code: string }) => e.code).sort()).toEqual(['E_PROB_RANGE', 'E_UNSUPPORTED']);
+    expect(r.json.errors.every((e: { line: number }) => e.line > 0)).toBe(true);
+    expect(files().filter((f) => f.startsWith('imp-bad'))).toEqual([]);
+  });
+
+  it('an existing model is never replaced, and a failed import leaves no stray file', async () => {
+    const before = readFileSync(path.join(projectDir, 'imp-good.json'), 'utf8');
+    const r = await post('/api/import', { text: GOOD.replace('Pumps', 'Other'), name: 'imp-good' });
+    expect(r.status).toBe(409);
+    expect(r.json.error.code).toBe('E_EXISTS');
+    expect(readFileSync(path.join(projectDir, 'imp-good.json'), 'utf8')).toBe(before);
+    expect(readFileSync(path.join(projectDir, 'imp-good.opsa.xml'), 'utf8')).toBe(GOOD);
+    // a leftover note file of that name stops the import before the model is written, and the original written first is removed
+    writeFileSync(path.join(projectDir, 'imp-late.opsa-import.log'), 'theirs');
+    const late = await post('/api/import', { text: GOOD, name: 'imp-late' });
+    expect(late.status).toBe(409);
+    expect(files().filter((f) => f.startsWith('imp-late'))).toEqual(['imp-late.opsa-import.log']);
+    expect(readFileSync(path.join(projectDir, 'imp-late.opsa-import.log'), 'utf8')).toBe('theirs');
+  });
+
+  it('names are checked like model names: no path, no odd characters', async () => {
+    for (const name of ['../escape', 'a/b', 'a\\b', '.hidden', '', 'x'.repeat(65), 'a b']) {
+      const r = await post('/api/import', { text: GOOD, name });
+      expect(r.status, name).toBe(400);
+      expect(r.json.error.code, name).toBe('E_NAME');
+    }
+    expect((await post('/api/import', { text: GOOD })).status).toBe(400);
+    expect(readdirSync(path.dirname(projectDir)).filter((f) => f.includes('escape'))).toEqual([]);
+  });
+
+  it('hostile files are refused as data: a DOCTYPE with an entity starts nothing and nothing is saved', async () => {
+    const r = await post('/api/import', { text: '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><opsa-mef name="&e;"/>', name: 'imp-evil' });
+    expect(r.json).toMatchObject({ kind: 'refused', errors: [{ code: 'E_XML' }] });
+    expect(files().filter((f) => f.startsWith('imp-evil'))).toEqual([]);
+  });
+
+  it('the import route needs the request header and a JSON body like every write', async () => {
+    const noHeader = await request('POST', '/api/import', { body: JSON.stringify({ text: GOOD, name: 'imp-x' }), headers: { 'content-type': 'application/json' } });
+    expect(noHeader.status).toBe(403);
+    const big = await post('/api/import', { text: 'x'.repeat(2.5 * 1024 * 1024), name: 'imp-big' });
+    expect([400, 413]).toContain(big.status);
+    expect(files().filter((f) => f.startsWith('imp-x') || f.startsWith('imp-big'))).toEqual([]);
+  });
+});

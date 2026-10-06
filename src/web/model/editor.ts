@@ -1,7 +1,7 @@
 // The editor's state and commands, with no DOM: what is selected, the undo history, validation, runs and what is stale.
 // The UI only draws this and calls its methods, so everything here is testable without a browser.
 
-import { ApiError, type Api, type Engine, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
+import { ApiError, type Api, type Engine, type ImportResponse, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
 import * as D from './doc.js';
@@ -490,6 +490,29 @@ export class Editor {
   get lessonProgress(): LessonProgress | null {
     return this.lesson ? checkLesson(this.lesson, this.lessonDoc, this.lessonResult) : null;
   }
+  // ---- import ----
+  /**
+   * Imports an Open-PSA file under `name` (the server keeps the original beside the model) and opens the result. A refusal is returned
+   * with its errors and changes nothing: the model on the screen is untouched.
+   */
+  async importFile(text: string, name: string): Promise<ImportResponse | null> {
+    let r: ImportResponse;
+    try {
+      r = await this.api.importModel(text, name);
+    } catch (e) {
+      this.setNotice('error', `Could not import: ${(e as Error).message}`);
+      return null;
+    }
+    if (r.kind === 'imported') {
+      await this.refreshModels();
+      if (await this.open(r.name)) {
+        const extra = r.notes.length ? ` ${r.notes.length} note${r.notes.length === 1 ? '' : 's'} about the import are in ${r.name}.opsa-import.log.` : '';
+        this.setNotice('info', `Imported ${r.name}: ${r.summary.events} basic events, ${r.summary.gates} gates. The original file is kept as ${r.name}.opsa.xml.${extra}`);
+      }
+    }
+    return r;
+  }
+
   // ---- files ----
   setNotice(kind: Notice['kind'] | null, text = ''): void {
     this.notice = kind ? { kind, text } : null;

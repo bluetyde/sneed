@@ -4,7 +4,7 @@
 import type { Engine, Method } from '../api.js';
 import type { Editor } from '../model/editor.js';
 import { Canvas } from './canvas.js';
-import { confirmDiscard, openDialog, saveAsDialog } from './dialogs.js';
+import { confirmDiscard, importDialog, openDialog, saveAsDialog } from './dialogs.js';
 import { h } from './dom.js';
 import { METHOD_TEXT } from './hints.js';
 import { icon } from './icons.js';
@@ -47,6 +47,10 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     const name = await openDialog(editor);
     if (name && (await editor.open(name))) canvas.fit(true);
   };
+  const importModel = async (): Promise<void> => {
+    if (!confirmDiscard(editor)) return;
+    if (await importDialog(editor)) canvas.fit(true);
+  };
   const saveAs = async (): Promise<void> => {
     const name = await saveAsDialog(editor, editor.fileName ?? editor.doc.model.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+|[.-]+$/g, '').slice(0, 64));
     if (name) await editor.save(name);
@@ -67,6 +71,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     new: rbtn('new', 'new', 'New', 'New model (starts from a two-event OR)', newModel),
     open: rbtn('open', 'open', 'Open', 'Open a saved model', () => void openModel()),
     save: rbtn('save', 'save', 'Save', 'Save the model (Ctrl+S)', () => void save()),
+    import: rbtn('import', 'import', 'Import', 'Import an Open-PSA XML file as a new model', () => void importModel()),
     saveas: rbtn('saveas', 'saveas', 'Save as', 'Save under a new name', () => void saveAs()),
     undo: rbtn('undo', 'undo', 'Undo', 'Undo (Ctrl+Z)', () => editor.undo()),
     redo: rbtn('redo', 'redo', 'Redo', 'Redo (Ctrl+Y)', () => editor.redo()),
@@ -84,7 +89,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     }),
   };
   const ribbon = h('div', { class: 'ribbon', role: 'toolbar', 'aria-label': 'Editor tools' },
-    group('File', btn.new, btn.open, btn.save, btn.saveas),
+    group('File', btn.new, btn.open, btn.import, btn.save, btn.saveas),
     group('Edit', btn.undo, btn.redo, btn.del),
     group('Add', btn.event, btn.and, btn.or, btn.vote),
     group('View', btn.fit, btn.zin, btn.zout, btn.reset));

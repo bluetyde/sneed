@@ -61,7 +61,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## P2: analysis ([plan 02](docs/plans/02-engine-and-adapter.md), [05](docs/plans/05-verification.md))
 
-- [ ] Open-PSA export and documented-subset import; hostile XML contained.
+- [~] Open-PSA export and documented-subset import; hostile XML contained. Export done earlier; **import built 2026-10-06** (`src/core/import.ts`, `/api/import`, editor Import dialog, docs/OPEN-PSA-SUBSET.md). Open: mutation checks of the importer, Codex review of it, a headless `import` verb, importing from the SEED side.
 - [ ] Run manager: isolated run directory, explicit argument list, timeout, owned process tree, cancel.
 - [ ] **[agy]** Results parser; saved real reports parse, broken reports refused. Needs P0 reports.
 - [ ] Oracle set passes: parity with direct SCRAM and every hand oracle ([plan 05](docs/plans/05-verification.md)).

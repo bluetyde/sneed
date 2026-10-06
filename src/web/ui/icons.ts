@@ -5,6 +5,7 @@ const PATHS: Record<string, string[]> = {
   new: ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M12 11v6M9 14h6'],
   open: ['M3 7h6l2 2h10v10H3z'],
   save: ['M5 3h12l3 3v15H5z', 'M8 3v6h8V3', 'M8 21v-7h8v7'],
+  import: ['M5 3h12l3 3v15H5z', 'M12 8v8M9 13l3 3 3-3'],
   saveas: ['M5 3h12l3 3v7', 'M8 3v6h8V3', 'M5 3v18h8', 'M17 16v6M14 19h6'],
   undo: ['M9 7 4 12l5 5', 'M4 12h10a6 6 0 0 1 0 12'],
   redo: ['M15 7l5 5-5 5', 'M20 12H10a6 6 0 0 0 0 12'],
