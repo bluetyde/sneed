@@ -21,8 +21,21 @@ export function figureSize(svg: string): { width: number; height: number } {
   return { width: m ? Number(m[1]) : 800, height: m ? Number(m[2]) : 600 };
 }
 
-export function exportSvg(editor: Editor): void {
+/** The figure, checked: it must parse as an SVG document (a figure the browser cannot read is an error, not a file). Throws otherwise. */
+export function checkedFigure(editor: Editor): string {
   const svg = editor.figureSvg();
+  const d = new DOMParser().parseFromString(svg, 'image/svg+xml');
+  if (d.querySelector('parsererror') || d.documentElement.localName !== 'svg') throw new Error('the figure could not be built as a valid SVG document');
+  return svg;
+}
+
+export function exportSvg(editor: Editor): void {
+  let svg: string;
+  try {
+    svg = checkedFigure(editor);
+  } catch (e) {
+    return editor.setNotice('error', `Could not save the SVG: ${(e as Error).message}.`);
+  }
   save(`${figureFileStem(editor.doc, editor.fileName)}.svg`, new Blob([svg], { type: 'image/svg+xml' }));
   editor.setNotice('info', 'Saved the drawing as an SVG file.');
 }
@@ -51,7 +64,7 @@ export async function figurePng(svg: string): Promise<Blob> {
 
 export async function exportPng(editor: Editor): Promise<void> {
   try {
-    save(`${figureFileStem(editor.doc, editor.fileName)}.png`, await figurePng(editor.figureSvg()));
+    save(`${figureFileStem(editor.doc, editor.fileName)}.png`, await figurePng(checkedFigure(editor)));
     editor.setNotice('info', 'Saved the drawing as a PNG file.');
   } catch (e) {
     editor.setNotice('error', `Could not save the PNG: ${(e as Error).message}. The SVG file can still be saved.`);
@@ -66,8 +79,11 @@ const SHEET_CUT_SETS = 60;
  */
 export function buildPrintSheet(editor: Editor): HTMLElement {
   const sheet = h('section', { id: 'print-sheet', class: 'print-sheet', 'aria-hidden': 'true', 'data-testid': 'print-sheet' });
-  const doc = new DOMParser().parseFromString(editor.figureSvg(), 'image/svg+xml').documentElement;
-  sheet.append(document.importNode(doc, true));
+  try {
+    sheet.append(document.importNode(new DOMParser().parseFromString(checkedFigure(editor), 'image/svg+xml').documentElement, true));
+  } catch (e) {
+    sheet.append(h('p', { role: 'alert' }, `The drawing could not be printed: ${(e as Error).message}.`)); // a visible failure on the page, never a silently empty sheet
+  }
   const r = editor.result;
   if (r?.kind === 'ran' && !editor.figureStale) {
     const sets = r.record.minimal_cut_sets;
