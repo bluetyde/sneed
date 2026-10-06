@@ -434,3 +434,36 @@ describe('gaps closed by mutation checks: exact limits and each refusal for its 
     expect(((r.doc as { model: { name: string } }).model.name).length).toBe(200);
   });
 });
+
+describe('more gaps closed by mutation checks', () => {
+  const A = be('A', '0.1');
+  const B = be('B', '0.2');
+  const base = file([A, B, '    <define-gate name="TOP"><or><basic-event name="A"/><basic-event name="B"/></or></define-gate>'].join('\n'));
+
+  it('two probabilities on one basic event are refused as a second <float>', () => {
+    const e = bad(base.replace('<float value="0.1"/>', '<float value="0.1"/><float value="0.2"/>')).errors;
+    expect(e.some((x) => x.code === 'E_UNSUPPORTED' && x.construct === 'a second <float>')).toBe(true);
+  });
+
+  it('a K-of-N min must be a plain whole number', () => {
+    for (const min of ['abc', '2.5', ' 2', '1e1', '', '-1', '+2', '0x2']) {
+      const xml = base.replace('<or>', `<atleast min="${min}">`).replace('</or>', '</atleast>');
+      expect(first(xml).code, JSON.stringify(min)).toBe('E_VOTE_RANGE');
+    }
+  });
+
+  it('a reference may carry only a name', () => {
+    const e = first(base.replace('<basic-event name="A"/>', '<basic-event name="A" role="x"/>'));
+    expect(e).toMatchObject({ code: 'E_UNSUPPORTED', construct: 'attribute role' });
+  });
+
+  it('notes are in line order even when a warning is about an earlier line than a note', () => {
+    // C is defined first and never used (a warning about line 4), then a pass-through gate (a note about a later line)
+    const xml = file([be('C', '0.3'), A, B, '    <define-gate name="Z"><basic-event name="A"/></define-gate>', '    <define-gate name="TOP"><or><gate name="Z"/><basic-event name="B"/></or></define-gate>'].join('\n'));
+    const r = ok(xml);
+    const lines = r.notes.map((n) => n.line);
+    expect(r.notes.some((n) => n.kind === 'warning')).toBe(true);
+    expect(r.notes.some((n) => n.kind === 'pass-through')).toBe(true);
+    expect(lines).toEqual([...lines].sort((a, b) => a - b));
+  });
+});
