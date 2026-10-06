@@ -25,7 +25,7 @@ export interface SequenceComputation {
   probability: number;
   frequency: number;
   /** Only when asked: failure events only, success branches ignored. */
-  approximation?: { probability: number; frequency: number };
+  approximation?: { probability: number; frequency: number; ratio: number | null };
 }
 
 export interface EventTreeComputation {
@@ -69,8 +69,8 @@ export function computeEventTree(model: NativeModel, tree: EventTreeInput, opts:
   }
 
   /** Can this condition happen at all, with the events as the model states them? Zero-probability events cannot fail, certain ones always do, the
-   *  others are free at probability 0.5 (never below 2^-n for n events), so 0 means "impossible", never "too small to represent". */
-  const possible = (node: number): boolean => bdd.probability(node, p.map((q) => (q === 0 ? 0 : q === 1 ? 1 : 0.5))) > 0;
+   *  others are free. Decided on the structure of the diagram, never by multiplying probabilities (a product of a thousand halves underflows). */
+  const possible = (node: number): boolean => bdd.satisfiable(node, (v) => (p[v] === 0 ? 0 : p[v] === 1 ? 1 : undefined));
 
   const lambda = tree.initiating_event.frequency;
   const sequences: SequenceComputation[] = [];
@@ -95,7 +95,9 @@ export function computeEventTree(model: NativeModel, tree: EventTreeInput, opts:
       if (ap === 0 && possible(failures)) return range();
       const af = lambda * ap;
       if (!Number.isFinite(af) || (af === 0 && ap > 0 && lambda > 0)) return range();
-      row.approximation = { probability: ap, frequency: af };
+      const ratio = probability === 0 ? null : ap / probability;
+      if (ratio !== null && !Number.isFinite(ratio)) return range(); // an exact probability near the bottom of the range against an approximation near 1
+      row.approximation = { probability: ap, frequency: af, ratio };
     }
     sequences.push(row);
   }
@@ -110,11 +112,9 @@ export function computeEventTree(model: NativeModel, tree: EventTreeInput, opts:
     const list = byEnd.get(e.id) ?? [];
     return { id: e.id, frequency: stableSum(list.map((x) => x.frequency)), probability: stableSum(list.map((x) => x.probability)), sequences: list.map((x) => x.key) };
   });
-  return {
-    sequences,
-    endStates,
-    total: { frequency: lambda * probabilitySum, probabilitySum, partitionError },
-    approximationFrequencySum: opts.approximation ? stableSum(sequences.map((x) => x.approximation!.frequency)) : null,
-    nodes: bdd.nodeCount,
-  };
+  const totalFrequency = lambda * probabilitySum;
+  const approximationFrequencySum = opts.approximation ? stableSum(sequences.map((x) => x.approximation!.frequency)) : null;
+  // every aggregate is a number too: a sum of finite frequencies can still overflow
+  for (const x of [totalFrequency, approximationFrequencySum, ...endStates.flatMap((e) => [e.frequency, e.probability])]) if (x !== null && !Number.isFinite(x)) return range();
+  return { sequences, endStates, total: { frequency: totalFrequency, probabilitySum, partitionError }, approximationFrequencySum, nodes: bdd.nodeCount };
 }

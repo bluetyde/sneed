@@ -181,6 +181,30 @@ describe('failures are named, never a table with wrong numbers', () => {
     expect(why(() => run(SHARED, { ...t, initiating_event: { frequency: huge } }))).toBe('numeric-range');
   });
 
+  it('an AND of 1100 events at one half is possible but its probability (2^-1100) is not representable: numeric-range, not a table with a zero', () => {
+    const events: Record<string, number> = {};
+    for (let i = 0; i < 1100; i++) events[`E${i}`] = 0.5;
+    const m = mkDoc('TOP', { ...events, Z: 0.5 }, [OR('TOP', ['BIG', 'Z']), AND('BIG', Object.keys(events))]);
+    expect(why(() => run(m, treeOf([{ id: 'A', event: 'BIG' }], 1)))).toBe('numeric-range');
+    // the same width is fine when the product stays representable
+    const small: Record<string, number> = {};
+    for (let i = 0; i < 1100; i++) small[`E${i}`] = 0.999;
+    const m2 = mkDoc('TOP', { ...small, Z: 0.5 }, [OR('TOP', ['BIG', 'Z']), AND('BIG', Object.keys(small))]);
+    expect(run(m2, treeOf([{ id: 'A', event: 'BIG' }], 1)).total.probabilitySum).toBeCloseTo(1, 12);
+  });
+
+  it('a ratio between the exact probability and the approximation that overflows, and a sum of frequencies that overflows, are numeric-range', () => {
+    const events: Record<string, number> = {};
+    for (let i = 0; i < 1030; i++) events[`E${i}`] = 0.5;
+    const m = mkDoc('TOP', { ...events, Z: 0.5 }, [OR('TOP', ['ANY', 'Z']), OR('ANY', Object.keys(events))]);
+    const t = treeOf([{ id: 'A', event: 'ANY' }], 1);
+    expect(why(() => run(m, t, false))).toBe('no error'); // the exact sequences are fine: the works path is 1e-310, a denormal but nonzero
+    expect(why(() => run(m, t, true))).toBe('numeric-range'); // approximation 1 over exact 8.7e-311 is beyond a double
+    const huge = treeOf([{ id: 'A', event: 'X' }], Number.MAX_VALUE);
+    expect(why(() => run(SHARED, huge, false))).toBe('no error');
+    expect(why(() => run(SHARED, huge, true))).toBe('numeric-range'); // 1.28 x MAX_VALUE
+  });
+
   it('a frequency that underflows with the probability is numeric-range (the smallest double times a probability below 1 rounds to 0)', () => {
     const t = treeOf([{ id: 'A', event: 'X' }, { id: 'B', event: 'Y' }], 5e-324);
     expect(why(() => run(SHARED, t))).toBe('numeric-range');

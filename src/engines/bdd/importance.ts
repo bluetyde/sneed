@@ -49,11 +49,8 @@ export function importance(model: NativeModel, opts: SolveOptions & { maxWork?: 
   };
 
   /** Can the top event happen at all, with this event state? Zero-probability events cannot fail, certain ones always do, the others are free:
-   *  probability 0.5 each (never below 2^-300 for 300 events), so a result of 0 means "impossible", never "too small to represent". */
-  const possible = (fixed?: { index: number; value: 0 | 1 }): boolean => {
-    const r = p.map((q, j) => (fixed && fixed.index === j ? fixed.value : q === 0 ? 0 : q === 1 ? 1 : 0.5));
-    return bdd.probability(root, r) > 0;
-  };
+   *  decided on the structure of the diagram (no products of probabilities, which can underflow), so "impossible" is never "too small to represent". */
+  const possible = (fixed?: { index: number; value: 0 | 1 }): boolean => bdd.satisfiable(root, (v) => (fixed && fixed.index === v ? fixed.value : p[v] === 0 ? 0 : p[v] === 1 ? 1 : undefined));
 
   const top = bdd.probability(root, p);
   if (!Number.isFinite(top)) return range();

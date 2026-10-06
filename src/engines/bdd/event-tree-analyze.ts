@@ -116,7 +116,7 @@ export async function analyzeEventTreeBuiltin(treeText: string, modelText: strin
     probability: s.probability,
     frequency: s.frequency,
     share: s.probability,
-    ...(s.approximation ? { approximation: { probability: s.approximation.probability, frequency: s.approximation.frequency, ratio_to_exact: s.probability === 0 ? null : s.approximation.probability / s.probability } } : {}),
+    ...(s.approximation ? { approximation: { probability: s.approximation.probability, frequency: s.approximation.frequency, ratio_to_exact: s.approximation.ratio } } : {}),
   }));
   const names = new Map(doc.end_states.map((e) => [e.id, e]));
   const end_states: EtEndStateRow[] = c.endStates.map((e) => ({ id: e.id, name: names.get(e.id)!.name, synthetic: names.get(e.id)!.synthetic, frequency: e.frequency, probability: e.probability, sequences: e.sequences }));
