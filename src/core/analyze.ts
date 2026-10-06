@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { reachableEvents } from './bounds.js';
 import { documentHash, modelHash } from './canonical.js';
@@ -7,7 +7,7 @@ import { engineIdentity, execInWsl, toWslPath, type EngineConfig } from './engin
 import { defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import { ExportError, exportOpenPsa, type VotingMode } from './export.js';
 import type { Method, NativeModel, Settings } from './model.js';
-import { assess, AssessAborted, type EngineIdentity, type ResultRecord } from './result.js';
+import { assess, AssessAborted, MAX_REPORT_BYTES, type EngineIdentity, type ResultRecord } from './result.js';
 import { validateModelText, type Issue } from './validate.js';
 
 export interface AnalyzeOptions {
@@ -59,6 +59,9 @@ function writeAtomic(file: string, text: string): void {
  * Everything the engine saw and said is kept in the run directory, whatever the outcome.
  */
 export async function analyze(documentText: string, opts: AnalyzeOptions): Promise<AnalyzeOutcome> {
+  // one monotonic clock for the whole analysis, started on entry: validation, export, the engine and the checks on its report
+  const now = opts.now ?? ((): number => performance.now());
+  const deadline = now() + (opts.timeoutMs ?? 60000);
   const validation = validateModelText(documentText);
   if (!validation.valid) return { kind: 'refused', errors: validation.errors, warnings: validation.warnings };
 
@@ -97,9 +100,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(record, null, 2) + '\n');
     return { kind: 'ran', runDir, record };
   };
-  // the time limit covers the whole analysis, not only the engine: the checks on a large report poll this and stop
-  const now = opts.now ?? Date.now;
-  const deadline = now() + (opts.timeoutMs ?? 60000);
+  // the checks on a large report poll this and stop
   const check = (): void => {
     if (opts.signal?.aborted) throw new AssessAborted('cancelled');
     if (now() > deadline) throw new AssessAborted('timeout');
@@ -121,9 +122,15 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     return finish({ ...rec, reasons: ['engine-build-mismatch'] });
   }
 
-  const result = await execInWsl(engineCfg.distro, argv, { timeoutMs: opts.timeoutMs ?? 60000, ...(opts.signal ? { signal: opts.signal } : {}), ownerTag: toWslPath(runDir) });
+  // the engine gets what is left of the budget, and is not started at all when nothing is left
+  const remaining = Math.floor(deadline - now());
+  if (remaining <= 0 || opts.signal?.aborted) {
+    return assessWith(identity, { exit: null, timedOut: !opts.signal?.aborted, cancelled: opts.signal?.aborted === true, stderr: '' }, null);
+  }
+  const result = await execInWsl(engineCfg.distro, argv, { timeoutMs: remaining, ...(opts.signal ? { signal: opts.signal } : {}), ownerTag: toWslPath(runDir) });
   writeFileSync(path.join(runDir, 'log', 'stdout.txt'), result.stdout, 'utf8');
   writeFileSync(path.join(runDir, 'log', 'stderr.txt'), result.stderr, 'utf8');
-  const reportText = existsSync(reportPath) ? readFileSync(reportPath, 'utf8') : null;
-  return assessWith(identity, { exit: result.exit, timedOut: result.timedOut, cancelled: result.cancelled, stderr: result.stderr }, reportText);
+  const reportTooLarge = existsSync(reportPath) && statSync(reportPath).size > MAX_REPORT_BYTES; // never read into memory
+  const reportText = existsSync(reportPath) && !reportTooLarge ? readFileSync(reportPath, 'utf8') : null;
+  return finish(assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: result.exit, timedOut: result.timedOut, cancelled: result.cancelled, stderr: result.stderr }, reportText, reportTooLarge, hashes, exportedEvents: exported.mapping.events, check }));
 }

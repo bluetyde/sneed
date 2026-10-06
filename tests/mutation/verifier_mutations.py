@@ -123,7 +123,7 @@ MUTATIONS = [
     ("result: exact probability not checked against cut sets", Rs, "if (union !== null && union > report.probability && !close(union, report.probability)) {", "if (false as boolean) {"),
     ("result: omission evidence ignored", Rs, "if (emptyButPossible || explainsLess) {", "if (false as boolean) {"),
     ("result: approximation values not recomputed", Rs, "if (reasons.length === 0 && settings.method !== 'exact') {", "if (false as boolean) {"),
-    ("result: non-minimal cut sets accepted", Rs, "if (hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');", ""),
+    ("result: non-minimal cut sets accepted", Rs, "&& hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');", "&& (false as boolean)) reasons.push('non-minimal-cut-sets');"),
     ("result: clamp warning ignored for exact", Rs, "if (adjusted && settings.method === 'exact' && !close(report.probability, 1))", "if (false as boolean)"),
     # structural bound
     ("bounds: AND takes the maximum", B, "if (g.type === 'and') b = vals.reduce((x, y) => x + y, 0);", "if (g.type === 'and') b = Math.max(...vals);"),
@@ -133,7 +133,7 @@ MUTATIONS = [
     ("analyze: default limit is the engine's own 20", A, "limitOrder: Math.max(1, events.length)", "limitOrder: 20", HEADLESS),
     ("analyze: engine pin not enforced", A, "if (engineCfg.expectedSha256 && identity.sha256 !== engineCfg.expectedSha256) {", "if (false as boolean) {", HEADLESS),
     ("analyze: always writes SCRAM's atleast", A, "exportOpenPsa(model, opts.voting ? { voting: opts.voting } : {})", "exportOpenPsa(model, { voting: 'native' })", HEADLESS),
-    ("analyze: report read even after the run failed to produce one", A, "existsSync(reportPath) ? readFileSync(reportPath, 'utf8') : null", "'<report/>'", HEADLESS),
+    ("analyze: report read even after the run failed to produce one", A, "const reportText = existsSync(reportPath) && !reportTooLarge ? readFileSync(reportPath, 'utf8') : null;", "const reportText = '<report/>';", HEADLESS),
     ("engine: cancel does not kill the owned process", N, "      killOwned(distro, opts.ownerTag);\n", "", PROCESS),
     ("engine: owner tag not regex-escaped", N, "const pattern = regexEscape(ownerTag);", "const pattern = ownerTag;", PROCESS),
     ("engine: timeout never fires", N, "const timer = setTimeout(() => stop('timeout'), opts.timeoutMs);", "const timer = setTimeout(() => undefined, opts.timeoutMs);", PROCESS),
@@ -295,8 +295,14 @@ MUTATIONS = [
     ("result: the minimality check never polls the deadline", Rs, "if (ops % POLL_EVERY < n) check();", ""),
     ("result: sets of the same size are compared", Rs, "const size = sets[order[at]!]!.length;", "const size = 0;"),
     ("result: a subset is not noticed", Rs, "if (c === sets[t]!.length) return true;", "if (c === sets[t]!.length + 1) return true;"),
-    ("result: a timeout during the checks is reported as a result", Rs, "return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');", "return fail('result-too-large-to-verify');"),
+    ("result: a timeout during the checks is reported as a result", Rs, "if (e instanceof AssessAborted) {\n      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };\n      return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');", "if (e instanceof AssessAborted) {\n      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };\n      return fail('result-too-large-to-verify');"),
+    ("result: a timeout at the final check is reported as too large", Rs, "if (!(e instanceof AssessAborted)) throw e;\n      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };\n      return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');", "if (!(e instanceof AssessAborted)) throw e;\n      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };\n      return fail('result-too-large-to-verify');"),
     ("analyze: the time limit covers only the engine", AN, "if (now() > deadline) throw new AssessAborted('timeout');", "", TIMEOUT),
+    ("result: a result is accepted without a final time check", Rs, "return accept({ ...base, ...parsed, status: 'completed', completeness: 'complete' } as ResultRecord);", "return { ...base, ...parsed, status: 'completed', completeness: 'complete' } as ResultRecord;"),
+    ("result: an unread oversized report is not refused", Rs, "if (input.reportTooLarge) return fail('result-too-large-to-verify');", ""),
+    ("result: the report size cap is off", Rs, "if (input.reportText.length > MAX_REPORT_BYTES) return fail('result-too-large-to-verify');", ""),
+    ("result: an over-long product is indexed", Rs, "ev.length > known.size || ", ""),
+    ("analyze: the engine is started with no time left", AN, "if (remaining <= 0 || opts.signal?.aborted) {", "if (false as boolean) {", TIMEOUT),
     # smoke checker (needs the engine)
     ("smoke: probability not compared", SM, "else if (Math.abs((r.top_event_probability ?? Number.NaN) - c.expected_probability) > Math.max(1e-12, 1e-5 * c.expected_probability)) reason = 'probability-differs';", "else if (false as boolean) reason = 'probability-differs';", SMOKE),
     ("smoke: cut sets not compared", SM, "else if (JSON.stringify(sorted(r.minimal_cut_sets.map((x) => x.events))) !== JSON.stringify(sorted(c.expected_cut_sets))) reason = 'cut-sets-differ';", "else if (false as boolean) reason = 'cut-sets-differ';", SMOKE),
@@ -349,6 +355,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[1] in web]
     if only == "compare":  # just the compare-runs mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("compare:", "runs:", "ui compare:", "editor: a failed comparison", "editor: a slow older", "editor: clearing does not", "editor: a listing failure"))]
+    if only == "timeout":  # just the time-limit and report-size mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith(("analyze:", "result: a result is accepted", "result: an unread", "result: the report size", "result: an over-long", "result: too many", "result: the minimality", "result: sets of", "result: a subset", "result: a timeout", "result: non-minimal", "analyze: report read"))]
     if only == "seed":  # just the SEED-side mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("headless:", "seed oracle:", "engine: hasOwned", "engine: a failed process", "analyze:"))]
     if only == "lessons":  # just the lesson mutations

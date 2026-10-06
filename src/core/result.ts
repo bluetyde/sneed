@@ -69,6 +69,8 @@ export interface AssessInput {
    * The checks are CPU-bound and cannot be interrupted from outside, so they poll.
    */
   check?: () => void;
+  /** The caller found the report file larger than MAX_REPORT_BYTES and did not read it. */
+  reportTooLarge?: boolean;
 }
 
 /** Thrown by the `check` callback (or by a check that gives up) to stop assessing. assess() turns it into a record. */
@@ -80,6 +82,8 @@ export class AssessAborted extends Error {
 
 /** A report with more cut sets than this is not verified (and so never "completed"): the checks below grow faster than the count. */
 export const MAX_CUT_SETS = 50_000;
+/** A report file larger than this is not read or parsed (characters of XML text). */
+export const MAX_REPORT_BYTES = 64 * 1024 * 1024;
 /** Elementary steps the minimality check may take before it gives up. A few seconds of work. */
 export const MINIMALITY_BUDGET = 40_000_000;
 const POLL_EVERY = 4096;
@@ -108,6 +112,7 @@ export function hasNonMinimal(sets: string[][], check: () => void = () => undefi
       const s = sets[order[i]!]!;
       const seen = new Map<number, number>();
       for (const e of s) {
+        tick(1); // every event visit is charged, also one that finds nothing
         for (const t of post.get(e) ?? []) {
           tick(1);
           const c = (seen.get(t) ?? 0) + 1;
@@ -117,12 +122,12 @@ export function hasNonMinimal(sets: string[][], check: () => void = () => undefi
       }
     }
     for (let i = at; i < end; i++) {
+      tick(size); // charged before the set is indexed, not after
       for (const e of sets[order[i]!]!) {
         const list = post.get(e);
         if (list) list.push(order[i]!);
         else post.set(e, [order[i]!]);
       }
-      tick(size);
     }
     at = end;
   }
@@ -174,6 +179,17 @@ export function assess(input: AssessInput): ResultRecord {
     minimal_cut_sets: [],
   };
   const fail = (...reasons: string[]): ResultRecord => ({ ...base, reasons });
+  /** A result is accepted only if the time is not up when it is accepted: the steps after the minimality check are not interruptible. */
+  const accept = (r: ResultRecord): ResultRecord => {
+    try {
+      (input.check ?? ((): void => undefined))();
+      return r;
+    } catch (e) {
+      if (!(e instanceof AssessAborted)) throw e;
+      if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };
+      return fail(e.why === 'timeout' ? 'timeout' : 'result-too-large-to-verify');
+    }
+  };
 
   if (input.outcome.cancelled) return { ...base, status: 'cancelled', reasons: ['cancelled'] };
   if (input.outcome.timedOut) return fail('timeout');
@@ -181,7 +197,9 @@ export function assess(input: AssessInput): ResultRecord {
     const cls = /scram::[A-Za-z:]+/.exec(input.outcome.stderr)?.[0];
     return fail(`engine-exit-${input.outcome.exit}`, ...(cls ? [`engine-error:${cls}`] : []));
   }
+  if (input.reportTooLarge) return fail('result-too-large-to-verify');
   if (input.reportText === null) return fail('no-report');
+  if (input.reportText.length > MAX_REPORT_BYTES) return fail('result-too-large-to-verify');
 
   let report: ParsedReport;
   try {
@@ -207,11 +225,16 @@ export function assess(input: AssessInput): ResultRecord {
   const sets = report.products.map((x) => x.events);
   try {
     check(); // once before the loops: a run whose time is already up must not start them
-    let seenProducts = 0;
+    let work = 0;
+    let nextPoll = POLL_EVERY;
     for (const prod of report.products) {
-      if (++seenProducts % POLL_EVERY === 0) check();
+      work += prod.events.length + 1;
+      if (work >= nextPoll) {
+        check();
+        nextPoll = work + POLL_EVERY;
+      }
       const ev = prod.events;
-      if (ev.length === 0 || new Set(ev).size !== ev.length || prod.order !== ev.length) reasons.push('malformed-cut-set');
+      if (ev.length === 0 || ev.length > known.size || new Set(ev).size !== ev.length || prod.order !== ev.length) reasons.push('malformed-cut-set');
       else if (ev.some((e) => !known.has(e))) reasons.push('unknown-event-in-cut-set');
       else {
         const expected = ev.reduce((acc, e) => acc * p.get(e)!, 1);
@@ -221,7 +244,8 @@ export function assess(input: AssessInput): ResultRecord {
       if (keys.has(key)) reasons.push('duplicate-cut-set');
       keys.add(key);
     }
-    if (hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');
+    // the index of the minimality check is only meaningful for well-formed, distinct sets (anything else already fails the result)
+    if (!reasons.includes('malformed-cut-set') && !reasons.includes('duplicate-cut-set') && !reasons.includes('unknown-event-in-cut-set') && hasNonMinimal(sets, check)) reasons.push('non-minimal-cut-sets');
   } catch (e) {
     if (e instanceof AssessAborted) {
       if (e.why === 'cancelled') return { ...base, status: 'cancelled', reasons: ['cancelled'] };
@@ -268,13 +292,13 @@ export function assess(input: AssessInput): ResultRecord {
     if (report.products.length === 0) return { ...fail('empty-result-inconsistent'), warnings };
     // with an ample limit nothing may be missing: the cut sets must explain the whole probability
     if (union !== null && !close(union, report.probability)) return { ...fail('probability-inconsistent-with-cut-sets'), warnings };
-    return { ...base, ...parsed, status: 'completed', completeness: 'complete' } as ResultRecord;
+    return accept({ ...base, ...parsed, status: 'completed', completeness: 'complete' } as ResultRecord);
   }
   // limit below the structural bound: omission must be demonstrated, otherwise completeness is unknown
   const emptyButPossible = report.products.length === 0 && report.probability > 0;
   const explainsLess = union !== null && union < report.probability && !close(union, report.probability);
   if (emptyButPossible || explainsLess) {
-    return { ...base, ...parsed, status: 'truncated', completeness: 'truncated', reasons: ['product-order-limit-effective'] } as ResultRecord;
+    return accept({ ...base, ...parsed, status: 'truncated', completeness: 'truncated', reasons: ['product-order-limit-effective'] } as ResultRecord);
   }
   return { ...fail('limit-below-bound-completeness-unknown'), warnings };
 }

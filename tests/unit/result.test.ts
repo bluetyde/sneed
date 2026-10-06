@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assess, AssessAborted, hasNonMinimal, MAX_CUT_SETS, MINIMALITY_BUDGET, type AssessInput, type Outcome } from '../../src/core/result.js';
+import { assess, AssessAborted, hasNonMinimal, MAX_CUT_SETS, MAX_REPORT_BYTES, MINIMALITY_BUDGET, type AssessInput, type Outcome } from '../../src/core/result.js';
 import { maxCutSetOrderBound, reachableEvents } from '../../src/core/bounds.js';
 import { makeReport, type FakeReport } from '../oracle/reportgen.js';
 import { AND, OR, VOTE, mkDoc, ORACLE_MODELS } from '../oracle/models.js';
@@ -360,5 +360,61 @@ describe('the checks on a large report are bounded (found by SEED: --timeout-sec
     expect(r.status).toBe('failed');
     expect(r.reasons).toEqual(['too-many-cut-sets']);
     expect(r.minimal_cut_sets).toEqual([]);
+  });
+});
+
+describe('a result is accepted only while time is left (second review of the time-limit fix)', () => {
+  // 12 disjoint cut sets of 300 events each: every step after the minimality check has real work to do
+  const events = Array.from({ length: 12 }, (_, i) => Array.from({ length: 300 }, (_, k) => `E${i}_${k}`));
+  const model = asModel(mkDoc('TOP', Object.fromEntries(events.flat().map((e) => [e, 0.5])), [OR('TOP', events.map((_, i) => `G${i}`)), ...events.map((es, i) => AND(`G${i}`, es))]));
+  const report: FakeReport = { probability: String(12 * 2 ** -300), limit: 300, products: events.map((es) => ({ events: es, probability: String(2 ** -300) })) };
+
+  it('sanity: with time left the same report is completed', () => {
+    expect(run(model, report).status).toBe('completed');
+  });
+
+  it('time that runs out after the first poll still ends the run as a timeout, never completed', () => {
+    let calls = 0;
+    const r = run(model, report, {
+      check: () => {
+        if (++calls > 1) throw new AssessAborted('timeout'); // time is up from the second look on
+      },
+    });
+    expect(r).toMatchObject({ status: 'failed', reasons: ['timeout'], top_event_probability: null, minimal_cut_sets: [] });
+    expect(calls).toBeGreaterThan(1); // it looked again before accepting
+  });
+
+  it('time that runs out only at the very last look, when the result is about to be accepted, is still a timeout', () => {
+    // the look made by accept() is told apart by its stack frame, so the earlier polls inside the checks all pass
+    const atAcceptance = (why: 'timeout' | 'cancelled') => (): void => {
+      if (new Error().stack?.includes('accept')) throw new AssessAborted(why);
+    };
+    expect(run(model, report, { check: () => undefined }).status).toBe('completed');
+    expect(run(model, report, { check: atAcceptance('timeout') })).toMatchObject({ status: 'failed', reasons: ['timeout'], top_event_probability: null, minimal_cut_sets: [] });
+    expect(run(model, report, { check: atAcceptance('cancelled') })).toMatchObject({ status: 'cancelled' });
+  });
+
+  it('a cancel after the first poll ends the run as cancelled', () => {
+    let calls = 0;
+    const r = run(model, report, {
+      check: () => {
+        if (++calls > 1) throw new AssessAborted('cancelled');
+      },
+    });
+    expect(r).toMatchObject({ status: 'cancelled', reasons: ['cancelled'] });
+  });
+
+  it('a report file the caller did not read, or one larger than the cap, is a named refusal before any parsing', () => {
+    expect(run(model, report, { reportTooLarge: true, reportText: null })).toMatchObject({ status: 'failed', reasons: ['result-too-large-to-verify'] });
+    expect(run(model, 'x'.repeat(MAX_REPORT_BYTES + 1))).toMatchObject({ status: 'failed', reasons: ['result-too-large-to-verify'] });
+  });
+
+  it('a product with more events than the model has is malformed at once and is not indexed', () => {
+    const small = asModel(ORACLE_MODELS['pra-and']!);
+    let polls = 0;
+    const r = run(small, { probability: '0.02', limit: 2, products: [{ events: Array.from({ length: 5000 }, (_, i) => `X${i}`), probability: '0.02' }] }, { check: () => void polls++ });
+    expect(r.status).toBe('failed');
+    expect(r.reasons).toContain('malformed-cut-set');
+    expect(r.reasons).not.toContain('non-minimal-cut-sets');
   });
 });
