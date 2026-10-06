@@ -624,10 +624,15 @@ MUTATIONS += [
     em("the order of the files matters", "[...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map(", "[...files].map("),
     em("the path is not part of the identity", "`${f.path}\\n${sha256(normalise(f.content))}\\n`", "`${sha256(normalise(f.content))}\\n`"),
     em("the separator is missing", "`${f.path}\\n${sha256(normalise(f.content))}\\n`", "`${f.path}${sha256(normalise(f.content))}`"),
-    em("the shared result checks are not covered", "export const EXTRA_SOURCE_FILES = ['src/core/result.ts', 'src/core/canonical.ts'];", "export const EXTRA_SOURCE_FILES: string[] = [];"),
-    em("only some solver files are covered", ".filter((f) => f.endsWith('.ts'))", ".filter((f) => f.endsWith('solve.ts'))"),
-    em("the generated file hashes itself", "    .filter((f) => f !== BUILD_ID_FILE);", "    .filter(() => true);"),
+    em("the schema is not covered", "export const EXTRA_SOURCE_FILES = ['schema/model.schema.json'];", "export const EXTRA_SOURCE_FILES: string[] = [];"),
+    em("only some solver files are covered", "    .filter((f) => f.endsWith('.ts'))\n    .map((f) => `src/engines/bdd/${f}`);", "    .filter((f) => f.endsWith('solve.ts'))\n    .map((f) => `src/engines/bdd/${f}`);"),
+    em("the generated file hashes itself", "if (seen.has(p) || p === BUILD_ID_FILE) continue;", "if (seen.has(p)) continue;"),
     em("the file list is not sorted", "const list = files.map((f) => f.path).sort();", "const list = files.map((f) => f.path);"),
+    em("imports are not followed", "      if (next) queue.push(next);", "      void next;"),
+    em("type-only imports are followed", "const runtime = text.replace(/\\b(?:import|export)\\s+type\\b[^;]*?from\\s*['\"][^'\"]+['\"]/g, '');", "const runtime = text;"),
+    em("a file outside the project is read", "    if (candidate.startsWith('..')) continue;\n", ""),
+    em("dynamic imports are not followed", "(?:\\bfrom\\s*|\\bimport\\s*\\(?\\s*)", "(?:\\bfrom\\s*|\\bimport\\s*)"),
+    em("a module reached twice is read twice", "if (seen.has(p) || p === BUILD_ID_FILE) continue;", "if (p === BUILD_ID_FILE) continue;"),
     em("a record names no build", "sha256: BDD_SOURCE_SHA256, runtime: null };", "sha256: null, runtime: null };", BA_FILE),
     em("reuse ignores the build", " && r.engine_sha256 === wantSha);", ");", SA),
     em("reuse matches a record with no build", "let wantSha: string | null = BDD_SOURCE_SHA256;", "let wantSha: string | null = null;", SA),
@@ -654,6 +659,13 @@ def run_tests(suite: tuple[str, int] = UNIT) -> tuple[bool | None, str]:
         pw = re.findall(r"^\s*(\d+ (?:passed|failed|flaky)[^\n]*)$", out, re.MULTILINE)
         return proc.returncode == 0, (" | ".join(pw) if pw else "no test summary (crash)")
     return proc.returncode == 0, m.group(1).strip()
+
+
+def hashed_files() -> set[str]:
+    """The files the built-in engine's identity hashes (the list in the generated build-id.ts): a mutant in one of them must not be caught
+    only because the committed identity no longer matches."""
+    text = (ROOT / "src/engines/bdd/build-id.ts").read_text(encoding="utf-8")
+    return set(re.findall(r'"((?:src|schema)/[^"]+)"', text))
 
 
 def recover() -> None:
@@ -728,7 +740,7 @@ def main() -> int:
         # A mutant in a file the built-in engine's identity hashes would fail the identity test for that reason alone and hide real gaps:
         # regenerate build-id.ts for the mutant (and put the original back afterwards), so the mutant is judged by its behaviour.
         rel = path.relative_to(ROOT).as_posix()
-        regen = (rel.startswith("src/engines/bdd/") and rel != "src/engines/bdd/build-id.ts") or rel in ("src/core/result.ts", "src/core/canonical.ts")
+        regen = rel in hashed_files()
         bid = ROOT / "src/engines/bdd/build-id.ts"
         bid_original = bid.read_bytes() if regen else b""
         bid_stash = BACKUP / "build-id.ts.orig"
@@ -737,7 +749,14 @@ def main() -> int:
         try:
             path.write_bytes(text.replace(old, new, 1).encode("utf-8"))
             if regen:
-                subprocess.run("npx tsx scripts/gen-engine-id.ts", cwd=ROOT, shell=True, capture_output=True)
+                try:
+                    gen = subprocess.run("npx tsx scripts/gen-engine-id.ts", cwd=ROOT, shell=True, capture_output=True, timeout=120)
+                except subprocess.TimeoutExpired:
+                    gen = None
+                if gen is None or gen.returncode != 0:  # never judge a mutant against a stale identity: that would count as caught for the wrong reason
+                    print(f"INFRASTRUCTURE ERROR  {name}: the engine identity could not be regenerated" + (f": {gen.stderr.decode('utf-8', 'replace')[-300:]}" if gen else " (timeout)"))
+                    survived.append(name + " [infrastructure error]")
+                    continue
             green, summary = run_tests(suite)
         finally:
             path.write_bytes(original)
