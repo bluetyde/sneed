@@ -818,6 +818,12 @@ describe('EventTreeEditor', () => {
     // a prediction that is not a number counts as none
     ed.setPrediction('lots');
     expect(ed.prediction).toBeNull();
+    ed.setPrediction('-1');
+    expect(ed.prediction).toBeNull(); // a frequency is not negative
+    ed.setPrediction(' ');
+    expect(ed.prediction).toBeNull();
+    ed.setPrediction('0');
+    expect(ed.prediction).toBe(0);
     expect(ed.lessonProgress!.complete).toBe(false);
   });
 
