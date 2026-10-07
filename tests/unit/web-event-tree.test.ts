@@ -198,7 +198,7 @@ describe('event-tree document operations', () => {
     let d = E.addHeading(E.newEventTree(ref, 'T', NOW), 'TOP', NOW);
     d = E.setBypass(d, 'H2', { heading: 'H1', branch: 'fails' }, NOW);
     expect(d.headings[1]!.asked_only_if).toEqual({ heading: 'H1', branch: 'fails' });
-    expect(d.sequences.map((s) => pathKey(s.path))).toEqual(['H1:works,H2:works', 'H1:works,H2:fails', 'H1:fails']);
+    expect(d.sequences.map((s) => pathKey(s.path))).toEqual(['H1:works', 'H1:fails,H2:works', 'H1:fails,H2:fails']);
     d = E.setBypass(d, 'H2', null, NOW);
     expect(d.headings[1]!.asked_only_if).toBeUndefined();
     expect(d.sequences).toHaveLength(4);
