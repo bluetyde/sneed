@@ -3,6 +3,8 @@
 
 import type { Engine, Method } from '../api.js';
 import type { Editor } from '../model/editor.js';
+import type { EventTreeEditor } from '../model/event-tree-editor.js';
+import { EventTreeView } from './event-tree.js';
 import { Canvas } from './canvas.js';
 import { confirmDiscard, importDialog, openDialog, saveAsDialog } from './dialogs.js';
 import { exportPng, exportSvg, installPrint } from './exporter.js';
@@ -18,8 +20,12 @@ import { ResultsPanel } from './results.js';
 
 type Tab = 'properties' | 'problems' | 'results' | 'compare' | 'lesson';
 
-export function mountShell(root: HTMLElement, editor: Editor): void {
+type Mode = 'fault-tree' | 'event-tree';
+
+export function mountShell(root: HTMLElement, editor: Editor, eventTree?: EventTreeEditor): void {
   let tab: Tab = 'properties';
+  let mode: Mode = 'fault-tree';
+  const etView = eventTree ? new EventTreeView(eventTree) : null;
   const canvas = new Canvas(editor);
   const outline = new Outline(editor);
   const properties = new Properties(editor);
@@ -108,7 +114,11 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   const runBtn = h('button', { class: 'run', type: 'button', 'data-testid': 'run', 'aria-describedby': 'run-pill', onclick: run }, icon('run'), 'Run') as HTMLButtonElement;
   const stopBtn = h('button', { class: 'stop', type: 'button', 'data-testid': 'cancel', onclick: () => void editor.cancel() }, icon('stop'), 'Cancel') as HTMLButtonElement;
   const pill = h('span', { class: 'run-pill', id: 'run-pill', role: 'status', 'data-testid': 'run-pill' });
-  const titlebar = h('div', { class: 'titlebar' }, h('h1', { class: 'brand' }, 'SNEED', h('small', {}, 'fault-tree editor')), docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'engine' }, 'Engine'), engineSelect, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
+  const brandSub = h('small', {}, 'fault-tree editor');
+  const modeBtn = (m: Mode, label: string): HTMLButtonElement => h('button', { class: 'btn', type: 'button', 'data-mode': m, 'aria-pressed': 'false', onclick: () => void setMode(m) }, label) as HTMLButtonElement;
+  const modeButtons: Record<Mode, HTMLButtonElement> = { 'fault-tree': modeBtn('fault-tree', 'Fault tree'), 'event-tree': modeBtn('event-tree', 'Event tree') };
+  const modeSwitch = h('div', { class: 'mode-switch', role: 'group', 'aria-label': 'What to edit', hidden: !etView }, modeButtons['fault-tree'], modeButtons['event-tree']);
+  const titlebar = h('div', { class: 'titlebar' }, h('h1', { class: 'brand' }, 'SNEED', brandSub), modeSwitch, docName, h('div', { class: 'spacer' }), h('div', { class: 'run-group' }, h('label', { for: 'engine' }, 'Engine'), engineSelect, h('label', { for: 'method' }, 'Method'), methodSelect, runBtn, stopBtn, pill));
 
   // ---- notice ----
   const notice = h('div', { class: 'notice', role: 'status', hidden: true, 'data-testid': 'notice' });
@@ -152,10 +162,19 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   const status = h('footer', { class: 'status', 'data-testid': 'status' });
 
   const center = h('main', { class: 'center', 'aria-label': 'Drawing area' }, h('div', { class: 'canvas-bar' }, h('span', {}, 'Drag a node to move it. Drag from the dot under a gate to connect it. Arrow keys move between nodes; Enter edits.')), canvas.el);
-  const win = h('div', { class: 'win', 'data-testid': 'win' }, h('header', { class: 'top' }, titlebar, ribbon, notice), h('div', { class: 'main' }, outline.el, center, side), status);
+  const mainRow = h('div', { class: 'main' }, outline.el, center, side);
+  const win = h('div', { class: 'win', 'data-testid': 'win' }, h('header', { class: 'top' }, titlebar, ribbon, notice), mainRow, ...(etView ? [etView.el] : []), status);
   root.replaceChildren(win);
   root.removeAttribute('class');
   root.classList.add('app');
+
+  async function setMode(next: Mode): Promise<void> {
+    if (next === mode || !etView || !eventTree) return;
+    mode = next;
+    if (mode === 'event-tree') await eventTree.refreshContext(); // the saved models may have changed in the other view
+    renderAll();
+  }
+  const runGroup = titlebar.querySelector<HTMLElement>('.run-group')!;
 
   // ---- render ----
   let queued = false;
@@ -170,8 +189,36 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     }, 0);
   };
 
+  function renderEventTreeMode(): void {
+    const et = eventTree!;
+    docName.replaceChildren(h('b', {}, et.doc.tree.name), ` · ${et.fileName ?? 'not saved yet'}`, et.dirty ? h('span', { class: 'dirty', role: 'img', 'aria-label': 'unsaved changes', 'data-testid': 'et-dirty' }, ' ●') : '');
+    document.title = `${et.dirty ? '• ' : ''}${et.doc.tree.name} · SNEED`;
+    win.dataset.dirty = String(et.dirty);
+    win.dataset.valid = et.validation === null ? 'unknown' : String(et.validation.valid);
+    win.dataset.running = String(et.running);
+    notice.hidden = et.notice === null;
+    notice.className = `notice ${et.notice?.kind ?? 'info'}`;
+    notice.replaceChildren(h('span', {}, et.notice?.text ?? ''), h('button', { type: 'button', 'aria-label': 'Dismiss this message', onclick: () => et.setNotice(null) }, 'Dismiss'));
+    etView!.render();
+    const v = et.validation;
+    status.replaceChildren(
+      h('span', {}, 'Event tree hash ', h('code', { 'data-testid': 'et-hash', 'data-hash': v?.tree_hash ?? '' }, v?.tree_hash ? v.tree_hash.slice(0, 12) : 'none')),
+      h('span', { 'data-testid': 'et-validation-state' }, v === null ? 'checking…' : v.valid ? (v.warnings.length ? `valid, ${v.warnings.length} warning${v.warnings.length === 1 ? '' : 's'}` : 'valid') : `${v.errors.length} problem${v.errors.length === 1 ? '' : 's'}`),
+      h('span', {}, `model ${et.doc.fault_tree_model.name}`),
+      h('span', { class: 'spacer' }),
+      h('span', {}, `${et.doc.headings.length} headings · ${et.doc.sequences.length} sequences · ${et.doc.end_states.length} end states`));
+  }
+
   function renderAll(): void {
     const ed = editor;
+    for (const m of Object.keys(modeButtons) as Mode[]) modeButtons[m].setAttribute('aria-pressed', String(m === mode));
+    const et = mode === 'event-tree';
+    ribbon.hidden = et;
+    runGroup.hidden = et;
+    mainRow.hidden = et;
+    if (etView) etView.el.hidden = !et;
+    brandSub.textContent = et ? 'event-tree editor' : 'fault-tree editor';
+    if (et) return renderEventTreeMode();
     const v = ed.validation;
     // title
     docName.replaceChildren(h('b', {}, ed.doc.model.name), ` · ${ed.fileName ?? 'not saved yet'}`, ed.dirty ? h('span', { class: 'dirty', role: 'img', 'aria-label': 'unsaved changes', 'data-testid': 'dirty' }, ' ●') : '');
@@ -241,6 +288,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
   }
 
   editor.subscribe(schedule);
+  eventTree?.subscribe(schedule);
 
   // ---- keyboard ----
   window.addEventListener('keydown', (e) => {
@@ -248,6 +296,16 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     const typing = !!t && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement);
     const mod = e.ctrlKey || e.metaKey;
     if (document.querySelector('dialog[open]')) return;
+    if (mode === 'event-tree' && eventTree && etView) {
+      if (mod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void etView.save();
+      } else if (mod && e.key === 'Enter') {
+        e.preventDefault();
+        if (eventTree.canRun) void eventTree.run();
+      } else if (e.key === 'Escape' && !typing && eventTree.running) void eventTree.cancel();
+      return;
+    }
     if (mod && e.key.toLowerCase() === 's') {
       e.preventDefault();
       void save();
@@ -267,7 +325,7 @@ export function mountShell(root: HTMLElement, editor: Editor): void {
     }
   });
   window.addEventListener('beforeunload', (e) => {
-    if (editor.dirty) {
+    if (editor.dirty || eventTree?.dirty) {
       e.preventDefault();
       e.returnValue = '';
     }
