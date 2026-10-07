@@ -187,4 +187,10 @@ describe('the figure of an event tree', () => {
     expect(lines).toContain('Warning: a zero frequency');
     expect(lines).toContain('hash tttttttttttt');
   });
+
+  it('carries the caveats of the result into the figure', () => {
+    const d = twoHeadings();
+    const svg = eventTreeSvg(d, { result: { record: record(d, { caveats: ['A distinct caveat for this run.'] }), stale: false } });
+    expect(svg).toContain('A distinct caveat for this run.');
+  });
 });

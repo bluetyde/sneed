@@ -123,7 +123,7 @@ describe('comparing two saved event-tree analyses', () => {
     }
     const d = diffEventTreeResults(rec(), failed)!;
     expect(d.runs.b).toEqual({ status: 'failed', completeness: 'unknown' });
-    const partial = rec(undefined, { completeness: 'unknown' });
+    const partial = rec([0.2, 0.2, 0.2, 0.2], { completeness: 'unknown' }); // a total that differs, so a comparison of it would show
     const dp = diffEventTreeResults(rec(), partial)!;
     expect(dp.numbersCompared).toBe(false);
     expect(dp.total).toBeNull();
