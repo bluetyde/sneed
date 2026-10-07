@@ -817,7 +817,7 @@ MUTATIONS += [
 ]
 
 # Event tree drawing, saved analyses and Compare (plan 13, stage S4). The files that read and write browser downloads and the print sheet
-# (src/web/ui/event-tree-export.ts) are covered by the end-to-end tests, not by mutants here. Removed as equivalent: the existence test before a
+# (src/web/ui/event-tree-export.ts) are covered by the end-to-end tests, not by mutants here. Removed because only the end-to-end test can see it: the sentence naming a damaged file in the Compare panel (e2e/event-tree-compare.spec.ts). Removed as equivalent: the existence test before a
 # run folder is opened (a fault-tree folder has no such file, so reading it fails and is skipped anyway: the test only saves work).
 EFIG = ROOT / "src/web/model/event-tree-figure.ts"
 ECMP = ROOT / "src/core/event-tree-compare.ts"
@@ -879,7 +879,6 @@ MUTATIONS += [
     sf("an end state row that cannot be read is not noticed as damage", "      else damaged = true;\n    }\n  }\n  const assumptions", "    }\n  }\n  const assumptions", ECMP),
     sf("a missing list of sequences is not damage", "  if (!Array.isArray(raw.sequences)) damaged = true;\n", "", ECMP),
     sf("an engine build is compared by its short label", "(idA !== idB || engineA !== engineB) ? { from: engineA, to: engineB } : null,", "(engineA !== engineB) ? { from: engineA, to: engineB } : null,", ECMP),
-    sf("a damaged file is not named", "d.malformed.a || d.malformed.b ?", "false ?", ROOT / "src/web/ui/event-tree-compare.ts"),
     sf("an invalid frequency entry is drawn as the input", "const freqText = opts.frequencyDraft != null ?", "const freqText = false ?"),
     sf("the editor does not pass the invalid entry to the figure", ", frequencyDraft: this.frequencyDraft });", " });", EED4),
     sf("a string in a saved record is not cut short", "const text = (v: unknown, max: number): string | null => (typeof v === 'string' ? v.slice(0, max) : null);", "const text = (v: unknown, max: number): string | null => (typeof v === 'string' ? v : null);", ERUNS),

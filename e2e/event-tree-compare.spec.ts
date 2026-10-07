@@ -1,3 +1,5 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test, buildSharedEventTree as build, SHARED_MODEL, saveSharedModel } from './fixtures.js';
 
@@ -80,5 +82,30 @@ test.describe('comparing saved event-tree analyses', () => {
     await expect(page.getByTestId('et-compare-result')).toBeVisible();
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(page.getByTestId('et-compare-result')).toHaveCount(0);
+  });
+
+  test('a saved analysis that says it is complete but is damaged is named as damaged, and none of its numbers are compared', async ({ app, page, srv }) => {
+    await app.open();
+    await build(page);
+    await analyse(page);
+    const list = (await (await page.request.get('/api/event-tree-runs')).json()) as { runs: { id: string }[] };
+    const good = (await (await page.request.get(`/api/event-tree-runs/${list.runs[0]!.id}`)).json()) as { record: { sequences: { frequency: unknown }[] } };
+    good.record.sequences[0]!.frequency = 'a lot'; // damaged by hand: still says completed / complete
+    const id = '9999-damaged-run-1'; // sorts newest
+    const dir = path.join(srv.dir, 'runs', id);
+    mkdirSync(path.join(dir, 'native'), { recursive: true });
+    writeFileSync(path.join(dir, 'event-tree-results.json'), JSON.stringify(good.record));
+    try {
+      await page.locator('[data-mode="fault-tree"]').click();
+      await page.locator('[data-mode="event-tree"]').click(); // the list is read again on return
+      await expect(page.locator('#et-cmp-b option').first()).toContainText('unnamed event tree');
+      await page.locator('#et-cmp-b').selectOption(id);
+      await page.locator('#et-cmp-a').selectOption({ index: 1 });
+      await page.locator('[data-action="et-compare"]').click();
+      await expect(page.getByTestId('et-compare-nonumbers')).toContainText('damaged');
+      await expect(page.getByTestId('et-compare-seqs')).toHaveCount(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
