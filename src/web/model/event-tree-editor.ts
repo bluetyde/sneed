@@ -61,6 +61,12 @@ export class EventTreeEditor {
 
   static queuePollMs = 700;
   private savedText = '';
+  /** Counts every change to the document, including undo and redo: a view that keeps what a field shows must redraw when it moves, even if the document ends up equal to one it had before (a field holding text that was typed and then undone). */
+  revision = 0;
+  private undoStack: { doc: E.EtDoc; label: string }[] = [];
+  private redoStack: { doc: E.EtDoc; label: string }[] = [];
+  /** The most steps of history kept. */
+  static readonly HISTORY = 200;
   /** Bumped whenever another document replaces this one (New, Open), so an answer that arrives later for the old one is ignored. */
   private docGen = 0;
   private chooseSeq = 0;
@@ -258,6 +264,7 @@ export class EventTreeEditor {
       doc = E.setInitiating(doc, { frequency: 1 }, this.now());
       this.frequencyDraft = null;
       this.doc = doc;
+      this.resetHistory();
       this.fileName = null;
       this.savedText = this.text;
       this.result = null;
@@ -395,29 +402,80 @@ export class EventTreeEditor {
       this.setNotice('error', `${name} is not a valid model (${v.errors.length} problem${v.errors.length === 1 ? '' : 's'}): open it in the fault-tree editor and fix it first.`);
       return;
     }
-    this.commit(E.setModelRef(this.doc, { name, hash: v.model_hash }, this.now()));
+    this.commit(E.setModelRef(this.doc, { name, hash: v.model_hash }, this.now()), 'choosing the fault-tree model');
     await this.loadModelInfo();
   }
   /** "I have looked at the changed model": pins the document to its current hash. Results made for the old model stay marked old. */
   async adoptCurrentModel(): Promise<void> {
     if (!this.model?.hash) return;
-    this.commit(E.setModelRef(this.doc, { name: this.model.name, hash: this.model.hash }, this.now()));
+    this.commit(E.setModelRef(this.doc, { name: this.model.name, hash: this.model.hash }, this.now()), 'checking against the current model');
     this.setNotice('info', `Checked against the current ${this.model.name}. Run the analysis again: an earlier result describes the old model.`);
   }
 
   // ---- editing
-  private commit(next: E.EtDoc): void {
+  private commit(next: E.EtDoc, label: string): void {
     if (E.serialize(next) === this.text) return;
+    this.undoStack.push({ doc: this.doc, label });
+    if (this.undoStack.length > EventTreeEditor.HISTORY) this.undoStack.shift();
+    this.redoStack = [];
     this.doc = next;
+    this.revision++;
     this.scheduleValidation();
     this.emit();
+  }
+  /** A new, opened or lesson document starts its own history: undo never goes back into another document. */
+  private resetHistory(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+  get canUndo(): boolean {
+    return this.undoStack.length > 0 || this.frequencyDraft !== null;
+  }
+  get canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+  get undoLabel(): string | null {
+    return this.frequencyDraft !== null ? 'the frequency being typed' : (this.undoStack.at(-1)?.label ?? null);
+  }
+  get redoLabel(): string | null {
+    return this.redoStack.at(-1)?.label ?? null;
+  }
+  /** Goes back one edit (or drops a frequency that is not a number yet). Returns what was undone, or null when there was nothing. */
+  undo(): string | null {
+    if (this.frequencyDraft !== null) {
+      this.frequencyDraft = null;
+      this.revision++;
+      this.setNotice('info', 'Undid: the frequency being typed.');
+      return 'the frequency being typed';
+    }
+    const step = this.undoStack.pop();
+    if (!step) return null;
+    this.redoStack.push({ doc: this.doc, label: step.label });
+    this.restore(step.doc, `Undid: ${step.label}.`);
+    return step.label;
+  }
+  redo(): string | null {
+    const step = this.redoStack.pop();
+    if (!step) return null;
+    this.undoStack.push({ doc: this.doc, label: step.label });
+    this.restore(step.doc, `Redid: ${step.label}.`);
+    return step.label;
+  }
+  private restore(doc: E.EtDoc, message: string): void {
+    const modelBefore = this.doc.fault_tree_model.name;
+    this.doc = doc;
+    this.revision++;
+    this.frequencyDraft = null;
+    this.scheduleValidation();
+    this.setNotice('info', message);
+    if (doc.fault_tree_model.name !== modelBefore || this.model?.name !== doc.fault_tree_model.name) void this.loadModelInfo(); // the model the headings name may have changed
   }
   setApproximation(on: boolean): void {
     this.approximation = on;
     this.emit();
   }
   setTreeName(name: string): void {
-    this.commit(E.setTreeName(this.doc, name, this.now()));
+    this.commit(E.setTreeName(this.doc, name, this.now()), 'renaming the event tree');
   }
   /** Takes the frequency as typed: a number 0 or more is the new value; anything else is kept as a draft and blocks analysis until fixed. */
   setFrequencyText(v: string): void {
@@ -433,48 +491,48 @@ export class EventTreeEditor {
     this.emit();
   }
   setInitiating(patch: Partial<E.EtDoc['initiating_event']>): void {
-    this.commit(E.setInitiating(this.doc, patch, this.now()));
+    this.commit(E.setInitiating(this.doc, patch, this.now()), 'editing the initiating event');
   }
   /**
    * A change to the headings or to when they are asked changes which paths exist. A path that still exists keeps its end state; one that
    * does not is gone, and a new path has none: the author chooses, because carrying an answer over to a different path would be a guess.
    * Says so when answers were lost.
    */
-  private commitPaths(next: E.EtDoc): void {
+  private commitPaths(next: E.EtDoc, label: string): void {
     const kept = new Set(next.sequences.map((s) => pathKey(s.path)));
     const lost = this.doc.sequences.filter((s) => s.end_state !== '' && !kept.has(pathKey(s.path))).length;
-    this.commit(next);
+    this.commit(next, label);
     if (lost > 0) this.setNotice('info', `The paths changed, so ${lost} end state${lost === 1 ? ' choice was' : ' choices were'} dropped. Every sequence on the new list that has none needs one.`);
   }
   addHeading(): void {
-    this.commitPaths(E.addHeading(this.doc, this.model?.top ?? this.doc.headings.at(-1)?.event ?? 'none', this.now()));
+    this.commitPaths(E.addHeading(this.doc, this.model?.top ?? this.doc.headings.at(-1)?.event ?? 'none', this.now()), 'adding a heading');
   }
   removeHeading(id: string): void {
-    this.commitPaths(E.removeHeading(this.doc, id, this.now()));
+    this.commitPaths(E.removeHeading(this.doc, id, this.now()), 'removing a heading');
   }
   moveHeading(id: string, by: -1 | 1): void {
-    this.commitPaths(E.moveHeading(this.doc, id, by, this.now()));
+    this.commitPaths(E.moveHeading(this.doc, id, by, this.now()), 'moving a heading');
   }
   patchHeading(id: string, patch: { name?: string; event?: string }): void {
-    this.commit(E.patchHeading(this.doc, id, patch, this.now()));
+    this.commit(E.patchHeading(this.doc, id, patch, this.now()), 'editing a heading');
   }
   setBypass(id: string, cond: { heading: string; branch: Branch } | null): void {
-    this.commitPaths(E.setBypass(this.doc, id, cond, this.now()));
+    this.commitPaths(E.setBypass(this.doc, id, cond, this.now()), 'changing when a heading is asked');
   }
   addEndState(): void {
-    this.commit(E.addEndState(this.doc, this.now()));
+    this.commit(E.addEndState(this.doc, this.now()), 'adding an end state');
   }
   removeEndState(id: string): void {
-    this.commit(E.removeEndState(this.doc, id, this.now()));
+    this.commit(E.removeEndState(this.doc, id, this.now()), 'removing an end state');
   }
   patchEndState(id: string, patch: Partial<Omit<E.EtEndState, 'id'>>): void {
-    this.commit(E.patchEndState(this.doc, id, patch, this.now()));
+    this.commit(E.patchEndState(this.doc, id, patch, this.now()), 'editing an end state');
   }
   setSequenceEnd(key: string, endState: string): void {
-    this.commit(E.setSequenceEnd(this.doc, key, endState, this.now()));
+    this.commit(E.setSequenceEnd(this.doc, key, endState, this.now()), 'choosing an end state');
   }
   setUnsetEnds(endState: string): void {
-    this.commit(E.setUnsetEnds(this.doc, endState, this.now()));
+    this.commit(E.setUnsetEnds(this.doc, endState, this.now()), 'giving the unset sequences an end state');
   }
 
   // ---- files
@@ -497,6 +555,7 @@ export class EventTreeEditor {
     this.frequencyDraft = null;
     this.leaveLesson();
     this.doc = E.newEventTree(ref, undefined, this.now());
+    this.resetHistory();
     this.fileName = null;
     this.savedText = this.text;
     this.result = null;
@@ -516,6 +575,7 @@ export class EventTreeEditor {
       this.frequencyDraft = null;
       this.leaveLesson();
       this.doc = doc;
+      this.resetHistory();
       this.fileName = name;
       this.savedText = this.text;
       this.result = null;

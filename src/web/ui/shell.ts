@@ -305,6 +305,12 @@ export function mountShell(root: HTMLElement, editor: Editor, eventTree?: EventT
         e.preventDefault();
         etView.flush();
         if (eventTree.canRun) void eventTree.run();
+      } else if (mod && !typing && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        eventTree.undo();
+      } else if (mod && !typing && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        eventTree.redo();
       } else if (e.key === 'Escape' && !typing && eventTree.running) void eventTree.cancel();
       return;
     }

@@ -192,4 +192,54 @@ test.describe('event tree editor', () => {
     const again = await page.request.get('/api/event-trees/typed-et');
     expect(JSON.parse(((await again.json()) as { text: string }).text).initiating_event.frequency).toBe(0.75);
   });
+
+  test('undo and redo: buttons with the edit named, Ctrl+Z and Ctrl+Y outside a field, native undo inside one, and a new tree starts afresh', async ({ app, page }) => {
+    await app.open();
+    await saveModel(page, MODEL(0.1));
+    await mode(page, 'event-tree').click();
+    await page.locator('[data-action="et-new"]').click();
+    await page.locator('[data-field="et-model"]').selectOption('shared');
+    await expect(page.locator('[data-field="et-h-event-H1"] option[value="X"]')).toHaveCount(1);
+    await expect(page.locator('[data-action="et-undo"]')).toHaveAttribute('title', 'Undo: choosing the fault-tree model (Ctrl+Z)'); // choosing the model is the first edit
+    await expect(page.locator('[data-action="et-redo"]')).toBeDisabled();
+    await page.locator('[data-action="et-add-heading"]').click();
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    await expect(page.locator('[data-action="et-undo"]')).toBeEnabled();
+    await expect(page.locator('[data-action="et-undo"]')).toHaveAttribute('title', 'Undo: adding a heading (Ctrl+Z)');
+    await page.locator('[data-action="et-undo"]').click();
+    await expect(page.locator('[data-seq]')).toHaveCount(2);
+    await expect(page.getByTestId('notice')).toContainText('Undid: adding a heading.');
+    await expect(page.locator('[data-action="et-redo"]')).toBeEnabled();
+    await expect(page.locator('[data-action="et-redo"]')).toHaveAttribute('title', 'Redo: adding a heading (Ctrl+Y)');
+    await page.locator('[data-action="et-redo"]').click();
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    // the keyboard, with focus on a button (not in a field)
+    await page.locator('[data-action="et-add-heading"]').focus();
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('[data-seq]')).toHaveCount(2);
+    await page.keyboard.press('Control+y');
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+Shift+z');
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    // a committed edit, then typing in a field: Ctrl+Z there is the browser's own undo of the typing, not the document's
+    await page.locator('[data-field="et-ie-freq"]').fill('0.7');
+    await page.locator('[data-field="et-ie-freq"]').press('Enter');
+    await page.locator('[data-field="et-ie-desc"]').click();
+    await page.keyboard.type('typed words');
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('[data-field="et-ie-freq"]')).toHaveValue('0.7');
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    // Undo while a field has focus with uncommitted text: the text is committed first, so the button undoes THAT edit
+    await page.locator('[data-field="et-ie-desc"]').fill('words that are committed by the button');
+    await page.locator('[data-action="et-undo"]').click();
+    await expect(page.locator('[data-field="et-ie-desc"]')).not.toHaveValue('words that are committed by the button');
+    await expect(page.locator('[data-field="et-ie-freq"]')).toHaveValue('0.7');
+    // New starts a fresh history
+    await expect(page.locator('[data-action="et-undo"]')).toBeEnabled();
+    page.once('dialog', (d) => void d.accept()); // unsaved work: New asks first
+    await page.locator('[data-action="et-new"]').click();
+    await expect(page.locator('[data-action="et-undo"]')).toBeDisabled();
+    await expect(page.locator('[data-action="et-redo"]')).toBeDisabled();
+  });
 });
