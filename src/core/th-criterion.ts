@@ -115,6 +115,17 @@ export function validateCriterion(doc: unknown, ctx: ThContext = {}): ThValidati
   return { valid: e2.length === 0, errors: e2 };
 }
 
+/** Validate document text exactly as saved. Invalid JSON is E_SCHEMA. */
+export function validateCriterionText(text: string, ctx: ThContext = {}): ThValidation {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    return { valid: false, errors: [err('E_SCHEMA', '/', `not valid JSON: ${(e as Error).message}`)] };
+  }
+  return validateCriterion(doc, ctx);
+}
+
 /**
  * Hash of what the criterion MEANS: the tree and heading it is about, the plant model and change list it is run against, and the condition.
  * Name, description, the example label and the time stamps are not part of it. Callers validate first.
