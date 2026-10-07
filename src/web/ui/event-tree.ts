@@ -41,12 +41,12 @@ export class EventTreeView {
   render(): void {
     if (this.el.hidden) return;
     const e = this.ed;
-    const barSig = JSON.stringify([e.running, e.queueAhead, e.canRun, e.runBlockedReason, e.approximation, e.dirty, e.fileName, e.stale, e.result?.kind === 'ran' ? e.result.record.status : null]);
+    const barSig = JSON.stringify([e.running, e.queueAhead, e.canRun, e.runBlockedReason, e.approximation, e.dirty, e.fileName, e.stale, e.canUndo, e.canRedo, e.undoLabel, e.redoLabel, e.result?.kind === 'ran' ? e.result.record.status : null]);
     if (barSig !== this.sig.bar) {
       this.sig.bar = barSig;
       rerender(this.bar, () => this.toolbar());
     }
-    const editSig = JSON.stringify([e.doc, e.model, e.models, e.frequencyDraft, e.modelChanged, e.figureSvg()]);
+    const editSig = JSON.stringify([e.doc, e.model, e.models, e.frequencyDraft, e.modelChanged, e.figureSvg(), e.revision]);
     if (editSig !== this.sig.edit) {
       this.sig.edit = editSig;
       rerender(this.edit, () => this.editor());
@@ -72,6 +72,9 @@ export class EventTreeView {
       b('save', 'Save', 'Save the event tree (Ctrl+S)', () => void this.save()),
       b('saveas', 'Save as', 'Save under a new name', () => void this.saveAs()),
       h('span', { class: 'sep', 'aria-hidden': 'true' }),
+      b('undo', 'Undo', e.undoLabel ? `Undo: ${e.undoLabel} (Ctrl+Z)` : 'Undo (Ctrl+Z)', () => this.undo(), { disabled: !e.canUndo }),
+      b('redo', 'Redo', e.redoLabel ? `Redo: ${e.redoLabel} (Ctrl+Y)` : 'Redo (Ctrl+Y)', () => this.redo(), { disabled: !e.canRedo }),
+      h('span', { class: 'sep', 'aria-hidden': 'true' }),
       b('svg', 'SVG', 'Save the drawing and its result as an SVG file', () => exportEventTreeSvg(e)),
       b('png', 'PNG', 'Save the drawing and its result as a PNG image', () => void exportEventTreePng(e)),
       b('print', 'Print', 'Print the drawing, its result and the tables', () => window.print()),
@@ -80,6 +83,16 @@ export class EventTreeView {
       h('label', { class: 'check', for: 'et-approx' }, h('input', { type: 'checkbox', id: 'et-approx', 'data-field': 'et-approx', checked: e.approximation, disabled: e.running, onchange: (ev) => e.setApproximation((ev.target as HTMLInputElement).checked) }), ' Also show the "success branches ignored" approximation'),
       h('span', { class: `run-pill ${e.running ? 'warn' : e.runBlockedReason ? 'blocked' : 'ok'}`, role: 'status', 'data-testid': 'et-pill', title: e.runBlockedReason ?? '' }, pill),
     ];
+  }
+
+  /** Commits a field being typed in first (a text field only commits on change), so Undo undoes the edit the student just made. */
+  undo(): void {
+    this.flush();
+    this.ed.undo();
+  }
+  redo(): void {
+    this.flush();
+    this.ed.redo();
   }
 
   async newTree(): Promise<void> {

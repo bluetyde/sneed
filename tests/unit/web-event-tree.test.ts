@@ -1053,4 +1053,215 @@ describe('EventTreeEditor', () => {
     await running;
     expect(ed.reveal!.predicted).toBe(0.05);
   });
+
+  // ---- undo and redo
+  it('undoes and redoes an edit, with the label of what was edited; a new edit forgets what could be redone', async () => {
+    const { ed } = await make();
+    expect(ed.canUndo).toBe(false);
+    expect(ed.undo()).toBeNull();
+    const start = ed.text;
+    ed.setInitiating({ frequency: 0.7 });
+    expect(ed.canUndo).toBe(true);
+    expect(ed.undoLabel).toBe('editing the initiating event');
+    expect(ed.undo()).toBe('editing the initiating event');
+    expect(ed.text).toBe(start);
+    expect(ed.notice?.text).toBe('Undid: editing the initiating event.');
+    expect(ed.canRedo).toBe(true);
+    expect(ed.redoLabel).toBe('editing the initiating event');
+    expect(ed.redo()).toBe('editing the initiating event');
+    expect(ed.doc.initiating_event.frequency).toBe(0.7);
+    expect(ed.notice?.text).toBe('Redid: editing the initiating event.');
+    expect(ed.canRedo).toBe(false);
+    ed.undo();
+    ed.setInitiating({ frequency: 0.9 }); // a new edit
+    expect(ed.canRedo).toBe(false);
+    expect(ed.redo()).toBeNull();
+  });
+
+  it('every kind of edit can be undone to exactly the text before it, and redone to exactly the text after', async () => {
+    const { ed } = await make();
+    ed.setUnsetEnds('ES1');
+    ed.addHeading();
+    ed.addEndState();
+    const edits: [string, () => void][] = [
+      ['rename', () => ed.setTreeName('Another name')],
+      ['initiating event', () => ed.setInitiating({ name: 'Another initiating event' })],
+      ['add heading', () => ed.addHeading()],
+      ['edit heading', () => ed.patchHeading('H1', { name: 'First', event: 'a' })],
+      ['bypass', () => ed.setBypass('H2', { heading: 'H1', branch: 'works' })],
+      ['move heading', () => ed.moveHeading('H2', -1)],
+      ['remove heading', () => ed.removeHeading('H3')],
+      ['add end state', () => ed.addEndState()],
+      ['edit end state', () => ed.patchEndState('ES2', { name: 'Edited (example)', synthetic: false })],
+      ['choose end state', () => ed.setSequenceEnd(ed.doc.sequences[0]!.path.map((x) => `${x.heading}:${x.branch}`).join(','), 'ES2')],
+      ['give unset', () => ed.setUnsetEnds('ES1')],
+      ['remove end state', () => ed.removeEndState('ES2')],
+    ];
+    const texts: string[] = [ed.text];
+    for (const [name, f] of edits) {
+      f();
+      expect(ed.text, `${name} changed nothing`).not.toBe(texts.at(-1));
+      texts.push(ed.text);
+    }
+    for (let k = edits.length - 1; k >= 0; k--) {
+      expect(ed.undo(), edits[k]![0]).not.toBeNull();
+      expect(ed.text, `after undoing ${edits[k]![0]}`).toBe(texts[k]);
+    }
+    expect(ed.canUndo).toBe(true); // the three edits made before the list
+    for (let k = 0; k < edits.length; k++) {
+      expect(ed.redo(), edits[k]![0]).not.toBeNull();
+      expect(ed.text, `after redoing ${edits[k]![0]}`).toBe(texts[k + 1]);
+    }
+    expect(ed.canRedo).toBe(false);
+  });
+
+  it('an edit that changes nothing is not a step of history', async () => {
+    const { ed } = await make();
+    ed.setInitiating({ frequency: ed.doc.initiating_event.frequency });
+    ed.patchHeading('H1', { name: ed.doc.headings[0]!.name });
+    ed.setTreeName(ed.doc.tree.name);
+    expect(ed.canUndo).toBe(false);
+  });
+
+  it('undoing a heading removal brings back the sequences and the end states that were chosen for them', async () => {
+    const { ed } = await make();
+    ed.addHeading();
+    ed.setUnsetEnds('ES1');
+    ed.setSequenceEnd('H1:fails,H2:fails', '');
+    const before = ed.text;
+    ed.removeHeading('H2');
+    expect(ed.doc.headings).toHaveLength(1);
+    expect(ed.undo()).toBe('removing a heading');
+    expect(ed.text).toBe(before);
+    expect(ed.doc.sequences.find((x) => x.path.length === 2 && x.path[1]!.branch === 'fails' && x.path[0]!.branch === 'fails')!.end_state).toBe('');
+    expect(ed.doc.sequences.filter((x) => x.end_state === 'ES1')).toHaveLength(3);
+  });
+
+  it('a frequency that is not a number is undone first, as one step; then the edits before it', async () => {
+    const { ed } = await make();
+    ed.setInitiating({ frequency: 0.3 });
+    ed.setFrequencyText('lots');
+    expect(ed.canUndo).toBe(true);
+    expect(ed.undoLabel).toBe('the frequency being typed');
+    expect(ed.undo()).toBe('the frequency being typed');
+    expect(ed.frequencyDraft).toBeNull();
+    expect(ed.doc.initiating_event.frequency).toBe(0.3);
+    expect(ed.undoLabel).toBe('editing the initiating event');
+    // with nothing but a draft, there is still something to undo, and nothing after
+    const { ed: ed2 } = await make();
+    ed2.setFrequencyText('x');
+    expect(ed2.canUndo).toBe(true);
+    ed2.undo();
+    expect(ed2.canUndo).toBe(false);
+    expect(ed2.canRedo).toBe(false);
+  });
+
+  it('a new, opened or lesson document starts its own history: undo never goes back into another document', async () => {
+    const { ed, api } = await make(lessonApi());
+    ed.setInitiating({ frequency: 0.3 });
+    await ed.newTree();
+    expect(ed.canUndo).toBe(false);
+    ed.setInitiating({ frequency: 0.4 });
+    api.trees.set('t', E.serialize(E.newEventTree(null, 'T', NOW)));
+    await ed.open('t');
+    expect(ed.canUndo).toBe(false);
+    expect(ed.canRedo).toBe(false);
+    ed.setInitiating({ frequency: 0.5 });
+    ed.undo();
+    await ed.loadLessons();
+    await ed.startLesson(INDEP_LESSON.id);
+    expect(ed.canUndo).toBe(false);
+    expect(ed.canRedo).toBe(false);
+    expect(ed.undo()).toBeNull();
+    expect(ed.lesson).not.toBeNull(); // undo never ends a lesson
+  });
+
+  it('saving is not a step; going back to the saved text is clean, and going back past it is unsaved work', async () => {
+    const { ed } = await make();
+    ed.setInitiating({ frequency: 0.3 });
+    await ed.save('t1');
+    expect(ed.dirty).toBe(false);
+    ed.setInitiating({ frequency: 0.6 });
+    expect(ed.dirty).toBe(true);
+    ed.undo();
+    expect(ed.doc.initiating_event.frequency).toBe(0.3);
+    expect(ed.dirty).toBe(false); // back to the text that was saved
+    expect(ed.undo()).toBe('editing the initiating event'); // the edit from before the save is still undoable
+    expect(ed.doc.initiating_event.frequency).toBe(0.1);
+    expect(ed.dirty).toBe(true); // past the saved text
+    ed.redo();
+    ed.redo();
+    expect(ed.doc.initiating_event.frequency).toBe(0.6);
+  });
+
+  it('keeps at most the last 200 steps', async () => {
+    const { ed } = await make();
+    for (let i = 1; i <= 205; i++) ed.setInitiating({ frequency: i });
+    let n = 0;
+    while (ed.undo() !== null) n++;
+    expect(n).toBe(200);
+    expect(ed.doc.initiating_event.frequency).toBe(5); // the first five steps fell off the far end
+  });
+
+  it('undoing a choice of model puts the headings\' model back, and the list of events with it', async () => {
+    const { ed, api } = await make();
+    api.models.set('other', modelText(0.3));
+    const hash0 = ed.model?.hash;
+    await ed.chooseModel('other');
+    await ed.settle();
+    expect(ed.doc.fault_tree_model.name).toBe('other');
+    expect(ed.undo()).toBe('choosing the fault-tree model');
+    await new Promise((r) => setTimeout(r, 20));
+    await ed.settle();
+    expect(ed.doc.fault_tree_model.name).toBe('shared');
+    expect(ed.model?.name).toBe('shared');
+    expect(ed.model?.events.map((e) => e.id)).toEqual(['S', 'a', 'b']);
+    expect(ed.model?.hash).toBe(hash0);
+    expect(ed.validation?.valid).toBe(false); // the end states are still unset: only the model changed back
+  });
+
+  it('after undoing to the tree an analysis was made for, that analysis is current again; redoing the edit makes it old again', async () => {
+    const { ed } = await make();
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    await ed.run();
+    expect(ed.stale).toBe(false);
+    ed.setInitiating({ frequency: 0.9 });
+    await ed.settle();
+    expect(ed.stale).toBe(true);
+    ed.undo();
+    await ed.settle();
+    expect(ed.stale).toBe(false);
+    ed.redo();
+    await ed.settle();
+    expect(ed.stale).toBe(true);
+  });
+
+  it('a lesson follows the undo: a step done by an edit is undone with it', async () => {
+    const { ed } = await make(lessonApi());
+    await ed.loadLessons();
+    await ed.startLesson(SHARED_LESSON.id);
+    ed.setInitiating({ frequency: 0.5 });
+    expect(ed.lessonProgress!.steps.find((x) => x.id === 'frequency')!.done).toBe(true);
+    ed.undo();
+    expect(ed.lessonProgress!.steps.find((x) => x.id === 'frequency')!.done).toBe(false);
+    ed.redo();
+    expect(ed.lessonProgress!.steps.find((x) => x.id === 'frequency')!.done).toBe(true);
+  });
+
+  it('the revision moves with every edit, undo and redo (so a field showing typed text is redrawn even when the document ends up equal to an earlier one), and not with an edit that changes nothing', async () => {
+    const { ed } = await make();
+    const r0 = ed.revision;
+    ed.setInitiating({ frequency: ed.doc.initiating_event.frequency });
+    expect(ed.revision).toBe(r0);
+    ed.setInitiating({ frequency: 0.4 });
+    expect(ed.revision).toBe(r0 + 1);
+    ed.undo();
+    expect(ed.revision).toBe(r0 + 2);
+    ed.redo();
+    expect(ed.revision).toBe(r0 + 3);
+    ed.setFrequencyText('x');
+    ed.undo(); // drops the draft
+    expect(ed.revision).toBe(r0 + 4);
+  });
 });
