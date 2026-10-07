@@ -87,7 +87,7 @@ export function eventTreeSvg(doc: EtDoc, opts: EtFigureOptions = {}): string {
   const contentW = Math.max(treeW, 640);
   const width = Math.ceil(contentW + 2 * m);
 
-  const cur = opts.result && !opts.result.stale && opts.result.record.status === 'completed' ? opts.result.record : null;
+  const cur = opts.result && !opts.result.stale && opts.result.record.status === 'completed' && opts.result.record.completeness === 'complete' ? opts.result.record : null;
   const freq = new Map(cur?.sequences.map((s) => [s.key, s.frequency]) ?? []);
   const endOf = new Map(doc.sequences.map((s) => [pathKey(s.path), s.end_state]));
   const endName = (id: string): string => {
