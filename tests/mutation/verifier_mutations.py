@@ -816,6 +816,66 @@ MUTATIONS += [
     eu("opening another tree keeps a half-typed frequency", "      this.frequencyDraft = null;\n      this.doc = doc;", "      this.doc = doc;", EED),
 ]
 
+# Event tree drawing, saved analyses and Compare (plan 13, stage S4). The files that read and write browser downloads and the print sheet
+# (src/web/ui/event-tree-export.ts) are covered by the end-to-end tests, not by mutants here. Removed as equivalent: the existence test before a
+# run folder is opened (a fault-tree folder has no such file, so reading it fails and is skipped anyway: the test only saves work).
+EFIG = ROOT / "src/web/model/event-tree-figure.ts"
+ECMP = ROOT / "src/core/event-tree-compare.ts"
+ERUNS = ROOT / "src/server/runs.ts"
+EED4 = ROOT / "src/web/model/event-tree-editor.ts"
+S4_SUITE = ("tests/unit/event-tree-figure.test.ts tests/unit/event-tree-compare.test.ts tests/unit/event-tree-runs.test.ts tests/unit/web-event-tree.test.ts", 120)
+
+
+def sf(name: str, old: str, new: str, f: pathlib.Path = EFIG) -> tuple:
+    return (f"event tree s4: {name}", f, old, new, S4_SUITE)
+
+
+MUTATIONS += [
+    sf("one sequence too few is drawn at the limit", "enumeratePaths(doc.headings).length <= MAX_DRAWN_SEQUENCES;", "enumeratePaths(doc.headings).length < MAX_DRAWN_SEQUENCES;"),
+    sf("the drawing limit is off by one", "export const MAX_DRAWN_SEQUENCES = 64;", "export const MAX_DRAWN_SEQUENCES = 63;"),
+    sf("a heading with a condition is always asked in the drawing", "    return earlier !== undefined && earlier.branch === c.branch;\n  };", "    return true;\n  };"),
+    sf("the drawing ignores the branch a condition names", "    return earlier !== undefined && earlier.branch === c.branch;\n  };", "    return earlier !== undefined;\n  };"),
+    sf("an old result is drawn as current", "const cur = opts.result && !opts.result.stale && opts.result.record.status", "const cur = opts.result && opts.result.record.status"),
+    sf("a result that is not complete is drawn as numbers", " && opts.result.record.completeness === 'complete' ? opts.result.record : null;", " ? opts.result.record : null;"),
+    sf("an old result is not said to be old", "  if (r.stale) return ['NO CURRENT RESULT", "  if (false as boolean) return ['NO CURRENT RESULT"),
+    sf("a result that is not complete is not said to be diagnostic", "if (rec.status !== 'completed' || rec.completeness !== 'complete') {", "if (rec.status !== 'completed' && rec.completeness !== 'complete') {"),
+    sf("the approximation is not mentioned", "  if (rec.approximation) out.push(", "  if (false as boolean) out.push("),
+    sf("the partition check is not shown", "  if (rec.total) out.push(", "  if (false as boolean) out.push("),
+    sf("an example end state is not labelled", "endStateLabel(short(e.name, 30), e.synthetic)", "short(e.name, 30)"),
+    sf("a missing end state is not shown as missing", "id === '' ? '(no end state)' : id;", "id === '' ? '' : id;"),
+    sf("the works and fails branches are drawn the wrong way round", "const works = go(i + 1, [...path, { heading: id, branch: 'works' }]);\n    const fails = go(i + 1, [...path, { heading: id, branch: 'fails' }]);", "const fails = go(i + 1, [...path, { heading: id, branch: 'fails' }]);\n    const works = go(i + 1, [...path, { heading: id, branch: 'works' }]);"),
+    sf("a sequence takes another one's frequency", "const f = freq.get(it.key);", "const f = freq.get(leaves[0]!);"),
+    sf("the caveats are dropped from the figure", "  for (const c of rec.caveats) out.push(c);\n", ""),
+    sf("the warnings are dropped from the figure", "  for (const w of rec.warnings) out.push(`Warning: ${w}`);\n", ""),
+    sf("the file stem keeps unsafe characters", "const stem = raw.replace(/[^A-Za-z0-9._-]+/g, '-')", "const stem = raw.replace(/[^A-Za-z0-9._/-]+/g, '-')"),
+    sf("numbers are compared when only one analysis is complete", "  const numbers = a.complete && b.complete;", "  const numbers = a.complete || b.complete;", ECMP),
+    sf("a change from zero has a ratio", "ratio: from === 0 ? null : to / from }", "ratio: to / from }", ECMP),
+    sf("an unchanged number is reported as changed", "const moved = (from: number, to: number): Moved | null => (from === to ? null :", "const moved = (from: number, to: number): Moved | null => (false as boolean ? null :", ECMP),
+    sf("an unknown heading is named by a placeholder", ".find((n) => n !== undefined) ?? p.heading}", ".find((n) => n !== undefined) ?? '?'}", ECMP),
+    sf("an unchanged sequence is not counted", "      else seqs.unchanged++;", "      else seqs.unchanged += 0;", ECMP),
+    sf("a moved end state is not noticed", "const end_state = sa.end_state !== sb.end_state ? { from: sa.end_state, to: sb.end_state } : null;", "const end_state = null;", ECMP),
+    sf("a sequence that only changed end state is dropped", "      if (frequency || end_state) seqs.changed.push(", "      if (frequency) seqs.changed.push(", ECMP),
+    sf("the same inputs are claimed without a stated engine", "sameInputs: sameTree && sameModel && engineA !== null && engineA === engineB,", "sameInputs: sameTree && sameModel && engineA === engineB,", ECMP),
+    sf("two missing tree hashes are the same tree", "const sameTree = a.treeHash !== null && a.treeHash === b.treeHash;", "const sameTree = a.treeHash === b.treeHash;", ECMP),
+    sf("two missing model hashes are the same model", "const sameModel = a.modelHash !== null && a.modelHash === b.modelHash;", "const sameModel = a.modelHash === b.modelHash;", ECMP),
+    sf("a total is compared when numbers are not", "    total: numbers && a.total !== null && b.total !== null ?", "    total: a.total !== null && b.total !== null ?", ECMP),
+    sf("an assumption that did not change is listed", ".filter((x) => x.from !== x.to);", ";", ECMP),
+    sf("a sequence with a bad frequency is read", "if (!isObj(s) || !str(s.key) || !num(s.frequency)) continue;", "if (!isObj(s) || !str(s.key)) continue;", ECMP),
+    sf("an end state with a bad frequency is read", "if (isObj(e) && str(e.id) && num(e.frequency)) endStates.set(", "if (isObj(e) && str(e.id)) endStates.set(", ECMP),
+    sf("a record of another kind is read", "if (!isObj(raw) || !isObj(raw.schema) || raw.schema.id !== 'sneed.event-tree-result') return null;", "if (!isObj(raw)) return null;", ECMP),
+    sf("a record of another version is listed", "rec.schema.id === 'sneed.event-tree-result' && rec.schema.version === 1;", "rec.schema.id === 'sneed.event-tree-result';", ERUNS),
+    sf("the event-tree list has no limit", "    if (out.length >= limit) break;\n    // only folders that are event-tree runs", "    // only folders that are event-tree runs", ERUNS),
+    sf("the event-tree list is oldest first", "const ids = readdirSync(dir).filter(isValidRunId).sort().reverse();\n  const out: EventTreeRunInfo[]", "const ids = readdirSync(dir).filter(isValidRunId).sort();\n  const out: EventTreeRunInfo[]", ERUNS),
+    sf("a record of another kind is served", "    if (!isEtRecord(record)) throw new Error('not an event-tree result');\n", "", ERUNS),
+    sf("a failed comparison leaves the earlier one on show", "    const mine = ++this.compareSeq;\n    this.comparison = null;\n", "    const mine = ++this.compareSeq;\n", EED4),
+    sf("a late comparison replaces a later one", "      if (mine !== this.compareSeq) return; // a later choice took over while these were being read", "      void mine; // a later choice took over while these were being read", EED4),
+    sf("clearing does not stop a late comparison", "  clearComparison(): void {\n    this.compareSeq++;\n", "  clearComparison(): void {\n", EED4),
+    sf("a run does not refresh the list of analyses", "        this.resultApproximation = approximation;\n        void this.refreshRuns();", "        this.resultApproximation = approximation;", EED4),
+    sf("returning to the view does not refresh the analyses", "this.loadModelInfo(), this.refreshRuns()]);", "this.loadModelInfo()]);", EED4),
+    sf("an unreadable file is not named", "      this.compareError = `Could not read the saved analyses: ${(e as Error).message}`;", "      this.compareError = null;", EED4),
+    sf("a file that is not a result is accepted", "      if (!diff) this.compareError = 'One of these files is not an event-tree result, so they cannot be compared.';", "      if (!diff) this.compareError = null;", EED4),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -898,6 +958,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree engine:")]
     if only == "etui":  # just the event tree editor mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree editor:")]
+    if only == "ets4":  # just the event tree drawing, saved-analysis and compare mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree s4:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
