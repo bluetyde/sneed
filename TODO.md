@@ -78,13 +78,13 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [ ] Standalone vs workspace equivalence on the same immutable input; PRA through MCP and direct agree on every oracle (harness test 9) [seed].
 - [ ] Stale component-link handling; no automatic derivation from a coolant diagram.
 - [ ] Human screen-reader pass: **not done.** Script and record in `docs/SCREEN-READER-PASS.md`.
-- [ ] Instructor read-through of the lessons: **a human task, not done.** Give the instructor `docs/LESSON-REVIEW.md` (regenerate with `node scripts/lesson-review.mjs`) and record the verdict in it.
+- [ ] Instructor read-through of the lessons: **a human task, not done.** Give the instructor `docs/LESSON-REVIEW.md` (regenerate with `node scripts/lesson-review.mjs`) and record the verdict in it. The three event-tree lessons have their own sheet, with the instructor's discussion questions and model answers: `docs/EVENT-TREE-LESSON-REVIEW.md` (same script; `--check` fails when a sheet is not what the lesson files produce).
 - [ ] **[codex]** P3 exit review.
 
 ## P4: extensions ([plan 07](docs/plans/07-extensions.md))
 
 - [x] Importance measures with hand oracles (built 2026-10-06, plan 12, docs/EDITOR.md).
-- [~] Event trees ([plan 13](docs/plans/13-event-trees.md)): semantics decided 2026-10-06 (owner took all seven recommendations); **S1 built** (document, validator, storage, API). **S2 built** (engine, record, run route; owner's go-ahead 2026-10-06). **S3 built** (the editor: Event tree view, 2026-10-06). **S4 built** (tree drawing, SVG/PNG export, print sheet, Compare of saved analyses; 2026-10-07). S5 (three lessons) waits for the owner's go-ahead.
+- [~] Event trees ([plan 13](docs/plans/13-event-trees.md)): semantics decided 2026-10-06 (owner took all seven recommendations); **S1 built** (document, validator, storage, API). **S2 built** (engine, record, run route; owner's go-ahead 2026-10-06). **S3 built** (the editor: Event tree view, 2026-10-06). **S4 built** (tree drawing, SVG/PNG export, print sheet, Compare of saved analyses; 2026-10-07). **S5 built** (three event-tree lessons, the instructor sheet; 2026-10-07). Open for the owner: the instructor read of the event-tree lessons and the screen-reader pass over the new views.
 - [ ] Common-cause groups: stated model, data source and zero-parameter reduction check.
 - [ ] Uncertainty: seeds, sampling design, noise reported separately from input uncertainty.
 - [ ] Decide whether non-coherent logic and time dependence belong in a teaching tool.

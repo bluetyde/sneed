@@ -47,6 +47,6 @@ Hand calculation: P(S) + P(P1 P2) − P(S) P(P1 P2).
 
 ## Open
 
-- How many more lessons before release (event tree intro waits for [plan 07](07-extensions.md)).
+- How many more lessons before release. (The three event-tree lessons were built 2026-10-07: see [plan 13](13-event-trees.md) and docs/EDITOR.md. They follow these rules.)
 - Whether to include a short instructor guide with answers and discussion questions.
 - Language and reading level; review by an instructor before release.
