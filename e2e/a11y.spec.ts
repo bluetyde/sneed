@@ -264,4 +264,32 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('et-compare-seqs')).toBeVisible();
     await audit(page, 'event tree: a comparison with changed sequences');
   });
+
+  test('the event-tree lessons have no axe violations: the list, a lesson in progress, with the mistake, the reveal and the hand calculation', async ({ app, page }) => {
+    await app.open();
+    await page.locator('[data-mode="event-tree"]').click();
+    await page.getByTestId('et-lessons').locator('summary').first().click();
+    await expect(page.getByTestId('et-start-lesson')).toHaveCount(3);
+    await audit(page, 'event tree: the lesson list');
+    await page.locator('[data-testid="et-start-lesson"][data-lesson="et-02-shared-event"]').click();
+    await expect(page.getByTestId('et-lesson-step').first()).toBeVisible();
+    await expect(page.locator('[data-field="et-h-event-H1"] option').nth(1)).toBeAttached();
+    await audit(page, 'event tree: a lesson just started');
+    await page.locator('[data-field="et-h-event-H1"]').selectOption('TOP');
+    await expect(page.getByTestId('et-lesson-mistakes')).toBeVisible();
+    await audit(page, 'event tree: a lesson with a mistake shown');
+    await page.locator('[data-field="et-h-event-H1"]').selectOption('X');
+    await page.locator('[data-field="et-ie-freq"]').fill('0.5');
+    await page.locator('[data-field="et-ie-freq"]').press('Enter');
+    await page.locator('[data-action="et-add-heading"]').click();
+    await page.locator('[data-field="et-h-event-H2"]').selectOption('Y');
+    await page.locator('[data-field="et-set-all"]').selectOption('ES1');
+    await page.locator('[data-field="et-prediction"]').fill('0.05');
+    await page.locator('[data-field="et-prediction"]').press('Enter');
+    await page.locator('[data-action="et-run"]').click();
+    await expect(page.getByTestId('et-lesson-reveal')).toBeVisible();
+    await page.getByTestId('et-show-calc').click();
+    await expect(page.getByTestId('et-lesson-calc')).toBeVisible();
+    await audit(page, 'event tree: a completed lesson with the reveal and the hand calculation');
+  });
 });

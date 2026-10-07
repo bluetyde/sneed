@@ -1,0 +1,322 @@
+[
+  {
+    "id": "et-independent",
+    "description": "plan 13 case 6.1: independent headings",
+    "model": {
+      "top": "TOP",
+      "events": [
+        {
+          "id": "INJ",
+          "probability": 0.01
+        },
+        {
+          "id": "COOL",
+          "probability": 0.1
+        }
+      ],
+      "gates": [
+        {
+          "id": "TOP",
+          "type": "or",
+          "inputs": [
+            "INJ",
+            "COOL"
+          ]
+        }
+      ]
+    },
+    "initiating_frequency": 0.1,
+    "headings": [
+      {
+        "event": "INJ"
+      },
+      {
+        "event": "COOL"
+      }
+    ],
+    "sequences": [
+      {
+        "path": [
+          {
+            "event": "INJ",
+            "branch": "works"
+          },
+          {
+            "event": "COOL",
+            "branch": "works"
+          }
+        ],
+        "probability": 0.891,
+        "frequency": 0.0891
+      },
+      {
+        "path": [
+          {
+            "event": "INJ",
+            "branch": "works"
+          },
+          {
+            "event": "COOL",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.099,
+        "frequency": 0.0099
+      },
+      {
+        "path": [
+          {
+            "event": "INJ",
+            "branch": "fails"
+          },
+          {
+            "event": "COOL",
+            "branch": "works"
+          }
+        ],
+        "probability": 0.009,
+        "frequency": 0.0009
+      },
+      {
+        "path": [
+          {
+            "event": "INJ",
+            "branch": "fails"
+          },
+          {
+            "event": "COOL",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.001,
+        "frequency": 0.0001
+      }
+    ],
+    "derivation": "lambda x product along the path: 0.1 x 0.99 x 0.9 = 0.0891; 0.1 x 0.99 x 0.1 = 0.0099; 0.1 x 0.01 x 0.9 = 0.0009; 0.1 x 0.01 x 0.1 = 0.0001",
+    "tolerance": {
+      "absolute": 1e-12
+    }
+  },
+  {
+    "id": "et-shared",
+    "description": "plan 13 case 6.2: a shared event under both headings",
+    "model": {
+      "top": "TOP",
+      "events": [
+        {
+          "id": "S",
+          "probability": 0.1
+        },
+        {
+          "id": "a",
+          "probability": 0.2
+        },
+        {
+          "id": "b",
+          "probability": 0.3
+        }
+      ],
+      "gates": [
+        {
+          "id": "X",
+          "type": "or",
+          "inputs": [
+            "S",
+            "a"
+          ]
+        },
+        {
+          "id": "Y",
+          "type": "or",
+          "inputs": [
+            "S",
+            "b"
+          ]
+        },
+        {
+          "id": "TOP",
+          "type": "and",
+          "inputs": [
+            "X",
+            "Y"
+          ]
+        }
+      ]
+    },
+    "initiating_frequency": 0.5,
+    "headings": [
+      {
+        "event": "X"
+      },
+      {
+        "event": "Y"
+      }
+    ],
+    "sequences": [
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "works"
+          },
+          {
+            "event": "Y",
+            "branch": "works"
+          }
+        ],
+        "probability": 0.504,
+        "frequency": 0.252
+      },
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "works"
+          },
+          {
+            "event": "Y",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.216,
+        "frequency": 0.108
+      },
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "fails"
+          },
+          {
+            "event": "Y",
+            "branch": "works"
+          }
+        ],
+        "probability": 0.126,
+        "frequency": 0.063
+      },
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "fails"
+          },
+          {
+            "event": "Y",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.154,
+        "frequency": 0.077
+      }
+    ],
+    "derivation": "enumerate S, a, b: both work 0.9 x 0.8 x 0.7 = 0.504; both fail S + (1 - S) a b = 0.1 + 0.9 x 0.06 = 0.154; X fails Y works 0.9 x 0.2 x 0.7 = 0.126; X works Y fails 0.9 x 0.8 x 0.3 = 0.216; each x 0.5 per year",
+    "tolerance": {
+      "absolute": 1e-12
+    }
+  },
+  {
+    "id": "et-bypass",
+    "description": "plan 13 case 6.4: Y is asked only if X works",
+    "model": {
+      "top": "TOP",
+      "events": [
+        {
+          "id": "S",
+          "probability": 0.1
+        },
+        {
+          "id": "a",
+          "probability": 0.2
+        },
+        {
+          "id": "b",
+          "probability": 0.3
+        }
+      ],
+      "gates": [
+        {
+          "id": "X",
+          "type": "or",
+          "inputs": [
+            "S",
+            "a"
+          ]
+        },
+        {
+          "id": "Y",
+          "type": "or",
+          "inputs": [
+            "S",
+            "b"
+          ]
+        },
+        {
+          "id": "TOP",
+          "type": "and",
+          "inputs": [
+            "X",
+            "Y"
+          ]
+        }
+      ]
+    },
+    "initiating_frequency": 0.5,
+    "headings": [
+      {
+        "event": "X"
+      },
+      {
+        "event": "Y",
+        "asked_only_if": {
+          "event": "X",
+          "branch": "works"
+        }
+      }
+    ],
+    "sequences": [
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "works"
+          },
+          {
+            "event": "Y",
+            "branch": "works"
+          }
+        ],
+        "probability": 0.504,
+        "frequency": 0.252
+      },
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "works"
+          },
+          {
+            "event": "Y",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.216,
+        "frequency": 0.108
+      },
+      {
+        "path": [
+          {
+            "event": "X",
+            "branch": "fails"
+          }
+        ],
+        "probability": 0.28,
+        "frequency": 0.14
+      }
+    ],
+    "derivation": "X works and Y works 0.504; X works and Y fails 0.216; X fails 0.28 (Y is not asked); each x 0.5 per year",
+    "tolerance": {
+      "absolute": 1e-12
+    }
+  }
+]

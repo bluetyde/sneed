@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
+import { loadEventTreeLessons } from './event-tree-lessons.js';
 import { listEventTreeRuns, listRuns, MAX_LOOKUP_RUNS, readEventTreeRun, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
@@ -307,6 +308,11 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       if (method === 'PUT') return send(res, 200, writeModel(eventTreeDir, name, needText(await readJson(req))));
     }
 
+    if (p === '/api/event-tree-lessons' && method === 'GET') {
+      // The event-tree lessons live in a folder of the lessons folder, checked against an oracle file beside the fault-tree oracles.
+      if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');
+      return send(res, 200, { lessons: loadEventTreeLessons(path.join(opts.lessonsDir, 'event-trees'), path.join(path.dirname(opts.oraclesFile), 'event-tree-oracles.json')).map(({ discussion: _instructorOnly, ...student }) => student) });
+    }
     if (p === '/api/lessons' && method === 'GET') {
       if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');
       return send(res, 200, { lessons: loadLessons(opts.lessonsDir, opts.oraclesFile) });

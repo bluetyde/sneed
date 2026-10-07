@@ -335,6 +335,7 @@ export function mountShell(root: HTMLElement, editor: Editor, eventTree?: EventT
 
   renderAll();
   canvas.fit(true);
+  void eventTree?.loadLessons();
   void editor.loadHealth();
   void editor.refreshModels();
   void editor.loadLessons();

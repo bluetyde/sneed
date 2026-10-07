@@ -1,0 +1,179 @@
+{
+  "schema": {
+    "id": "sneed.event-tree-lesson",
+    "version": 1
+  },
+  "id": "et-01-independent-headings",
+  "title": "An event tree by hand: two independent safety functions",
+  "goals": [
+    "Read an event tree: one initiating event, headings that work or fail, and sequences that end in named end states.",
+    "Find the frequency of each sequence by multiplying along its path, and see that the frequencies add up to the frequency of the initiating event."
+  ],
+  "assumptions": "All numbers are made up for teaching. The initiating event happens 0.1 times per year. The heading \"Injection\" fails with probability 0.01 each time it is asked, and \"Cooling\" with probability 0.1. The two are independent. The end states you name are examples, not conditions of any real plant. A frequency here is a result of this model under these assumptions, not a plant figure.",
+  "model": {
+    "name": "lesson-et-independent",
+    "document": {
+      "schema": {
+        "id": "sneed.fault-tree",
+        "version": 1
+      },
+      "model": {
+        "id": "lesson-et-independent",
+        "name": "lesson-et-independent",
+        "created": "2026-10-07T00:00:00Z",
+        "updated": "2026-10-07T00:00:00Z"
+      },
+      "assumptions": {
+        "probability_model": "constant",
+        "independence": "declared-independent",
+        "coherence": "coherent",
+        "time": "none"
+      },
+      "top": "TOP",
+      "events": [
+        {
+          "id": "INJ",
+          "name": "Injection fails",
+          "probability": 0.01
+        },
+        {
+          "id": "COOL",
+          "name": "Cooling fails",
+          "probability": 0.1
+        }
+      ],
+      "gates": [
+        {
+          "id": "TOP",
+          "name": "Either fails",
+          "type": "or",
+          "inputs": [
+            "INJ",
+            "COOL"
+          ]
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "id": "frequency",
+      "prompt": "Set the frequency of the initiating event to 0.1 per year.",
+      "hint": "Use the Frequency field under \"Initiating event\". It is a number of events per year.",
+      "check": {
+        "kind": "frequency",
+        "value": 0.1
+      }
+    },
+    {
+      "id": "headings",
+      "prompt": "Make heading 1 fail when INJ occurs and name it Injection. Add a second heading that fails when COOL occurs and name it Cooling.",
+      "hint": "Use the list \"Fails when this occurs\" in each row of the Headings table, and the button \"Add a heading\". The order matters: Injection acts first.",
+      "check": {
+        "kind": "heading-events",
+        "events": [
+          "INJ",
+          "COOL"
+        ]
+      }
+    },
+    {
+      "id": "paths",
+      "prompt": "Look at the Sequences table. Two headings that each work or fail give four paths. Check that it lists four.",
+      "hint": "Each heading doubles the number of paths, because every earlier path can continue in two ways.",
+      "check": {
+        "kind": "sequence-count",
+        "count": 4
+      }
+    },
+    {
+      "id": "end-states",
+      "prompt": "Add end states until you have three: one for \"everything worked\", one for \"one heading failed\" and one for \"both failed\". Name each one so that it says it is an example.",
+      "hint": "Use \"Add an end state\". Names such as \"Safe (example)\" are fine. The tool never fills in a name that sounds like a real plant condition.",
+      "check": {
+        "kind": "end-states-min",
+        "count": 3
+      }
+    },
+    {
+      "id": "assign",
+      "prompt": "Choose an end state for each of the four sequences.",
+      "hint": "The list \"Ends in\" in each row of the Sequences table. Think about how many headings failed on the path.",
+      "check": {
+        "kind": "ends-assigned"
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "independent",
+      "label": "Two independent headings at 0.1 per year",
+      "oracle": "et-independent",
+      "frequencies": [
+        {
+          "key": "INJ:works,COOL:works",
+          "frequency": 0.0891
+        },
+        {
+          "key": "INJ:works,COOL:fails",
+          "frequency": 0.0099
+        },
+        {
+          "key": "INJ:fails,COOL:works",
+          "frequency": 0.0009
+        },
+        {
+          "key": "INJ:fails,COOL:fails",
+          "frequency": 0.0001
+        }
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
+    }
+  ],
+  "mistakes": [
+    {
+      "id": "same-event",
+      "message": "Two headings fail on the same event. Each heading should be a different safety function with its own event.",
+      "detect": {
+        "kind": "same-event-twice"
+      }
+    },
+    {
+      "id": "top-as-heading",
+      "message": "A heading fails when ITS event occurs. TOP is the event that either one fails, which is not one safety function. Choose INJ for one heading and COOL for the other.",
+      "detect": {
+        "kind": "heading-on-event",
+        "event": "TOP"
+      }
+    },
+    {
+      "id": "zero-frequency",
+      "message": "A frequency of 0 makes every sequence frequency 0. The initiating event happens 0.1 times per year here.",
+      "detect": {
+        "kind": "frequency-zero"
+      }
+    }
+  ],
+  "hand_calculation": [
+    "A sequence frequency is the frequency of the initiating event times the probability of every branch on its path. Injection works with probability 1 - 0.01 = 0.99, and Cooling works with probability 1 - 0.1 = 0.9.",
+    "Both work: 0.1 x 0.99 x 0.9 = 0.0891 per year. Injection works, Cooling fails: 0.1 x 0.99 x 0.1 = 0.0099. Injection fails, Cooling works: 0.1 x 0.01 x 0.9 = 0.0009. Both fail: 0.1 x 0.01 x 0.1 = 0.0001.",
+    "The four add up to 0.1 per year, the frequency of the initiating event: every time it happens, exactly one sequence follows. The tool checks this and refuses a table that does not add up.",
+    "Your end states add sequences together. If \"one failed\" collects both middle paths, its frequency is 0.0099 + 0.0009 = 0.0108 per year."
+  ],
+  "discussion": [
+    {
+      "question": "Why must the frequencies of all sequences add up to the frequency of the initiating event?",
+      "answer": "Each occurrence of the initiating event is followed by exactly one path through the tree, so the paths partition the possible outcomes."
+    },
+    {
+      "question": "Why does the \"both failed\" frequency (0.0001) equal the product of the two failure probabilities times the initiating frequency here?",
+      "answer": "Because the two headings were declared independent: they share no basic event. The next lesson shows what changes when they do."
+    },
+    {
+      "question": "What would you need to know before using such a number for any real system?",
+      "answer": "Where the probabilities and the frequency come from, whether the headings really are independent, whether anything else can happen after the initiating event, and what the end states mean physically. None of that is in this model."
+    }
+  ]
+}
