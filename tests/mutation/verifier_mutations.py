@@ -1151,6 +1151,31 @@ MUTATIONS += [
 ]
 
 
+APP = ROOT / "src/server/app.ts"
+T0R_SUITE = ("tests/unit/server-th-criteria.test.ts", 120)
+
+
+def tr(name: str, old: str, new: str, f: pathlib.Path = APP) -> tuple:
+    return (f"th routes: {name}", f, old, new, T0R_SUITE)
+
+
+MUTATIONS += [
+    tr("criteria are kept with the event trees", "const criteriaDir = path.join(opts.projectDir, 'th-criteria');", "const criteriaDir = path.join(opts.projectDir, 'event-trees');"),
+    tr("the list shows the event trees", "{ criteria: listModels(criteriaDir) }", "{ criteria: listModels(eventTreeDir) }"),
+    tr("a criterion is read from the event tree folder", "text: readModel(criteriaDir, name) }", "text: readModel(eventTreeDir, name) }"),
+    tr("a criterion is saved in the event tree folder", "writeModel(criteriaDir, name, needText", "writeModel(eventTreeDir, name, needText"),
+    tr("a missing criterion is called a model", "no saved success criterion called", "no saved model called"),
+    tr("a criterion is checked against no tree", "validateCriterionText(text, { resolveTree: loadEventTree })", "validateCriterionText(text, {})"),
+    tr("a tree that is not valid is found", "      if (!validateEventTreeText(text).valid) return null;\n      const doc = JSON.parse(text) as { headings", "      const doc = JSON.parse(text) as { headings"),
+    tr("the tree hash is not the tree's hash", "hash: eventTreeHash(doc as Parameters<typeof eventTreeHash>[0]),", "hash: '0'.repeat(64),"),
+    tr("the headings of the tree are not given", "headings: new Set(doc.headings.map((h) => h.id)) };", "headings: new Set<string>() };"),
+    tr("an invalid criterion gets a hash", "      if (v.valid) {\n        try {\n          criterion_hash", "      if (true as boolean) {\n        try {\n          criterion_hash"),
+    tr("a valid criterion gets no hash", "criterion_hash = criterionHash(JSON.parse(text) as ThCriterion);", "criterion_hash = null;"),
+    tr("the validation does not return the document hash", "criterion_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });\n    }\n    const cm", "criterion_hash, document_hash: null });\n    }\n    const cm"),
+    tr("the criterion text check leaves the tree out", "  return validateCriterion(doc, ctx);\n}\n\n/**\n * Hash of what the criterion MEANS", "  return validateCriterion(doc);\n}\n\n/**\n * Hash of what the criterion MEANS", ROOT / "src/core/th-criterion.ts"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1243,6 +1268,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th criterion:")]
     if only == "thmutation":  # just the plant-model mutation record (plan 14, stage T1) mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("th mutation:")]
+    if only == "throutes":  # just the success-criterion folder and route mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("th routes:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

@@ -19,6 +19,7 @@ import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../r
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
+import { criterionHash, validateCriterionText, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
 import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
 import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
@@ -171,6 +172,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const MAX_QUEUE = 8;
   /** Event trees live in their own folder, so a tree and a fault-tree model can never take each other's name. */
   const eventTreeDir = path.join(opts.projectDir, 'event-trees');
+  /** Success criteria for thermal-hydraulic runs (plan 14) live in their own folder too. */
+  const criteriaDir = path.join(opts.projectDir, 'th-criteria');
   /** Resolves when it is this job's turn. */
   const acquire = (job: Job): Promise<void> =>
     new Promise<void>((resolve) => {
@@ -241,6 +244,19 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     }
   };
 
+  // A saved event tree as a criterion needs it: its meaning hash and its headings. A tree that is not structurally valid is "not found".
+  // (Its fault-tree model is not looked at here: the tree pins that model's hash, so a model change shows up when the tree is updated.)
+  const loadEventTree = (name: string): TreeRef | null => {
+    try {
+      const text = readModel(eventTreeDir, name);
+      if (!validateEventTreeText(text).valid) return null;
+      const doc = JSON.parse(text) as { headings: { id: string }[] };
+      return { hash: eventTreeHash(doc as Parameters<typeof eventTreeHash>[0]), headings: new Set(doc.headings.map((h) => h.id)) };
+    } catch {
+      return null; // no such tree, an unreadable one, a name that is not a name, or something the hash cannot hold
+    }
+  };
+
   async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
     const method = req.method ?? 'GET';
     const p = url.pathname;
@@ -306,6 +322,35 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         }
       }
       if (method === 'PUT') return send(res, 200, writeModel(eventTreeDir, name, needText(await readJson(req))));
+    }
+
+    // ---- success criteria for thermal-hydraulic runs (plan 14, stage T0 records): saved in their own folder, checked against the saved event tree
+    if (p === '/api/th-criteria' && method === 'GET') return send(res, 200, { criteria: listModels(criteriaDir) });
+    if (p === '/api/th-criterion/validate' && method === 'POST') {
+      const text = needText(await readJson(req));
+      const v = validateCriterionText(text, { resolveTree: loadEventTree });
+      let criterion_hash: string | null = null;
+      if (v.valid) {
+        try {
+          criterion_hash = criterionHash(JSON.parse(text) as ThCriterion);
+        } catch {
+          criterion_hash = null;
+        }
+      }
+      return send(res, 200, { ...v, treeChecked: true, criterion_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+    }
+    const cm = /^\/api\/th-criteria\/([^/]+)$/.exec(p);
+    if (cm) {
+      const name = safeDecode(cm[1]!);
+      if (method === 'GET') {
+        try {
+          return send(res, 200, { name, text: readModel(criteriaDir, name) });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === 'E_NOT_FOUND') throw new StorageError('E_NOT_FOUND', `no saved success criterion called ${name}`);
+          throw e;
+        }
+      }
+      if (method === 'PUT') return send(res, 200, writeModel(criteriaDir, name, needText(await readJson(req))));
     }
 
     if (p === '/api/event-tree-lessons' && method === 'GET') {
