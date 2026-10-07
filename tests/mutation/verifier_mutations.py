@@ -251,7 +251,7 @@ MUTATIONS = [
     ("ui compare: the choice follows new runs after the student picked", WK, "if (!this.chosen || !ids.includes(this.a) || !ids.includes(this.b)) {", "if (!ids.includes(this.a) || !ids.includes(this.b)) {", E2E),
     ("ui compare: the unexpected-difference warning is never shown", WK, "if (r.sameInputs && p.delta !== null && p.delta !== 0) {", "if (false as boolean) {", E2E),
     # SEED side (plan 11): the headless runner and the generated oracle entries
-    ("headless: a truncated result is written as a result", HL, "if (rec.status !== 'completed' || rec.completeness !== 'complete') {", "if (rec.status !== 'completed') {"),
+    ("headless: a truncated result is written as a result", HL, "if (outcome.status !== 'completed' || outcome.completeness !== 'complete') {", "if (outcome.status !== 'completed') {"),
     ("headless: an invalid model reaches the engine", HL, "if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed), warnings: v.warnings.map(warnTyped) }, 2);\n    let engine: EngineConfig | null = null;", "let engine: EngineConfig | null = null;"),
     ("headless: model text is not labelled as app content", HL, "  source: 'app-content',\n", ""),
     ("headless: SEED's schema code is not used", HL, "code: i.code === 'E_SCHEMA' ? 'E_SCHEMA_INVALID' : i.code,", "code: i.code,"),
@@ -956,6 +956,63 @@ MUTATIONS += [
     lm("an analysis for another document is shown", "      else if (gen === this.docGen) {\n        this.result = r;", "      else if (true as boolean) {\n        this.result = r;", ELE),
 ]
 
+# Undo and redo in the event-tree view, and the event-tree verbs of the headless runner. The shortcuts and the buttons (src/web/ui/event-tree.ts,
+# shell.ts) are covered by the end-to-end tests, not by mutants here. Duplicated blocks of the event-tree run (the same text as the fault-tree run
+# in the same file) cannot be mutated one by one: the tests exercise both.
+UEED = ROOT / "src/web/model/event-tree-editor.ts"
+HL = ROOT / "src/cli/headless.ts"
+UNDO_SUITE = ("tests/unit/web-event-tree.test.ts", 150)
+HL_SUITE = ("tests/unit/headless-event-tree.test.ts tests/unit/headless.test.ts", 200)
+
+
+def um(name: str, old: str, new: str) -> tuple:
+    return (f"event tree undo: {name}", UEED, old, new, UNDO_SUITE)
+
+
+def hv(name: str, old: str, new: str) -> tuple:
+    return (f"event tree headless: {name}", HL, old, new, HL_SUITE)
+
+
+MUTATIONS += [
+    um("the history has no end", "    if (this.undoStack.length > EventTreeEditor.HISTORY) this.undoStack.shift();\n", ""),
+    um("the history is one step short", "static readonly HISTORY = 200;", "static readonly HISTORY = 199;"),
+    um("a new edit keeps what could be redone", "    this.redoStack = [];\n    this.doc = next;", "    this.doc = next;"),
+    um("an edit that changes nothing is a step", "    if (E.serialize(next) === this.text) return;\n    this.undoStack.push", "    this.undoStack.push"),
+    um("undo cannot be redone", "    this.redoStack.push({ doc: this.doc, label: step.label });\n", ""),
+    um("redo cannot be undone", "    this.undoStack.push({ doc: this.doc, label: step.label });\n    this.restore(step.doc, `Redid:", "    this.restore(step.doc, `Redid:"),
+    um("a frequency that is not a number is not undone first", "    if (this.frequencyDraft !== null) {\n      this.frequencyDraft = null;\n      this.revision++;", "    if (false as boolean) {\n      this.frequencyDraft = null;\n      this.revision++;"),
+    um("a draft alone is nothing to undo", "return this.undoStack.length > 0 || this.frequencyDraft !== null;", "return this.undoStack.length > 0;"),
+    um("a draft is not named", "return this.frequencyDraft !== null ? 'the frequency being typed' : (this.undoStack.at(-1)?.label ?? null);", "return this.undoStack.at(-1)?.label ?? null;"),
+    um("an undone edit leaves the draft", "    this.revision++;\n    this.frequencyDraft = null;\n    this.scheduleValidation();", "    this.revision++;\n    this.scheduleValidation();"),
+    um("an undone choice of model keeps the other model's events", " void this.loadModelInfo(); // the model the headings name may have changed", " undefined; // the model the headings name may have changed"),
+    um("a new tree keeps the history", "    this.doc = E.newEventTree(ref, undefined, this.now());\n    this.resetHistory();", "    this.doc = E.newEventTree(ref, undefined, this.now());"),
+    um("an opened tree keeps the history", "      this.doc = doc;\n      this.resetHistory();\n      this.fileName = name;", "      this.doc = doc;\n      this.fileName = name;"),
+    um("a lesson keeps the history", "      this.doc = doc;\n      this.resetHistory();\n      this.fileName = null;", "      this.doc = doc;\n      this.fileName = null;"),
+    um("an edit does not move the revision", "    this.doc = next;\n    this.revision++;", "    this.doc = next;"),
+    um("an undo does not move the revision", "    this.doc = doc;\n    this.revision++;\n    this.frequencyDraft = null;", "    this.doc = doc;\n    this.frequencyDraft = null;"),
+    um("an undo is not announced", "    this.restore(step.doc, `Undid: ${step.label}.`);", "    this.restore(step.doc, '');"),
+    um("a heading removal is not named", "'removing a heading');", "'x');"),
+    um("the choice of a model is not named", "'choosing the fault-tree model');", "'x');"),
+    hv("a file over the limit is read", "    if (bytes.length > MAX_INPUT_BYTES) return fail(", "    if (false as boolean) return fail("),
+    hv("an invalid model is not refused", "    if (!mv.valid) return reply({ ok: false, errors: mv.errors.map(", "    if (false as boolean) return reply({ ok: false, errors: mv.errors.map("),
+    hv("the fields of a model problem are not named under model", "typed({ ...e, path: `model${e.path === '/' ? '' : e.path}` })", "typed(e)"),
+    hv("a tree is checked against no model", "resolveModel: (n) => (n === named ? ref : null) });\n    if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed)", "resolveModel: () => null });\n    if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed)"),
+    hv("the limits are swapped", "limits: { headings: MAX_HEADINGS, sequences: MAX_SEQUENCES },", "limits: { headings: MAX_SEQUENCES, sequences: MAX_HEADINGS },"),
+    hv("a refused tree is refused only after the record exists", "    checkEventTree(tree.text, model.text); // refused (exit 2) before any folder or record exists\n", ""),
+    hv("the approximation is never asked for", "const approximation = args.includes('--approximation');", "const approximation = false;"),
+    hv("the analysis cannot be cancelled", "timeoutMs: timeoutSeconds * 1000, signal, approximation });", "timeoutMs: timeoutSeconds * 1000, approximation });"),
+    hv("the time limit is not passed on", "timeoutMs: timeoutSeconds * 1000, signal, approximation });", "signal, approximation });"),
+    hv("a refusal of the analysis loses its errors", "errors: outcome.errors.map(typed), warnings: outcome.warnings.map(typed) };", "errors: [], warnings: [] };"),
+    hv("the tree is not kept as it was", "'event-tree.json': tree.bytes,", "'event-tree.json': Buffer.from(JSON.stringify(JSON.parse(tree.text))),"),
+    hv("the manifest says the approximation was not asked for", "approximation: rec.approximation !== null,", "approximation: false,"),
+    hv("the manifest names the model hash as the tree hash", "          treeHash: rec.input_hashes.tree_hash,", "          treeHash: rec.input_hashes.model_hash,"),
+    hv("the manifest does not hash the tree file", "treeSha256: sha256(tree.bytes),", "treeSha256: sha256(model.bytes),"),
+    hv("the event-tree verbs do not exist", "    else if (verb === 'run-event-tree') await runEventTree(args);\n", ""),
+    hv("describe-event-trees is missing", "    else if (verb === 'describe-event-trees') describeEventTrees();\n", ""),
+    hv("validate-event-tree is missing", "    else if (verb === 'validate-event-tree') validateEventTreeVerb(args);\n", ""),
+    hv("the engine build is not named", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null },\n        limits:", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null },\n        limits:"),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1042,6 +1099,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree s4:")]
     if only == "etlesson":  # just the event tree lesson mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree lesson:")]
+    if only == "etundo":  # just the event tree undo and headless verb mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith(("event tree undo:", "event tree headless:"))]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
