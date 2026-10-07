@@ -60,6 +60,7 @@ function deps(over: Partial<Deps> = {}): { d: Deps; calls: Calls } {
       calls.builtin.push({ text, opts });
       return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ engine: { name: 'sneed-bdd', version: '0.1.0', sha256: null, runtime: null } }) };
     },
+    analyzeEventTree: realDeps().analyzeEventTree,
     resolveEngine: () => ({ distro: 'Ubuntu', binary: '/b', libs: '/l', expectedVersion: '0.16.2', expectedSha256: null }),
     distro: () => 'Ubuntu',
     killOwned: (distro, tag) => void calls.kill.push([distro, tag]),
