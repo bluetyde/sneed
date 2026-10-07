@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/th-criterion-1.json",
+  "title": "SNEED thermal-hydraulic success criterion, schema version 1",
+  "description": "Structural rules only (docs/plans/14-th-link.md). The heading and tree references, the window order and the finite-number rules are in src/core/th-criterion.ts. A criterion says what a thermal-hydraulic run must show for one heading of an event tree to count as working. It carries no probability. Unknown fields are allowed and preserved.",
+  "type": "object",
+  "required": ["schema", "criterion", "applies_to", "plant", "condition"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": { "id": { "const": "sneed.th-criterion" }, "version": { "const": 1 } }
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["id", "name", "description", "synthetic", "created", "updated"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "synthetic": { "type": "boolean" },
+        "created": { "type": "string", "minLength": 1 },
+        "updated": { "type": "string", "minLength": 1 }
+      }
+    },
+    "applies_to": {
+      "type": "object",
+      "required": ["event_tree", "heading"],
+      "properties": {
+        "event_tree": {
+          "type": "object",
+          "required": ["name", "tree_hash"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "tree_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "heading": { "type": "string", "pattern": "^[A-Za-z0-9_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" }
+      }
+    },
+    "plant": {
+      "type": "object",
+      "required": ["model_name", "model_hash", "mutation_list_hash"],
+      "properties": {
+        "model_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "model_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "mutation_list_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["quantity", "comparison", "limit", "unit", "window", "holds"],
+      "properties": {
+        "quantity": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "comparison": { "enum": ["above", "at-least", "below", "at-most"] },
+        "limit": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "window": {
+          "type": "object",
+          "required": ["from", "to", "unit"],
+          "properties": { "from": { "type": "number", "minimum": 0 }, "to": { "type": "number" }, "unit": { "const": "s" } }
+        },
+        "holds": { "enum": ["throughout", "at-some-time"] }
+      }
+    }
+  }
+}

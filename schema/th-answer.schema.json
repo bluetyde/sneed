@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/th-answer-1.json",
+  "title": "SNEED thermal-hydraulic answer record, schema version 1",
+  "description": "Structural rules only (docs/plans/14-th-link.md). What one thermal-hydraulic run showed, entered by hand in stage T0, with the identities of everything it was made from. Whether it satisfies a criterion is worked out by src/core/th-criterion.ts, never typed. Unknown fields are allowed and preserved.",
+  "type": "object",
+  "required": ["schema", "answer", "criterion_hash", "plant", "engine", "run", "observed"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": { "id": { "const": "sneed.th-answer" }, "version": { "const": 1 } }
+    },
+    "answer": {
+      "type": "object",
+      "required": ["id", "entered_by", "entered", "note"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "entered_by": { "const": "hand" },
+        "entered": { "type": "string", "minLength": 1 },
+        "note": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "criterion_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "plant": {
+      "type": "object",
+      "required": ["model_hash", "mutation_list_hash"],
+      "properties": {
+        "model_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "mutation_list_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+      }
+    },
+    "engine": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "version": { "type": "string", "minLength": 1, "maxLength": 100 } }
+    },
+    "run": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "enum": ["completed", "failed", "truncated", "terminated-by-trip"] } }
+    },
+    "observed": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["quantity", "unit", "window", "min", "max"],
+          "properties": {
+            "quantity": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "unit": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "window": {
+              "type": "object",
+              "required": ["from", "to", "unit"],
+              "properties": { "from": { "type": "number", "minimum": 0 }, "to": { "type": "number" }, "unit": { "const": "s" } }
+            },
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        }
+      ]
+    }
+  }
+}

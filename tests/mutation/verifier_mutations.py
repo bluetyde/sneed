@@ -1017,6 +1017,77 @@ MUTATIONS += [
     ("event tree headless: a gate with many inputs is re-filtered for each of them", ROOT / "src/core/validate.ts", "        childCache.set(top.id, children);\n", "", ("tests/unit/validate.test.ts", 150)),
 ]
 
+THC = ROOT / "src/core/th-criterion.ts"
+THS = ROOT / "schema/th-criterion.schema.json"
+THA = ROOT / "schema/th-answer.schema.json"
+T0_SUITE = ("tests/unit/th-criterion.test.ts", 60)
+
+
+def tz(name: str, old: str, new: str, f: pathlib.Path = THC) -> tuple:
+    return (f"th criterion: {name}", f, old, new, T0_SUITE)
+
+
+MUTATIONS += [
+    tz("above accepts equal", "return value > k.limit;", "return value >= k.limit;"),
+    tz("at-least refuses equal", "return value >= k.limit;", "return value > k.limit;"),
+    tz("below accepts equal", "return value < k.limit;", "return value <= k.limit;"),
+    tz("at-most refuses equal", "      return value <= k.limit;", "      return value < k.limit;"),
+    tz("throughout above reads the highest value", "(k.holds === 'throughout' ? o.min : o.max)", "(k.holds === 'throughout' ? o.max : o.min)"),
+    tz("throughout below reads the lowest value", "k.holds === 'throughout' ? o.max : o.min;", "k.holds === 'throughout' ? o.min : o.max;"),
+    tz("a held answer reads as not held", "make(holds(c, a.observed!) ? 'held' : 'did-not-hold', [])", "make(holds(c, a.observed!) ? 'did-not-hold' : 'held', [])"),
+    tz("a changed tree is not stale", "  if (c.applies_to.event_tree.tree_hash !== cur.treeHash) r.push('tree-changed');\n", ""),
+    tz("a changed plant is not stale", "c.plant.model_hash !== cur.plantModelHash || a.plant.model_hash !== c.plant.model_hash", "a.plant.model_hash !== c.plant.model_hash"),
+    tz("an answer from another plant is not stale", "c.plant.model_hash !== cur.plantModelHash || a.plant.model_hash !== c.plant.model_hash", "c.plant.model_hash !== cur.plantModelHash"),
+    tz("changed plant changes are not stale", "c.plant.mutation_list_hash !== cur.mutationListHash || a.plant.mutation_list_hash !== c.plant.mutation_list_hash", "a.plant.mutation_list_hash !== c.plant.mutation_list_hash"),
+    tz("an answer from other plant changes is not stale", "c.plant.mutation_list_hash !== cur.mutationListHash || a.plant.mutation_list_hash !== c.plant.mutation_list_hash", "c.plant.mutation_list_hash !== cur.mutationListHash"),
+    tz("an edited criterion leaves the answer current", "  if (a.criterion_hash !== criterionHash(c)) r.push('criterion-changed');\n", ""),
+    tz("a stale answer is still read", "  if (s.length) return make('stale', s);\n", ""),
+    tz("a run that does not settle the condition is read", "  if (u.length) return make('not-determined', u);\n", ""),
+    tz("a failed run is not noticed", "if (a.run.status === 'failed') r.push('run-failed');", "if (false as boolean) r.push('run-failed');"),
+    tz("a truncated run is not noticed", "else if (a.run.status === 'truncated') r.push('run-truncated');", "else if (false as boolean) r.push('run-truncated');"),
+    tz("a run ended by a trip is not noticed", "else if (a.run.status === 'terminated-by-trip') r.push('run-terminated-by-trip');", "else if (false as boolean) r.push('run-terminated-by-trip');"),
+    tz("another quantity is accepted", "if (o.quantity !== c.condition.quantity) r.push('quantity-differs');", ""),
+    tz("another unit is accepted", "if (o.unit !== c.condition.unit) r.push('unit-differs');", ""),
+    tz("a window that starts later is accepted", "if (o.window.from !== c.condition.window.from || o.window.to !== c.condition.window.to)", "if (o.window.to !== c.condition.window.to)"),
+    tz("a window that ends sooner or later is accepted", "if (o.window.from !== c.condition.window.from || o.window.to !== c.condition.window.to)", "if (o.window.from !== c.condition.window.from)"),
+    tz("a longer window is accepted", "if (o.window.from !== c.condition.window.from || o.window.to !== c.condition.window.to)", "if (o.window.from > c.condition.window.from || o.window.to < c.condition.window.to)"),
+    tz("an invalid pair is read when only one is invalid", "if (!cv.valid || !av.valid) return make(", "if (!cv.valid && !av.valid) return make("),
+    tz("the note that it is no probability is left out", "text: `${STATUS_TEXT[status]} ${TH_NOTE}`", "text: STATUS_TEXT[status]"),
+    tz("a completed run without observations is valid", "if (d.run.status === 'completed') errors.push(", "if (false as boolean) errors.push("),
+    tz("a smallest value above the largest is valid", "if (o.min > o.max)", "if (false as boolean)"),
+    tz("a flat line is refused", "if (o.min > o.max)", "if (o.min >= o.max)"),
+    tz("an empty criterion window is valid", "if (!(d.condition.window.to > d.condition.window.from)) {", "if (!(d.condition.window.to >= d.condition.window.from)) {"),
+    tz("a backwards criterion window is valid", "if (!(d.condition.window.to > d.condition.window.from)) {", "if (false as boolean) {"),
+    tz("a backwards observed window is valid", "if (!(o.window.to > o.window.from))", "if (false as boolean)"),
+    tz("a changed tree is not noticed by the criterion check", "if (tree.hash !== ref.tree_hash) errors.push(", "if (false as boolean) errors.push("),
+    tz("an unknown heading is not noticed", "if (!tree.headings.has(d.applies_to.heading)) errors.push(", "if (false as boolean) errors.push("),
+    tz("an unknown tree is not noticed", "if (!tree) errors.push(err('E_NO_TREE'", "if (false as boolean) errors.push(err('E_NO_TREE'"),
+    tz("the tree is looked up under another name", "const tree = ctx.resolveTree(ref.name);", "const tree = ctx.resolveTree(d.criterion.name);"),
+    tz("the hash ignores the heading", "heading: d.applies_to.heading },", "},"),
+    tz("the hash ignores the tree", "tree_hash: d.applies_to.event_tree.tree_hash }", "}"),
+    tz("the hash ignores the plant model", "model_hash: d.plant.model_hash, mutation_list_hash", "mutation_list_hash"),
+    tz("the hash ignores the change list", ", mutation_list_hash: d.plant.mutation_list_hash },", " },"),
+    tz("the hash ignores the limit", "comparison: c.comparison, limit: c.limit, unit", "comparison: c.comparison, unit"),
+    tz("the hash ignores the comparison", "quantity: c.quantity, comparison: c.comparison, limit", "quantity: c.quantity, limit"),
+    tz("the hash ignores the unit", "limit: c.limit, unit: c.unit, window", "limit: c.limit, window"),
+    tz("the hash ignores the start of the window", "window: { from: c.window.from, to: c.window.to, unit: c.window.unit }", "window: { to: c.window.to, unit: c.window.unit }"),
+    tz("the hash ignores the 'throughout or at some time'", ", holds: c.holds },", " },"),
+    tz("the hash follows the name", "    schema: { id: d.schema.id, version: d.schema.version },\n    applies_to", "    schema: { id: d.schema.id, version: d.schema.version },\n    name: d.criterion.name,\n    applies_to"),
+    tz("a heading with no criterion gets none and no refusal", "if (valid.length === 0) return { ok: false, code: 'E_TH_NO_CRITERION'", "if (valid.length === 0) return { ok: true, criterion: undefined as never, code: 'E_TH_NO_CRITERION'"),
+    tz("two criteria for one heading are not refused", "if (valid.length > 1) return", "if (valid.length > 2) return"),
+    tz("an invalid criterion counts as one", "if (!validateCriterion(raw).valid) {", "if (false as boolean) {"),
+    tz("a criterion of another tree is found", "c.applies_to.event_tree.name === treeName && c.applies_to.heading === headingId", "c.applies_to.heading === headingId"),
+    tz("a criterion of another heading is found", "c.applies_to.event_tree.name === treeName && c.applies_to.heading === headingId", "c.applies_to.event_tree.name === treeName"),
+    tz("the number of skipped documents is not said", "const skip = skipped ?", "const skip = false ?"),
+    tz("a criterion may lack the plant", '"required": ["schema", "criterion", "applies_to", "plant", "condition"],', '"required": ["schema", "criterion", "applies_to", "condition"],', THS),
+    tz("a criterion may name any comparison", '"comparison": { "enum": ["above", "at-least", "below", "at-most"] },', '"comparison": { "type": "string" },', THS),
+    tz("a criterion may use minutes", '"unit": { "const": "s" } }\n        },\n        "holds"', '"unit": { "type": "string" } }\n        },\n        "holds"', THS),
+    tz("an answer may lack its observations", '"required": ["schema", "answer", "criterion_hash", "plant", "engine", "run", "observed"],', '"required": ["schema", "answer", "criterion_hash", "plant", "engine", "run"],', THA),
+    tz("an answer may come from anything", '"entered_by": { "const": "hand" },', '"entered_by": { "type": "string" },', THA),
+    tz("an answer may have any run status", '"properties": { "status": { "enum": ["completed", "failed", "truncated", "terminated-by-trip"] } }', '"properties": { "status": { "type": "string" } }', THA),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1105,6 +1176,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree lesson:")]
     if only == "etundo":  # just the event tree undo and headless verb mutations
         chosen = [m for m in MUTATIONS if m[0].startswith(("event tree undo:", "event tree headless:"))]
+    if only == "thlink":  # just the thermal-hydraulic criterion (plan 14, stage T0) mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("th criterion:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
