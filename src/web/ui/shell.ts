@@ -302,6 +302,7 @@ export function mountShell(root: HTMLElement, editor: Editor, eventTree?: EventT
         void etView.save();
       } else if (mod && e.key === 'Enter') {
         e.preventDefault();
+        etView.flush();
         if (eventTree.canRun) void eventTree.run();
       } else if (e.key === 'Escape' && !typing && eventTree.running) void eventTree.cancel();
       return;
