@@ -7,6 +7,7 @@ import { MAX_HEADINGS, pathKey } from '../../core/event-tree-paths.js';
 import { h, rerender, type Child } from './dom.js';
 import { fmt } from './results.js';
 import { confirmDiscard, openEventTreeDialog, saveAsEventTreeDialog } from './dialogs.js';
+import { EventTreeComparePanel } from './event-tree-compare.js';
 import { exportEventTreePng, exportEventTreeSvg } from './event-tree-export.js';
 
 const ASSUMPTION_TEXT: Record<string, string> = {
@@ -23,9 +24,13 @@ export class EventTreeView {
   private readonly bar = h('div', { class: 'et-bar', role: 'toolbar', 'aria-label': 'Event tree tools' });
   private readonly edit = h('div', { class: 'et-edit', role: 'region', 'aria-label': 'Event tree', 'data-testid': 'et-edit' });
   private readonly side = h('div', { class: 'et-side', role: 'region', 'aria-label': 'Problems and results', tabindex: 0, 'data-testid': 'et-side' });
+  private readonly sideMain = h('div', { 'data-testid': 'et-side-main' });
+  private readonly compare: EventTreeComparePanel;
   private sig = { bar: '', edit: '', side: '' };
 
   constructor(private readonly ed: EventTreeEditor) {
+    this.compare = new EventTreeComparePanel(ed);
+    this.side.append(this.sideMain, this.compare.el);
     this.el.append(this.bar, h('div', { class: 'et-body' }, this.edit, this.side));
   }
 
@@ -45,8 +50,9 @@ export class EventTreeView {
     const sideSig = JSON.stringify([e.validation, e.result, e.stale, e.running, e.queueAhead, e.runError, e.approximation, e.runBlockedReason, e.doc.end_states.map((s) => [s.id, s.synthetic])]);
     if (sideSig !== this.sig.side) {
       this.sig.side = sideSig;
-      rerender(this.side, () => this.sidePanel());
+      rerender(this.sideMain, () => this.sidePanel());
     }
+    this.compare.render();
   }
 
   // ---------------------------------------------------------------- toolbar

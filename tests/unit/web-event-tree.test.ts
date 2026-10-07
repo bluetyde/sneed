@@ -41,6 +41,10 @@ function fakeApi(over: Partial<EtApi> = {}): EtApi & { models: Map<string, strin
     },
     cancel: async () => ({ cancelled: true }),
     runStatus: async () => ({ running: null, queued: [] }),
+    listEventTreeRuns: async () => [],
+    loadEventTreeRun: async (id) => {
+      throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);
+    },
     listEventTrees: async () => [...trees].map(([n, t]) => info(n, t)),
     loadEventTree: async (name) => {
       if (!trees.has(name)) throw new ApiError(404, 'E_NOT_FOUND', `no saved event tree called ${name}`);
@@ -602,5 +606,91 @@ describe('EventTreeEditor', () => {
     expect(ed.notice?.text).toMatch(/Could not cancel/);
     release({ kind: 'dequeued' });
     await p;
+  });
+
+  const savedRecord = (total: number): unknown => ({
+    schema: { id: 'sneed.event-tree-result', version: 1 },
+    status: 'completed',
+    completeness: 'complete',
+    headings: [],
+    sequences: [{ key: 'H1:works', path: [{ heading: 'H1', branch: 'works' }], end_state: 'ES1', frequency: total }],
+    end_states: [{ id: 'ES1', name: 'x', frequency: total }],
+    total: { frequency: total },
+    input_hashes: { tree_hash: 't', model_hash: 'm' },
+    initiating_event: { name: 'IE', frequency: 1 },
+  });
+
+  it('lists the saved analyses, and says so when the list cannot be read', async () => {
+    const { ed, api } = await make();
+    api.listEventTreeRuns = async () => [{ id: 'r1', modified: NOW, status: 'completed', completeness: 'complete', tree_name: 'T', initiating_event: 'IE', frequency: 1, total_frequency: 1, tree_hash: 't', model_hash: 'm', engine_name: 'e', engine_version: '1' }];
+    await ed.refreshRuns();
+    expect(ed.runs.map((r) => r.id)).toEqual(['r1']);
+    expect(ed.runsError).toBeNull();
+    api.listEventTreeRuns = async () => {
+      throw new Error('down');
+    };
+    await ed.refreshRuns();
+    expect(ed.runs).toEqual([]);
+    expect(ed.runsError).toMatch(/Could not list the saved analyses: down/);
+  });
+
+  it('a run adds itself to the list, and returning to the view refreshes it', async () => {
+    let listed = 0;
+    const { ed } = await make({
+      listEventTreeRuns: async () => {
+        listed++;
+        return [];
+      },
+    });
+    const before = listed;
+    await ed.refreshContext();
+    expect(listed).toBeGreaterThan(before);
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    const mid = listed;
+    await ed.run();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(listed).toBeGreaterThan(mid);
+  });
+
+  it('compares two saved analyses, and a file that cannot be read or is not a result is named, with no earlier comparison left on show', async () => {
+    const files: Record<string, unknown> = { a: savedRecord(1), b: savedRecord(2), junk: { schema: { id: 'sneed.fault-tree' } } };
+    const { ed } = await make({
+      loadEventTreeRun: async (id) => {
+        if (!(id in files)) throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);
+        return { id, record: files[id] };
+      },
+    });
+    await ed.compare('a', 'b');
+    expect(ed.comparison?.diff.total).toMatchObject({ from: 1, to: 2 });
+    expect(ed.compareError).toBeNull();
+    await ed.compare('a', 'junk');
+    expect(ed.comparison).toBeNull();
+    expect(ed.compareError).toMatch(/not an event-tree result/);
+    await ed.compare('a', 'b');
+    await ed.compare('a', 'gone');
+    expect(ed.comparison).toBeNull();
+    expect(ed.compareError).toMatch(/Could not read the saved analyses: no saved run called gone/);
+    await ed.compare('a', 'b');
+    ed.clearComparison();
+    expect(ed.comparison).toBeNull();
+    expect(ed.compareError).toBeNull();
+  });
+
+  it('of two comparisons the later request wins, whichever answers last, and a clear stops a late answer from reappearing', async () => {
+    const { ed } = await make({
+      loadEventTreeRun: async (id) => {
+        if (id === 'slow') await new Promise((r) => setTimeout(r, 30));
+        return { id, record: savedRecord(id === 'slow' ? 5 : 2) };
+      },
+    });
+    const first = ed.compare('slow', 'slow2');
+    await ed.compare('fast', 'fast2');
+    await first;
+    expect(ed.comparison?.a).toBe('fast');
+    const late = ed.compare('slow', 'slow2');
+    ed.clearComparison();
+    await late;
+    expect(ed.comparison).toBeNull();
   });
 });

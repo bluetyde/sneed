@@ -1,6 +1,7 @@
 // The event-tree editor's state and commands, with no DOM (like Editor for fault trees): the document, what the server says about it, the
 // saved fault-tree model it refers to, a run in progress and the result on show. The UI only draws this and calls its methods.
-import { ApiError, type EtApi, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus, type ValidateResponse } from '../api.js';
+import { diffEventTreeResults, type EtResultDiff } from '../../core/event-tree-compare.js';
+import { ApiError, type EtApi, type EtRunInfo, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus, type ValidateResponse } from '../api.js';
 import type { EtIssue } from '../../core/event-tree.js';
 import type { EventTreeResult } from '../../core/event-tree-result.js';
 import { pathKey, type Branch } from '../../core/event-tree-paths.js';
@@ -37,6 +38,12 @@ export class EventTreeEditor {
   /** Whether the shown result was asked for with the approximation. */
   private resultApproximation = false;
   runError: string | null = null;
+  /** Saved analyses offered to Compare (newest first), and the comparison on show. */
+  runs: EtRunInfo[] = [];
+  runsError: string | null = null;
+  comparison: { a: string; b: string; diff: EtResultDiff } | null = null;
+  compareError: string | null = null;
+  private compareSeq = 0;
   notice: Notice | null = null;
 
   static queuePollMs = 700;
@@ -168,6 +175,40 @@ export class EventTreeEditor {
     }
     this.emit();
   }
+  async refreshRuns(): Promise<void> {
+    try {
+      this.runs = await this.api.listEventTreeRuns();
+      this.runsError = null;
+    } catch (e) {
+      this.runs = [];
+      this.runsError = `Could not list the saved analyses: ${(e as Error).message}`;
+    }
+    this.emit();
+  }
+  /** Compares two saved analyses, `a` the earlier. A file that cannot be read says which one, and the previous comparison is not left on show. */
+  async compare(a: string, b: string): Promise<void> {
+    const mine = ++this.compareSeq;
+    this.comparison = null;
+    this.compareError = null;
+    this.emit();
+    try {
+      const [ra, rb] = await Promise.all([this.api.loadEventTreeRun(a), this.api.loadEventTreeRun(b)]);
+      if (mine !== this.compareSeq) return; // a later choice took over while these were being read
+      const diff = diffEventTreeResults(ra.record, rb.record);
+      if (!diff) this.compareError = 'One of these files is not an event-tree result, so they cannot be compared.';
+      else this.comparison = { a, b, diff };
+    } catch (e) {
+      if (mine !== this.compareSeq) return;
+      this.compareError = `Could not read the saved analyses: ${(e as Error).message}`;
+    }
+    this.emit();
+  }
+  clearComparison(): void {
+    this.compareSeq++;
+    this.comparison = null;
+    this.compareError = null;
+    this.emit();
+  }
   async refreshTrees(): Promise<void> {
     try {
       this.trees = await this.api.listEventTrees();
@@ -196,7 +237,7 @@ export class EventTreeEditor {
   private modelSeq = 0;
   /** Looks again at everything outside the document: the models on disk, the one named, the checks. Called when the page returns to this view. */
   async refreshContext(): Promise<void> {
-    await Promise.all([this.refreshModels(), this.refreshTrees(), this.loadModelInfo()]);
+    await Promise.all([this.refreshModels(), this.refreshTrees(), this.loadModelInfo(), this.refreshRuns()]);
     await this.revalidate();
   }
   /** Points the document at another saved model. Headings whose event the new model does not have keep their text and are named by the check. */
@@ -404,6 +445,7 @@ export class EventTreeEditor {
       else {
         this.result = r;
         this.resultApproximation = approximation;
+        void this.refreshRuns();
       }
     } catch (e) {
       this.runError = e instanceof ApiError ? `${e.message} (${e.code})` : (e as Error).message;

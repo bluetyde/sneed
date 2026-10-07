@@ -1,28 +1,8 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, test, SHARED_MODEL, saveSharedModel } from './fixtures.js';
+import { expect, test, buildSharedEventTree as build } from './fixtures.js';
 
 // The drawing, the files and the print sheet of an event tree (plan 13, stage S4), on plan 13 case 6.2 (shared event, 0.5 per year).
-
-async function build(page: Page): Promise<void> {
-  await saveSharedModel(page, SHARED_MODEL(0.1));
-  await page.locator('[data-mode="event-tree"]').click();
-  await page.locator('[data-action="et-new"]').click();
-  await page.locator('[data-field="et-model"]').selectOption('shared');
-  await expect(page.locator('[data-field="et-h-event-H1"] option[value="X"]')).toHaveCount(1);
-  await page.locator('[data-field="et-h-name-H1"]').fill('Injection');
-  await page.locator('[data-field="et-h-name-H1"]').press('Enter');
-  await page.locator('[data-field="et-h-event-H1"]').selectOption('X');
-  await page.locator('[data-action="et-add-heading"]').click();
-  await page.locator('[data-field="et-h-name-H2"]').fill('Cooling');
-  await page.locator('[data-field="et-h-name-H2"]').press('Enter');
-  await page.locator('[data-field="et-h-event-H2"]').selectOption('Y');
-  await page.locator('[data-field="et-ie-freq"]').fill('0.5');
-  await page.locator('[data-field="et-ie-freq"]').press('Enter');
-  await expect(page.locator('[data-seq]')).toHaveCount(4);
-  await page.locator('[data-field="et-set-all"]').selectOption('ES1');
-  await expect(page.getByTestId('et-no-problems')).toBeVisible();
-}
 
 const figureTexts = (page: Page, svg: string): Promise<string[]> =>
   page.evaluate((t) => {

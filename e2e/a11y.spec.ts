@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import type { Page } from '@playwright/test';
-import { expect, test, SHARED_MODEL, saveSharedModel } from './fixtures.js';
+import { expect, test, SHARED_MODEL, saveSharedModel, buildSharedEventTree } from './fixtures.js';
 
 // Automated accessibility audit with axe-core (WCAG 2.0 / 2.1 A and AA plus best practices) over every distinct state of the editor.
 // Automated checks find some problems, not all: keyboard operation is tested separately and a screen-reader pass is still a human task.
@@ -238,5 +238,30 @@ test.describe('accessibility', () => {
     await page.locator('[data-field="et-ie-freq"]').press('Enter');
     await expect(page.getByTestId('et-stale')).toBeVisible();
     await audit(page, 'event tree: out-of-date result');
+  });
+
+  test('the event-tree drawing and a comparison of two saved analyses have no axe violations', async ({ app, page }) => {
+    await app.open();
+    await buildSharedEventTree(page);
+    await audit(page, 'event tree: the drawing without a result');
+    for (let i = 0; i < 2; i++) {
+      await page.locator('[data-action="et-run"]').click();
+      await expect(page.getByTestId('et-result-status')).toBeVisible();
+      await expect(page.locator('[data-action="et-run"]')).toBeEnabled();
+    }
+    await expect(page.locator('#et-cmp-b')).toBeVisible();
+    await audit(page, 'event tree: the drawing with a result, the compare form');
+    await page.locator('[data-action="et-compare"]').click();
+    await expect(page.getByTestId('et-compare-result')).toBeVisible();
+    await audit(page, 'event tree: a comparison, nothing changed');
+    await page.locator('[data-field="et-ie-freq"]').fill('0.9');
+    await page.locator('[data-field="et-ie-freq"]').press('Enter');
+    const listed = await page.locator('#et-cmp-b option').count();
+    await page.locator('[data-action="et-run"]').click();
+    await expect(page.getByTestId('et-stale')).toHaveCount(0);
+    await expect(page.locator('#et-cmp-b option')).toHaveCount(Math.min(listed + 1, 100)); // the list has caught up with the new analysis
+    await page.locator('[data-action="et-compare"]').click();
+    await expect(page.getByTestId('et-compare-seqs')).toBeVisible();
+    await audit(page, 'event tree: a comparison with changed sequences');
   });
 });

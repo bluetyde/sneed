@@ -139,3 +139,81 @@ export function readRun(dir: string, id: string, afterCheck?: () => void, afterR
     throw new RunsError('E_UNREADABLE', `the files of run ${id} cannot be read`);
   }
 }
+
+// ---- event-tree runs (plan 13, stage S4): a folder with event-tree-results.json (kind sneed.event-tree-result). They are listed apart from the
+// fault-tree runs, which never see them (those need results.json).
+
+export interface EventTreeRunInfo {
+  id: string;
+  modified: string;
+  status: string | null;
+  completeness: string | null;
+  tree_name: string | null;
+  initiating_event: string | null;
+  frequency: number | null;
+  total_frequency: number | null;
+  tree_hash: string | null;
+  model_hash: string | null;
+  engine_name: string | null;
+  engine_version: string | null;
+}
+
+const isEtRecord = (rec: unknown): rec is Record<string, unknown> => isObj(rec) && isObj(rec.schema) && rec.schema.id === 'sneed.event-tree-result' && rec.schema.version === 1;
+const finite = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** The newest saved event-tree analyses. A run whose files cannot be read is left out, never an error for the rest. */
+export function listEventTreeRuns(dir: string, limit = MAX_LISTED_RUNS): EventTreeRunInfo[] {
+  if (!existsSync(dir)) return [];
+  const ids = readdirSync(dir).filter(isValidRunId).sort().reverse();
+  const out: EventTreeRunInfo[] = [];
+  for (const id of ids) {
+    if (out.length >= limit) break;
+    // only folders that are event-tree runs are opened at all: fault-tree runs have no event-tree-results.json
+    if (!existsSync(path.join(dir, id, 'event-tree-results.json'))) continue;
+    try {
+      const rec = readJsonFile(dir, [id, 'event-tree-results.json']);
+      if (!isEtRecord(rec)) continue;
+      let tree_name: string | null = null;
+      try {
+        const t = readJsonFile(dir, [id, 'native', 'event-tree.json']);
+        if (isObj(t) && isObj(t.tree) && typeof t.tree.name === 'string') tree_name = t.tree.name.slice(0, 200);
+      } catch {
+        /* the document is optional for the list */
+      }
+      const hashes = isObj(rec.input_hashes) ? rec.input_hashes : {};
+      const eng = isObj(rec.engine) ? rec.engine : {};
+      const ie = isObj(rec.initiating_event) ? rec.initiating_event : {};
+      const total = isObj(rec.total) ? rec.total : {};
+      out.push({
+        id,
+        modified: statSync(path.join(dir, id, 'event-tree-results.json')).mtime.toISOString(),
+        status: typeof rec.status === 'string' ? rec.status : null,
+        completeness: typeof rec.completeness === 'string' ? rec.completeness : null,
+        tree_name,
+        initiating_event: typeof ie.name === 'string' ? ie.name.slice(0, 200) : null,
+        frequency: finite(ie.frequency),
+        total_frequency: finite(total.frequency),
+        tree_hash: typeof hashes.tree_hash === 'string' ? hashes.tree_hash : null,
+        model_hash: typeof hashes.model_hash === 'string' ? hashes.model_hash : null,
+        engine_name: typeof eng.name === 'string' ? eng.name : null,
+        engine_version: typeof eng.version === 'string' ? eng.version : null,
+      });
+    } catch {
+      /* not a readable run */
+    }
+  }
+  return out;
+}
+
+/** One event-tree analysis: the results record. */
+export function readEventTreeRun(dir: string, id: string): { id: string; record: unknown } {
+  const d = runDir(dir, id);
+  if (!existsSync(d)) throw new RunsError('E_NOT_FOUND', `no saved run called ${id}`);
+  try {
+    const record = readJsonFile(dir, [id, 'event-tree-results.json']);
+    if (!isEtRecord(record)) throw new Error('not an event-tree result');
+    return { id, record };
+  } catch {
+    throw new RunsError('E_UNREADABLE', `the files of run ${id} cannot be read`);
+  }
+}
