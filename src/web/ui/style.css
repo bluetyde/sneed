@@ -237,3 +237,5 @@ ol.lessons h2 { margin: 0 0 4px; }
 .et table .btn-row { margin: 0; flex-wrap: nowrap; }
 .et-edit .field { max-width: 560px; }
 @media (max-width: 900px) { .et-body { flex-direction: column; } .et-side { border-left: 0; border-top: 1px solid var(--line); } }
+.et-drawing { overflow-x: auto; background: #fff; border: 1px solid var(--line2); border-radius: 4px; padding: 4px; }
+.et-figure { display: block; width: 100%; min-width: 640px; height: auto; }

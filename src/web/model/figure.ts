@@ -25,15 +25,15 @@ export interface FigureOptions {
 }
 
 export const FIGURE_MARGIN = 24;
-const FONT = 'Arial, Helvetica, sans-serif';
-const LINE = 16;
-const CHAR_W = 6.6; // an estimate of the average width of 11 px text, to size the page
+export const FONT = 'Arial, Helvetica, sans-serif';
+export const LINE = 16;
+export const CHAR_W = 6.6; // an estimate of the average width of 11 px text, to size the page
 
 /** Characters XML 1.0 does not allow at all (control characters, lone surrogates, U+FFFE and U+FFFF); a model name may hold them, a document may not. */
 const XML_INVALID = /[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
-const esc = (t: string): string => t.replace(XML_INVALID, '\uFFFD').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const short = (t: string, max: number): string => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
-const num = (n: number): string => String(Math.round(n * 100) / 100);
+export const esc = (t: string): string => t.replace(XML_INVALID, '\uFFFD').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export const short = (t: string, max: number): string => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
+export const num = (n: number): string => String(Math.round(n * 100) / 100);
 /** Breaks a line at spaces to at most `max` characters; a continuation keeps the indent of its line. */
 export function wrapText(line: string, max: number): string[] {
   const indent = /^ */.exec(line)![0];

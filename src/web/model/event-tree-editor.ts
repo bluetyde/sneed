@@ -2,9 +2,11 @@
 // saved fault-tree model it refers to, a run in progress and the result on show. The UI only draws this and calls its methods.
 import { ApiError, type EtApi, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus, type ValidateResponse } from '../api.js';
 import type { EtIssue } from '../../core/event-tree.js';
+import type { EventTreeResult } from '../../core/event-tree-result.js';
 import { pathKey, type Branch } from '../../core/event-tree-paths.js';
 import type { Notice } from './editor.js';
 import * as E from './event-tree-doc.js';
+import { eventTreeSvg } from './event-tree-figure.js';
 
 /** What the editor knows of the saved fault-tree model the headings refer to. */
 export interface ModelInfoView {
@@ -116,6 +118,17 @@ export class EventTreeEditor {
     const r = this.result.record;
     // an edit not yet checked counts as a change: until the check says the meaning is the same, a result must not look current
     return this.frequencyDraft !== null || !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;
+  }
+
+  /** The result on show, when it is a complete one for the tree on screen; null otherwise. */
+  get currentRecord(): EventTreeResult | null {
+    if (this.result?.kind !== 'ran' || this.stale) return null;
+    const r = this.result.record;
+    return r.status === 'completed' && r.completeness === 'complete' ? r : null;
+  }
+  /** The figure of the tree on screen, with the result only while it is current: a drawing never pairs old numbers with a new tree. */
+  figureSvg(): string {
+    return eventTreeSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.stale } : null });
   }
 
   // ---- validation

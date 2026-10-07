@@ -6,7 +6,7 @@ import { h } from './dom.js';
 
 const MAX_PNG_SIDE = 8000;
 
-function save(name: string, blob: Blob): void {
+export function save(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: name, hidden: true });
   document.body.append(a);
@@ -100,10 +100,10 @@ export function buildPrintSheet(editor: Editor): HTMLElement {
 }
 
 /** Wires the browser's print events to the sheet, so Ctrl+P and the Print button print the same thing. */
-export function installPrint(editor: Editor): void {
+export function installPrint(sheet: () => HTMLElement): void {
   window.addEventListener('beforeprint', () => {
     document.getElementById('print-sheet')?.remove();
-    document.body.append(buildPrintSheet(editor));
+    document.body.append(sheet());
   });
   window.addEventListener('afterprint', () => document.getElementById('print-sheet')?.remove());
 }
