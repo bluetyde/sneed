@@ -169,4 +169,27 @@ test.describe('event tree editor', () => {
     );
     expect(unnamed).toEqual([]);
   });
+
+  test('Ctrl+S saves what is being typed, and a frequency that is not a number is not saved', async ({ app, page }) => {
+    await app.open();
+    await saveModel(page, MODEL(0.1));
+    await mode(page, 'event-tree').click();
+    await buildSharedTree(page);
+    await page.locator('[data-action="et-saveas"]').click();
+    await page.locator('#save-name').fill('typed-et');
+    await page.getByTestId('save-confirm').click();
+    await expect(page.getByTestId('doc-name')).toContainText('typed-et');
+    await page.locator('[data-field="et-ie-freq"]').fill('0.75'); // not committed: the field still has focus
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('et-dirty')).toHaveCount(0);
+    const saved = await page.request.get('/api/event-trees/typed-et');
+    expect(JSON.parse(((await saved.json()) as { text: string }).text).initiating_event.frequency).toBe(0.75);
+    await page.locator('[data-field="et-ie-freq"]').fill('lots');
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('notice')).toContainText('not a number');
+    await expect(page.getByTestId('et-dirty')).toBeVisible();
+    await expect(page.locator('[data-action="et-run"]')).toBeDisabled();
+    const again = await page.request.get('/api/event-trees/typed-et');
+    expect(JSON.parse(((await again.json()) as { text: string }).text).initiating_event.frequency).toBe(0.75);
+  });
 });

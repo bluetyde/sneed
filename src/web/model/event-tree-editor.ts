@@ -1,6 +1,6 @@
 // The event-tree editor's state and commands, with no DOM (like Editor for fault trees): the document, what the server says about it, the
 // saved fault-tree model it refers to, a run in progress and the result on show. The UI only draws this and calls its methods.
-import { ApiError, type EtApi, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus } from '../api.js';
+import { ApiError, type EtApi, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus, type ValidateResponse } from '../api.js';
 import type { EtIssue } from '../../core/event-tree.js';
 import { pathKey, type Branch } from '../../core/event-tree-paths.js';
 import type { Notice } from './editor.js';
@@ -39,6 +39,11 @@ export class EventTreeEditor {
 
   static queuePollMs = 700;
   private savedText = '';
+  /** Bumped whenever another document replaces this one (New, Open), so an answer that arrives later for the old one is ignored. */
+  private docGen = 0;
+  private chooseSeq = 0;
+  /** The frequency as typed while it is not a number. The document keeps the last good value, but the tree is not runnable, not saved as if it were whole, and any result is old. */
+  frequencyDraft: string | null = null;
   private validatedText: string | null = null;
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -75,7 +80,7 @@ export class EventTreeEditor {
     return this.serializedFor.text;
   }
   get dirty(): boolean {
-    return this.text !== this.savedText;
+    return this.text !== this.savedText || this.frequencyDraft !== null;
   }
   get problems(): EtIssue[] {
     return this.validation ? [...this.validation.errors, ...this.validation.warnings] : [];
@@ -88,10 +93,11 @@ export class EventTreeEditor {
     return this.validation !== null && this.validatedText === this.text;
   }
   get canRun(): boolean {
-    return !this.running && this.checked && this.validation!.valid;
+    return !this.running && this.frequencyDraft === null && this.checked && this.validation!.valid;
   }
   get runBlockedReason(): string | null {
     if (this.running) return 'an analysis is in progress';
+    if (this.frequencyDraft !== null) return 'the frequency is not a number';
     if (!this.validation || !this.checked) return 'the event tree has not been checked yet';
     if (!this.validation.valid) return `${this.errorCount} problem${this.errorCount === 1 ? '' : 's'} to fix first`;
     return null;
@@ -109,7 +115,7 @@ export class EventTreeEditor {
     if (this.result?.kind !== 'ran') return false;
     const r = this.result.record;
     // an edit not yet checked counts as a change: until the check says the meaning is the same, a result must not look current
-    return !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;
+    return this.frequencyDraft !== null || !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;
   }
 
   // ---- validation
@@ -182,14 +188,21 @@ export class EventTreeEditor {
   }
   /** Points the document at another saved model. Headings whose event the new model does not have keep their text and are named by the check. */
   async chooseModel(name: string): Promise<void> {
+    const gen = this.docGen;
+    const mine = ++this.chooseSeq;
     let text: string;
+    let v: ValidateResponse;
     try {
       text = await this.api.loadModel(name);
+      v = await this.api.validate(text);
     } catch (e) {
-      this.setNotice('error', `Could not read ${name}: ${(e as Error).message}`);
+      if (gen === this.docGen && mine === this.chooseSeq) {
+        this.setNotice('error', `Could not read ${name}: ${(e as Error).message}`);
+        this.emit(); // the selector goes back to the model the document names
+      }
       return;
     }
-    const v = await this.api.validate(text);
+    if (gen !== this.docGen || mine !== this.chooseSeq) return; // another document, or a later choice, took over meanwhile
     if (!v.valid || !v.model_hash) {
       this.setNotice('error', `${name} is not a valid model (${v.errors.length} problem${v.errors.length === 1 ? '' : 's'}): open it in the fault-tree editor and fix it first.`);
       return;
@@ -217,6 +230,19 @@ export class EventTreeEditor {
   }
   setTreeName(name: string): void {
     this.commit(E.setTreeName(this.doc, name, this.now()));
+  }
+  /** Takes the frequency as typed: a number 0 or more is the new value; anything else is kept as a draft and blocks analysis until fixed. */
+  setFrequencyText(v: string): void {
+    const t = v.trim();
+    const n = Number(t);
+    if (t === '' || !Number.isFinite(n) || n < 0) {
+      this.frequencyDraft = v;
+      this.emit();
+      return;
+    }
+    this.frequencyDraft = null;
+    this.setInitiating({ frequency: n });
+    this.emit();
   }
   setInitiating(patch: Partial<E.EtDoc['initiating_event']>): void {
     this.commit(E.setInitiating(this.doc, patch, this.now()));
@@ -265,7 +291,9 @@ export class EventTreeEditor {
 
   // ---- files
   async newTree(): Promise<void> {
+    const gen = ++this.docGen;
     await this.refreshModels();
+    if (gen !== this.docGen) return;
     const first = this.models[0];
     let ref: { name: string; hash: string; top: string } | null = null;
     if (first) {
@@ -277,6 +305,8 @@ export class EventTreeEditor {
         ref = null;
       }
     }
+    if (gen !== this.docGen) return;
+    this.frequencyDraft = null;
     this.doc = E.newEventTree(ref, undefined, this.now());
     this.fileName = null;
     this.savedText = this.text;
@@ -288,9 +318,13 @@ export class EventTreeEditor {
     await this.loadModelInfo();
   }
   async open(name: string): Promise<boolean> {
+    const gen = ++this.docGen;
     try {
-      const doc = JSON.parse(await this.api.loadEventTree(name)) as E.EtDoc;
+      const raw = await this.api.loadEventTree(name);
+      if (gen !== this.docGen) return false; // another New or Open was started after this one
+      const doc = JSON.parse(raw) as E.EtDoc;
       if (typeof doc !== 'object' || doc === null || !Array.isArray(doc.headings) || !Array.isArray(doc.sequences) || !doc.fault_tree_model || !doc.initiating_event) throw new Error('this file is not an event tree');
+      this.frequencyDraft = null;
       this.doc = doc;
       this.fileName = name;
       this.savedText = this.text;
@@ -309,13 +343,23 @@ export class EventTreeEditor {
   async save(name?: string): Promise<boolean> {
     const target = name ?? this.fileName;
     if (!target) return false;
+    if (this.frequencyDraft !== null) {
+      this.setNotice('warning', 'Not saved: the frequency is not a number. Enter a number, 0 or more, first.');
+      return false;
+    }
+    const gen = this.docGen;
+    const started = this.doc;
     try {
-      const touched = { ...this.doc, tree: { ...this.doc.tree, updated: this.now() } };
-      await this.api.saveEventTree(target, E.serialize(touched));
-      this.doc = touched;
-      this.savedText = this.text;
-      this.fileName = target;
-      this.scheduleValidation();
+      const touched = { ...started, tree: { ...started.tree, updated: this.now() } };
+      const saved = E.serialize(touched);
+      await this.api.saveEventTree(target, saved);
+      if (gen === this.docGen) {
+        // what reached the disk is `saved`; an edit made while it was being written stays unsaved, and is not overwritten
+        if (this.doc === started) this.doc = touched;
+        this.savedText = saved;
+        this.fileName = target;
+        this.scheduleValidation();
+      }
       this.setNotice('info', `Saved ${target}.`);
       await this.refreshTrees();
       return true;
@@ -375,6 +419,10 @@ export class EventTreeEditor {
   }
   async cancel(): Promise<void> {
     if (!this.running) return;
-    await this.api.cancel(this.requestId ?? undefined).catch(() => undefined);
+    try {
+      await this.api.cancel(this.requestId ?? undefined);
+    } catch (e) {
+      this.setNotice('error', `Could not cancel the analysis: ${(e as Error).message}`);
+    }
   }
 }

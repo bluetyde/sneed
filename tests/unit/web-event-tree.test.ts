@@ -469,4 +469,138 @@ describe('EventTreeEditor', () => {
     await first;
     expect(ed.model?.name).toBe('other');
   });
+
+  it('an edit made while a save is under way is neither lost nor marked saved', async () => {
+    let finish: () => void = () => undefined;
+    const { ed, api } = await make();
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    const real = api.saveEventTree;
+    api.saveEventTree = (n, t) => new Promise((res) => (finish = () => void real(n, t).then(res)));
+    const saving = ed.save('t1');
+    ed.setInitiating({ frequency: 0.9 }); // typed after the save began
+    finish();
+    await saving;
+    expect(ed.doc.initiating_event.frequency).toBe(0.9);
+    expect(ed.dirty).toBe(true);
+    expect(JSON.parse(api.trees.get('t1')!).initiating_event.frequency).toBe(0.1);
+  });
+
+  it('a save that finishes after another tree was opened does not touch the open one', async () => {
+    let finish: () => void = () => undefined;
+    const { ed, api } = await make();
+    ed.setUnsetEnds('ES1');
+    api.trees.set('other', E.serialize(E.setUnsetEnds(E.newEventTree(ref, 'Other', NOW), 'ES1', NOW)));
+    const real = api.saveEventTree;
+    api.saveEventTree = (n, t) => new Promise((res) => (finish = () => void real(n, t).then(res)));
+    const saving = ed.save('t1');
+    await ed.open('other');
+    finish();
+    await saving;
+    expect(ed.fileName).toBe('other');
+    expect(ed.doc.tree.name).toBe('Other');
+    expect(ed.dirty).toBe(false);
+  });
+
+  it('of two opens the later one wins, whichever answers last', async () => {
+    const { ed, api } = await make();
+    api.trees.set('a', E.serialize(E.newEventTree(ref, 'A', NOW)));
+    api.trees.set('b', E.serialize(E.newEventTree(ref, 'B', NOW)));
+    const real = api.loadEventTree;
+    api.loadEventTree = async (n) => {
+      if (n === 'a') await new Promise((r) => setTimeout(r, 30));
+      return real(n);
+    };
+    const first = ed.open('a');
+    await ed.open('b');
+    await first;
+    expect(ed.fileName).toBe('b');
+    expect(ed.doc.tree.name).toBe('B');
+  });
+
+  it('a frequency that is not a number blocks analysis, marks the result old, is not saved as if it were whole, and is cleared by a number', async () => {
+    const { ed } = await make();
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    await ed.run();
+    expect(ed.stale).toBe(false);
+    ed.setFrequencyText('lots');
+    expect(ed.frequencyDraft).toBe('lots');
+    expect(ed.doc.initiating_event.frequency).toBe(0.1);
+    expect(ed.canRun).toBe(false);
+    expect(ed.runBlockedReason).toMatch(/not a number/);
+    expect(ed.stale).toBe(true);
+    expect(ed.dirty).toBe(true);
+    expect(await ed.save('t1')).toBe(false);
+    expect(ed.notice?.kind).toBe('warning');
+    ed.setFrequencyText('-1');
+    expect(ed.frequencyDraft).toBe('-1');
+    ed.setFrequencyText('0.25');
+    await ed.settle();
+    expect(ed.frequencyDraft).toBeNull();
+    expect(ed.doc.initiating_event.frequency).toBe(0.25);
+    expect(ed.canRun).toBe(true);
+  });
+
+  it('a half-typed frequency is unsaved work even when everything else is saved', async () => {
+    const { ed } = await make();
+    ed.setUnsetEnds('ES1');
+    expect(await ed.save('t1')).toBe(true);
+    expect(ed.dirty).toBe(false);
+    ed.setFrequencyText('0.10');
+    expect(ed.frequencyDraft).toBeNull(); // the same number as saved
+    expect(ed.dirty).toBe(false);
+    ed.setFrequencyText('abc');
+    expect(ed.dirty).toBe(true);
+  });
+
+  it('opening another tree drops a half-typed frequency', async () => {
+    const { ed, api } = await make();
+    api.trees.set('a', E.serialize(E.newEventTree(ref, 'A', NOW)));
+    ed.setFrequencyText('x');
+    await ed.open('a');
+    expect(ed.frequencyDraft).toBeNull();
+  });
+
+  it('a failure while checking the chosen model is shown, and a slower earlier choice does not override a later one', async () => {
+    const { ed, api } = await make();
+    api.models.set('other', modelText(0.3));
+    api.models.set('third', modelText(0.4));
+    const realLoad = api.loadModel;
+    api.loadModel = async (n) => {
+      if (n === 'other') await new Promise((r) => setTimeout(r, 30));
+      return realLoad(n);
+    };
+    const first = ed.chooseModel('other');
+    await ed.chooseModel('third');
+    await first;
+    expect(ed.doc.fault_tree_model.name).toBe('third');
+    const realValidate = api.validate;
+    api.validate = async () => {
+      throw new Error('server went away');
+    };
+    ed.setNotice(null);
+    await ed.chooseModel('shared');
+    expect(ed.notice?.kind).toBe('error');
+    expect(ed.doc.fault_tree_model.name).toBe('third');
+    api.validate = realValidate;
+  });
+
+  it('a cancel that fails is said, not swallowed', async () => {
+    let release: (r: EtRunResponse) => void = () => undefined;
+    const { ed } = await make({
+      runEventTree: () => new Promise<EtRunResponse>((res) => (release = res)),
+      cancel: async () => {
+        throw new Error('no connection');
+      },
+    });
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    const p = ed.run();
+    await new Promise((r) => setTimeout(r, 5));
+    await ed.cancel();
+    expect(ed.notice?.text).toMatch(/Could not cancel/);
+    release({ kind: 'dequeued' });
+    await p;
+  });
 });

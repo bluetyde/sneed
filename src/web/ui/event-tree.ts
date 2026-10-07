@@ -26,9 +26,6 @@ export class EventTreeView {
   private readonly edit = h('div', { class: 'et-edit', role: 'region', 'aria-label': 'Event tree', 'data-testid': 'et-edit' });
   private readonly side = h('div', { class: 'et-side', role: 'region', 'aria-label': 'Problems and results', tabindex: 0, 'data-testid': 'et-side' });
   private sig = { bar: '', edit: '', side: '' };
-  /** The frequency as typed, kept while it is not a number so the student sees what they typed next to the message. */
-  private freqDraft: string | null = null;
-  private freqError: string | null = null;
 
   constructor(private readonly ed: EventTreeEditor) {
     this.el.append(this.bar, h('div', { class: 'et-body' }, this.edit, this.side));
@@ -42,7 +39,7 @@ export class EventTreeView {
       this.sig.bar = barSig;
       rerender(this.bar, () => this.toolbar());
     }
-    const editSig = JSON.stringify([e.doc, e.model, e.models, this.freqDraft, this.freqError, e.modelChanged]);
+    const editSig = JSON.stringify([e.doc, e.model, e.models, e.frequencyDraft, e.modelChanged]);
     if (editSig !== this.sig.edit) {
       this.sig.edit = editSig;
       rerender(this.edit, () => this.editor());
@@ -87,6 +84,7 @@ export class EventTreeView {
     if (name) await this.ed.save(name);
   }
   async save(): Promise<void> {
+    this.flush();
     if (!(await this.ed.save())) await this.saveAs();
   }
 
@@ -110,8 +108,9 @@ export class EventTreeView {
     out.push(h('h2', {}, 'Initiating event'));
     out.push(this.field('et-ie-name', 'Name', this.text('et-ie-name', d.initiating_event.name, (v) => e.setInitiating({ name: v.trim() || d.initiating_event.name }))));
     out.push(this.field('et-ie-desc', 'Description', this.text('et-ie-desc', d.initiating_event.description, (v) => e.setInitiating({ description: v }))));
-    const freqValue = this.freqDraft ?? String(d.initiating_event.frequency);
-    out.push(this.field('et-ie-freq', 'Frequency, per year', this.text('et-ie-freq', freqValue, (v) => this.setFrequency(v), { inputmode: 'decimal', 'aria-describedby': this.freqError ? 'et-ie-freq-err et-ie-freq-hint' : 'et-ie-freq-hint', ...(this.freqError ? { 'aria-invalid': 'true' } : {}) }), 'How often the initiating event happens. Constant, and independent of every basic event.', this.freqError));
+    const freqValue = e.frequencyDraft ?? String(d.initiating_event.frequency);
+    const freqError = e.frequencyDraft === null ? null : 'Enter a number, 0 or more (for example 0.1). The tree keeps the last good value until you do.';
+    out.push(this.field('et-ie-freq', 'Frequency, per year', this.text('et-ie-freq', freqValue, (v) => e.setFrequencyText(v), { inputmode: 'decimal', 'aria-describedby': freqError ? 'et-ie-freq-err et-ie-freq-hint' : 'et-ie-freq-hint', ...(freqError ? { 'aria-invalid': 'true' } : {}) }), 'How often the initiating event happens. Constant, and independent of every basic event.', freqError));
 
     // model
     out.push(h('h2', {}, 'Fault-tree model'));
@@ -155,11 +154,11 @@ export class EventTreeView {
             }
           } }, h('option', { value: '', selected: condValue === '' }, 'Always'), ...earlier.flatMap((x) => (['works', 'fails'] as const).map((br) => h('option', { value: `${x.id}|${br}`, selected: condValue === `${x.id}|${br}` }, `Only if ${x.name} ${br}`))))),
           h('td', {}, h('div', { class: 'btn-row' },
-            h('button', { class: 'btn', type: 'button', 'aria-label': `Move ${hd.name} up`, disabled: i === 0, 'data-action': `et-up-${hd.id}`, onclick: () => e.moveHeading(hd.id, -1) }, 'Up'),
-            h('button', { class: 'btn', type: 'button', 'aria-label': `Move ${hd.name} down`, disabled: i === d.headings.length - 1, 'data-action': `et-down-${hd.id}`, onclick: () => e.moveHeading(hd.id, 1) }, 'Down'),
-            h('button', { class: 'btn danger', type: 'button', 'aria-label': `Remove ${hd.name}`, disabled: d.headings.length <= 1, 'data-action': `et-remove-${hd.id}`, onclick: () => e.removeHeading(hd.id) }, 'Remove'))));
+            h('button', { class: 'btn', type: 'button', 'aria-label': `Move ${hd.name} up`, disabled: i === 0, 'data-action': `et-up-${hd.id}`, 'data-field': `et-up-${hd.id}`, onclick: () => e.moveHeading(hd.id, -1) }, 'Up'),
+            h('button', { class: 'btn', type: 'button', 'aria-label': `Move ${hd.name} down`, disabled: i === d.headings.length - 1, 'data-action': `et-down-${hd.id}`, 'data-field': `et-down-${hd.id}`, onclick: () => e.moveHeading(hd.id, 1) }, 'Down'),
+            h('button', { class: 'btn danger', type: 'button', 'aria-label': `Remove ${hd.name}`, disabled: d.headings.length <= 1, 'data-action': `et-remove-${hd.id}`, onclick: () => { e.removeHeading(hd.id); setTimeout(() => this.edit.querySelector<HTMLElement>('[data-field="et-add-heading"]')?.focus(), 30); } }, 'Remove'))));
       }))));
-    out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', 'data-action': 'et-add-heading', disabled: d.headings.length >= MAX_HEADINGS, onclick: () => e.addHeading() }, 'Add a heading')));
+    out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', 'data-action': 'et-add-heading', 'data-field': 'et-add-heading', disabled: d.headings.length >= MAX_HEADINGS, onclick: () => e.addHeading() }, 'Add a heading')));
 
     // end states
     out.push(h('h2', {}, `End states (${d.end_states.length})`));
@@ -174,8 +173,8 @@ export class EventTreeView {
         h('td', {}, h('input', { type: 'text', value: es.description, 'aria-label': `Description of end state ${es.name}`, 'data-field': `et-e-desc-${es.id}`, onchange: (ev) => e.patchEndState(es.id, { description: (ev.target as HTMLInputElement).value.trim() || es.description }) })),
         h('td', {}, h('input', { type: 'checkbox', checked: es.synthetic, 'aria-label': `${es.name} is an example, not a real plant state`, 'data-field': `et-e-syn-${es.id}`, onchange: (ev) => e.patchEndState(es.id, { synthetic: (ev.target as HTMLInputElement).checked }) })),
         h('td', { class: 'num' }, String(usedBy.get(es.id) ?? 0)),
-        h('td', {}, h('button', { class: 'btn danger', type: 'button', 'aria-label': `Remove end state ${es.name}`, disabled: d.end_states.length <= 1, 'data-action': `et-remove-end-${es.id}`, onclick: () => e.removeEndState(es.id) }, 'Remove')))))));
-    out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', 'data-action': 'et-add-end', onclick: () => e.addEndState() }, 'Add an end state')));
+        h('td', {}, h('button', { class: 'btn danger', type: 'button', 'aria-label': `Remove end state ${es.name}`, disabled: d.end_states.length <= 1, 'data-action': `et-remove-end-${es.id}`, onclick: () => { e.removeEndState(es.id); setTimeout(() => this.edit.querySelector<HTMLElement>('[data-field="et-add-end"]')?.focus(), 30); } }, 'Remove')))))));
+    out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', 'data-action': 'et-add-end', 'data-field': 'et-add-end', onclick: () => e.addEndState() }, 'Add an end state')));
 
     // sequences
     out.push(h('h2', {}, `Sequences (${d.sequences.length})`));
@@ -203,21 +202,10 @@ export class EventTreeView {
     return out;
   }
 
-  private setFrequency(v: string): void {
-    const t = v.trim();
-    const n = Number(t);
-    if (t === '' || !Number.isFinite(n) || n < 0) {
-      this.freqDraft = v;
-      this.freqError = 'Enter a number, 0 or more (for example 0.1).';
-      this.sig.edit = '';
-      this.render();
-      return;
-    }
-    this.freqDraft = null;
-    this.freqError = null;
-    this.sig.edit = '';
-    this.ed.setInitiating({ frequency: n });
-    this.render();
+  /** Commits what is being typed (a text field only commits on change): called before Save or Analyse from the keyboard. */
+  flush(): void {
+    const a = document.activeElement;
+    if ((a instanceof HTMLInputElement || a instanceof HTMLSelectElement) && this.el.contains(a)) a.blur();
   }
 
   // ---------------------------------------------------------------- problems and results
