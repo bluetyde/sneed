@@ -114,3 +114,20 @@ Until these are answered nothing is assumed: the first example stays a proposal.
 - The first example is thin (one pump). Accepted, as above.
 - A "stopped from start" run may not be a faithful stand-in for a trip, and a student could read it as one. The wording of every judgement and criterion must keep saying "from the start of the run".
 - If the NODAL answer to question 1 is that the run fails, the first example moves to a different mutation (for example a closed valve) or waits for the two-pump loop.
+
+## Stage T1 as built (2026-10-07; the owner: "build stage T1, the mutation record")
+
+`sneed.th-mutation` as described in the addendum, specified in [docs/SCHEMA.md](../SCHEMA.md), code in `src/core/th-mutation.ts`. The T0 schemas and rules did not change: the record plugs into the criterion's `plant` fields and into `judge()` through the hash passed as `mutationListHash`.
+
+Decisions taken while building, for the owner to overrule:
+1. **Two models must differ in both name and hash.** Same hash would mean the edits changed nothing; same name would mean one model seen twice.
+2. **An edit that sets a value to what it already is is an error** (a record whose edits do nothing misleads), and so is the same field edited twice.
+3. **The record is "not current" if either model changed or is missing.** Everything that relied on it becomes stale, even when only the base model changed (the edits may no longer describe the difference).
+4. **Values are numbers, short text or true/false**, no lists or objects: enough for a pump speed, a valve state or a flag. Larger edits wait for a real case.
+5. **Only "from the start of the run".** A mid-run event is a later form.
+6. **Judging a criterion that rests on a record goes through `judgeWithMutation`, not `judge()`** (found by the Codex review: a criterion pinning the record but running the base plant would have been read as held).
+
+The NODAL session reported (2026-10-07, `messages/pipe-studio.md`) that on its clean engine the pumped-loop golden with `head.speedRatio` 0 runs to completion and loop flow goes from 30 kg/s to 6.7 kg/s at 8 s, against 79.2 kg/s with the pump on. That is their report, not mine; I did not run it. It makes the first example workable (the pump mutation) and the numbers above show why it will say "did not hold" for a high limit.
+
+Not built: folder, routes and screen for criteria, answers and mutation records; how an answer sets a branch; the check that the edits really produce the second model (needs a reader of NODAL models).
+

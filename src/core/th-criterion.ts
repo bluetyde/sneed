@@ -160,6 +160,7 @@ export type ThReason =
   | 'mutations-changed'
   | 'criterion-changed'
   | 'heading-unknown'
+  | 'mutation-link-invalid'
   | 'run-failed'
   | 'run-truncated'
   | 'run-terminated-by-trip'
@@ -183,6 +184,9 @@ export interface ThJudgement {
   /** The words to show. Always says what the answer is a fact about, and that it is not a probability. */
   text: string;
 }
+
+/** The words shown for a status: what it says, and that it is a fact about one run and not a probability. */
+export const describeStatus = (status: ThStatus): string => `${STATUS_TEXT[status]} ${TH_NOTE}`;
 
 export const TH_NOTE =
   'This is a fact about one run, made with the stated plant model and changes. It is not a probability: the failure probability of the heading still comes from its fault tree.';
@@ -244,7 +248,7 @@ function holds(c: ThCriterion, o: NonNullable<ThAnswer['observed']>): boolean {
  * the numbers in the record.
  */
 export function judge(criterion: unknown, answer: unknown, cur: ThCurrent): ThJudgement {
-  const make = (status: ThStatus, reasons: ThReason[]): ThJudgement => ({ status, reasons, text: `${STATUS_TEXT[status]} ${TH_NOTE}` });
+  const make = (status: ThStatus, reasons: ThReason[]): ThJudgement => ({ status, reasons, text: describeStatus(status) });
   const cv = validateCriterion(criterion);
   const av = validateAnswer(answer);
   if (!cv.valid || !av.valid) return make('not-determined', [...(cv.valid ? [] : (['criterion-invalid'] as const)), ...(av.valid ? [] : (['answer-invalid'] as const))]);

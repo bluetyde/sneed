@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { checkCriterionMutation, currentMutationHash, MUTATION_NOT_CURRENT, mutationHash, validateMutation, type ThMutation } from '../../src/core/th-mutation.js';
+import { checkCriterionMutation, currentMutationHash, judgeWithMutation, MUTATION_NOT_CURRENT, mutationHash, validateMutation, type ThMutation } from '../../src/core/th-mutation.js';
 import { criterionHash, judge, validateCriterion, type ThAnswer, type ThCriterion, type ThCurrent } from '../../src/core/th-criterion.js';
 
 const A = 'a'.repeat(64);
@@ -287,6 +287,86 @@ describe('the record tied to a criterion, and what a change does to an answer', 
     const j = judge(c, a, cur(old, now));
     expect(j.status).toBe('stale');
     expect(j.reasons).toEqual(['mutations-changed']);
+  });
+
+  describe('judging a criterion that rests on a record (the Codex finding: the link must be checked on the judgement path)', () => {
+    const { mutationListHash: _drop, ...curBase } = cur(good(), null);
+    const run = (c: ThCriterion, a: ThAnswer, m: unknown, curOver: Partial<ThCurrent> = {}, t = nowModels) => judgeWithMutation(c, a, { ...curBase, ...curOver }, m, ctxNow(t));
+
+    it('a criterion and record that belong together are read', () => {
+      const m = good();
+      const c = criterionFor(m);
+      expect(run(c, answerFor(c, 12), m).status).toBe('held');
+      expect(run(c, answerFor(c, 6.7), m).status).toBe('did-not-hold');
+    });
+
+    it('a criterion that pins the record but runs the BASE model is not read, even with a matching answer and plant (a run of the unchanged plant must not count)', () => {
+      const m = good();
+      const c = criterionFor(m);
+      c.plant.model_name = 'pumped-loop';
+      c.plant.model_hash = A;
+      const a = answerFor(c, 12);
+      const j = run(c, a, m, { plantModelHash: A });
+      expect(j.status).toBe('not-determined');
+      expect(j.reasons).toEqual(['mutation-link-invalid']);
+      // plain judge(), given the same facts, would have said held: that is why the combined entry exists
+      expect(judge(c, a, { ...curBase, plantModelHash: A, mutationListHash: mutationHash(m) }).status).toBe('held');
+    });
+
+    it('a criterion that names the mutated model by name but not by hash, or by hash but not by name, is not read', () => {
+      const m = good();
+      const byName = criterionFor(m);
+      byName.plant.model_hash = A;
+      expect(run(byName, answerFor(byName, 12), m, { plantModelHash: A }).reasons).toEqual(['mutation-link-invalid']);
+      const byHash = criterionFor(m);
+      byHash.plant.model_name = 'pumped-loop';
+      const j = run(byHash, answerFor(byHash, 12), m);
+      expect(j.status).toBe('not-determined');
+      expect(j.reasons).toEqual(['mutation-link-invalid']);
+    });
+
+    it('the reasons of an undetermined run are kept beside the link reason', () => {
+      const m = good();
+      const c = criterionFor(m);
+      c.plant.model_name = 'pumped-loop';
+      const a = answerFor(c, 12);
+      a.run.status = 'truncated';
+      expect(run(c, a, m).reasons).toEqual(['run-truncated', 'mutation-link-invalid']);
+    });
+
+    it('a criterion that pins a record, with no record supplied, or another one, is stale', () => {
+      const m = good();
+      const c = criterionFor(m);
+      const a = answerFor(c, 12);
+      expect(run(c, a, null)).toMatchObject({ status: 'stale', reasons: ['mutations-changed'] });
+      const other = good();
+      other.edits[0]!.to = 0.5;
+      expect(run(c, a, other)).toMatchObject({ status: 'stale', reasons: ['mutations-changed'] });
+    });
+
+    it('a changed model makes it stale and a criterion that pins no record is stale beside a supplied record', () => {
+      const m = good();
+      const c = criterionFor(m);
+      const a = answerFor(c, 12);
+      expect(run(c, a, m, {}, { ...nowModels, 'pumped-loop': 'd'.repeat(64) }).status).toBe('stale');
+      const plain = criterionFor(m);
+      plain.plant.mutation_list_hash = null;
+      expect(run(plain, answerFor(plain, 12), m).status).toBe('stale');
+    });
+
+    it('with no record anywhere it is the plain judgement', () => {
+      const m = good();
+      const c = criterionFor(m);
+      c.plant.mutation_list_hash = null;
+      c.plant.model_hash = A;
+      c.plant.model_name = 'pumped-loop';
+      expect(run(c, answerFor(c, 12), null, { plantModelHash: A }).status).toBe('held');
+      expect(run(c, answerFor(c, 12), undefined, { plantModelHash: A }).status).toBe('held');
+    });
+
+    it('an invalid criterion is not read, whatever the record', () => {
+      expect(run({} as ThCriterion, {} as ThAnswer, good()).reasons).toContain('criterion-invalid');
+    });
   });
 
   it('a renamed record is not an edit', () => {
