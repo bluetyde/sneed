@@ -145,6 +145,22 @@ describe('event-tree document operations', () => {
     expect(d.sequences.every((s) => s.end_state === '')).toBe(true);
   });
 
+  it('after a change to when a heading is asked, the paths that survive keep their end state and the new one has none', () => {
+    let d = E.addHeading(E.newEventTree(ref, 'T', NOW), 'TOP', NOW);
+    d = E.addEndState(d, NOW);
+    d = E.setUnsetEnds(d, 'ES2', NOW);
+    d = E.setSequenceEnd(d, 'H1:works,H2:works', 'ES1', NOW);
+    d = E.setBypass(d, 'H2', { heading: 'H1', branch: 'works' }, NOW);
+    expect(d.sequences.map((s) => [pathKey(s.path), s.end_state])).toEqual([['H1:works,H2:works', 'ES1'], ['H1:works,H2:fails', 'ES2'], ['H1:fails', '']]);
+  });
+
+  it('giving the unset sequences an end state leaves the chosen ones alone', () => {
+    let d = E.addEndState(E.newEventTree(ref, 'T', NOW), NOW);
+    d = E.setSequenceEnd(d, 'H1:fails', 'ES2', NOW);
+    d = E.setUnsetEnds(d, 'ES1', NOW);
+    expect(d.sequences.map((s) => s.end_state)).toEqual(['ES1', 'ES2']);
+  });
+
   it('removing an end state leaves its sequences without one, never pointing at a state that is gone', () => {
     let d = E.newEventTree(ref, 'T', NOW);
     d = E.addEndState(d, NOW);
@@ -296,6 +312,18 @@ describe('EventTreeEditor', () => {
     expect(ed.stale).toBe(false);
   });
 
+  it('a tree that was valid is not runnable the moment it is edited, until the new text has been checked', async () => {
+    const { ed } = await make();
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    expect(ed.canRun).toBe(true);
+    ed.setInitiating({ frequency: 0.3 });
+    expect(ed.canRun).toBe(false);
+    expect(ed.runBlockedReason).toMatch(/not been checked/);
+    await ed.settle();
+    expect(ed.canRun).toBe(true);
+  });
+
   it('a run is refused while the text on screen has not been checked, and while a run is in progress', async () => {
     let release: (r: EtRunResponse) => void = () => undefined;
     let asked = 0;
@@ -312,8 +340,9 @@ describe('EventTreeEditor', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(ed.running).toBe(true);
-    await ed.run(); // ignored
+    await ed.run(); // ignored, and says nothing
     expect(asked).toBe(1);
+    expect(ed.notice).toBeNull();
     release({ kind: 'ran', run_id: 'r', record: recordFor(ed.text, false) });
     await first;
     expect(ed.running).toBe(false);
