@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import type { ValidateFunction, Options } from 'ajv';
 import { canon } from './canonical.js';
-import type { ThCriterion } from './th-criterion.js';
+import { describeStatus, judge, type ThCriterion, type ThCurrent, type ThJudgement } from './th-criterion.js';
 
 interface AjvLike {
   compile(schema: object): ValidateFunction;
@@ -140,3 +140,22 @@ export function checkCriterionMutation(criterion: ThCriterion, mutation: unknown
   }
   return { valid: errors.length === 0, errors };
 }
+
+/**
+ * Decide what one recorded run says about a criterion that may rest on a mutation record. Use THIS, not `judge()`, whenever the criterion
+ * names a record or one is supplied: it works out the current hash of the record itself and refuses to read an answer whose criterion
+ * does not belong to the record (a criterion that runs the base model while pinning a record of the mutated one cannot count).
+ * Order: a stale answer is stale (changed record or model); otherwise a criterion and record that do not belong together settle nothing.
+ */
+export function judgeWithMutation(criterion: unknown, answer: unknown, cur: Omit<ThCurrent, 'mutationListHash'>, mutation: unknown | null, models: Required<MutationContext>): ThJudgement {
+  const listHash = mutation === null || mutation === undefined ? null : currentMutationHash(mutation, models);
+  const j = judge(criterion, answer, { ...cur, mutationListHash: listHash });
+  if (j.status === 'stale' || j.reasons.includes('criterion-invalid')) return j;
+  const c = criterion as ThCriterion;
+  const hasRecord = mutation !== null && mutation !== undefined;
+  // with no record supplied, a criterion that pins one is already stale above, so what is left here is a criterion that pins none
+  if (!hasRecord || checkCriterionMutation(c, mutation).valid) return j;
+  const reasons = [...(j.status === 'not-determined' ? j.reasons : []), 'mutation-link-invalid' as const];
+  return { status: 'not-determined', reasons, text: describeStatus('not-determined') };
+}
+
