@@ -146,3 +146,31 @@ export const test = base.extend<{ app: App }, { srv: { server: RunningServer; di
   baseURL: async ({ srv }, use) => use(srv.server.url),
   app: async ({ page }, use) => use(new App(page)),
 });
+
+export const SHARED_MODEL = (sProbability: number): string =>
+  JSON.stringify(
+    {
+      schema: { id: 'sneed.fault-tree', version: 1 },
+      model: { id: 'shared', name: 'Shared support', created: '2026-10-06T00:00:00Z', updated: '2026-10-06T00:00:00Z' },
+      assumptions: { probability_model: 'constant', independence: 'declared-independent', coherence: 'coherent', time: 'none' },
+      top: 'TOP',
+      events: [
+        { id: 'S', name: 'Shared support', probability: sProbability },
+        { id: 'a', probability: 0.2 },
+        { id: 'b', probability: 0.3 },
+      ],
+      gates: [
+        { id: 'X', name: 'Injection fails', type: 'or', inputs: ['S', 'a'] },
+        { id: 'Y', name: 'Cooling fails', type: 'or', inputs: ['S', 'b'] },
+        { id: 'TOP', type: 'and', inputs: ['X', 'Y'] },
+      ],
+    },
+    null,
+    2,
+  ) + '\n';
+
+/** Saves the plan 13 shared-event fault tree under the name `shared`. */
+export async function saveSharedModel(page: Page, text: string): Promise<void> {
+  const res = await page.request.put('/api/models/shared', { headers: { 'x-sneed-request': '1' }, data: { text } });
+  expect(res.ok()).toBe(true);
+}

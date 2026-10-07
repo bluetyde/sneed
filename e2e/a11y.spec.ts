@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.js';
+import { expect, test, SHARED_MODEL, saveSharedModel } from './fixtures.js';
 
 // Automated accessibility audit with axe-core (WCAG 2.0 / 2.1 A and AA plus best practices) over every distinct state of the editor.
 // Automated checks find some problems, not all: keyboard operation is tested separately and a screen-reader pass is still a human task.
@@ -212,5 +212,31 @@ test.describe('accessibility', () => {
     await audit(page, 'importance table');
     await page.getByText('What these measures mean').click();
     await audit(page, 'importance definitions open');
+  });
+
+  test('the event-tree view has no axe violations: empty, with problems, with a result and the approximation', async ({ app, page }) => {
+    await app.open();
+    await saveSharedModel(page, SHARED_MODEL(0.1));
+    await page.locator('[data-mode="event-tree"]').click();
+    await page.locator('[data-action="et-new"]').click();
+    await page.locator('[data-field="et-model"]').selectOption('shared');
+    await expect(page.locator('[data-field="et-h-event-H1"] option[value="X"]')).toHaveCount(1);
+    await expect(page.getByTestId('et-problems')).toContainText('E_NO_END_STATE');
+    await audit(page, 'event tree: a new tree with problems');
+    await page.locator('[data-field="et-h-event-H1"]').selectOption('X');
+    await page.locator('[data-action="et-add-heading"]').click();
+    await page.locator('[data-field="et-h-event-H2"]').selectOption('Y');
+    await page.locator('[data-field="et-h-ask-H2"]').selectOption('H1|works');
+    await page.locator('[data-field="et-set-all"]').selectOption('ES1');
+    await expect(page.getByTestId('et-no-problems')).toBeVisible();
+    await audit(page, 'event tree: valid, with a bypass');
+    await page.locator('#et-approx').check();
+    await page.locator('[data-action="et-run"]').click();
+    await expect(page.getByTestId('et-approximation')).toBeVisible();
+    await audit(page, 'event tree: result with the approximation');
+    await page.locator('[data-field="et-ie-freq"]').fill('0.7');
+    await page.locator('[data-field="et-ie-freq"]').press('Enter');
+    await expect(page.getByTestId('et-stale')).toBeVisible();
+    await audit(page, 'event tree: out-of-date result');
   });
 });

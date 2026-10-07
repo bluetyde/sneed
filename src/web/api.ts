@@ -1,6 +1,8 @@
 // The browser's side of the local API (src/server/app.ts). Types only come from the core; no core code runs in the browser.
 import type { Lesson } from '../core/lesson.js';
 import type { ResultRecord } from '../core/result.js';
+import type { EtIssue } from '../core/event-tree.js';
+import type { EventTreeResult } from '../core/event-tree-result.js';
 
 export interface Issue {
   code: string;
@@ -104,6 +106,32 @@ export interface Api {
   loadRun(id: string): Promise<SavedRun>;
 }
 
+/** Event trees (docs/plans/13-event-trees.md): what the server says about a document, and the answer to a run. */
+export interface EtValidateResponse {
+  valid: boolean;
+  errors: EtIssue[];
+  warnings: EtIssue[];
+  modelChecked: boolean;
+  tree_hash: string | null;
+  document_hash: string;
+}
+export type EtRunResponse = { kind: 'ran'; run_id: string; record: EventTreeResult } | { kind: 'refused'; errors: EtIssue[]; warnings: EtIssue[] } | { kind: 'dequeued' };
+
+/** The event-tree part of the API, apart from `Api` so the fault-tree editor and its tests are unchanged. */
+export interface EtApi {
+  validateEventTree(text: string): Promise<EtValidateResponse>;
+  runEventTree(text: string, approximation: boolean, requestId?: string): Promise<EtRunResponse>;
+  cancel(requestId?: string): Promise<{ cancelled: boolean }>;
+  runStatus(): Promise<RunStatus>;
+  listEventTrees(): Promise<ModelInfo[]>;
+  loadEventTree(name: string): Promise<string>;
+  saveEventTree(name: string, text: string): Promise<ModelInfo>;
+  /** The saved fault-tree models the headings can refer to. */
+  listModels(): Promise<ModelInfo[]>;
+  loadModel(name: string): Promise<string>;
+  validate(text: string): Promise<ValidateResponse>;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -114,7 +142,7 @@ export class ApiError extends Error {
   }
 }
 
-export function httpApi(base = ''): Api {
+export function httpApi(base = ''): Api & EtApi {
   const call = async <T>(method: string, url: string, body?: unknown): Promise<T> => {
     const init: RequestInit = { method, headers: { 'x-sneed-request': '1', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) } };
     if (body !== undefined) init.body = JSON.stringify(body);
@@ -138,5 +166,10 @@ export function httpApi(base = ''): Api {
     importModel: (text, name) => call('POST', '/api/import', { text, name }),
     lessons: async () => (await call<{ lessons: Lesson[] }>('GET', '/api/lessons')).lessons,
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
+    validateEventTree: (text) => call('POST', '/api/event-tree/validate', { text }),
+    runEventTree: (text, approximation, requestId) => call('POST', '/api/event-tree/run', { text, approximation, ...(requestId ? { request_id: requestId } : {}) }),
+    listEventTrees: async () => (await call<{ trees: ModelInfo[] }>('GET', '/api/event-trees')).trees,
+    loadEventTree: async (name) => (await call<{ text: string }>('GET', `/api/event-trees/${encodeURIComponent(name)}`)).text,
+    saveEventTree: (name, text) => call('PUT', `/api/event-trees/${encodeURIComponent(name)}`, { text }),
   };
 }
