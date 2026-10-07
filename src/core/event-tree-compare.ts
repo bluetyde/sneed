@@ -26,6 +26,8 @@ export interface EtResultDiff {
   runs: { a: { status: string | null; completeness: string | null }; b: { status: string | null; completeness: string | null } };
   /** Both analyses are complete, so their numbers were compared. */
   numbersCompared: boolean;
+  /** A record that says it is complete but whose rows or total are damaged: its numbers are not trusted, so not compared. */
+  malformed: { a: boolean; b: boolean };
   initiating: { name: Change<string> | null; frequency: Moved | null };
   headings: { added: string[]; removed: string[]; changed: { id: string; name: Change<string> | null; event: Change<string> | null }[] };
   sequences: { added: EtSequenceLine[]; removed: EtSequenceLine[]; changed: { key: string; words: string; frequency: Moved | null; end_state: Change<string> | null }[]; unchanged: number };
@@ -33,6 +35,8 @@ export interface EtResultDiff {
   total: Moved | null;
   assumptions: { key: string; from: string | null; to: string | null }[];
   engine: Change<string> | null;
+  /** Both records state the engine's name, version AND full build hash. Without that, "same engine" is not a claim anyone can make. */
+  engineKnown: boolean;
   sameTree: boolean;
   sameModel: boolean;
   /** Same tree meaning, same fault-tree model and same engine build, each stated in both records: any difference in the numbers is then unexpected. */
@@ -58,6 +62,8 @@ interface ReadRecord {
   endStates: Map<string, { id: string; name: string; frequency: number }>;
   total: number | null;
   assumptions: Map<string, string>;
+  /** Some row or the total was not readable although the record claims to be complete. */
+  malformed: boolean;
 }
 
 /** Reads an event-tree result record without trusting its shape. Null when it is not a recognisable one. */
@@ -65,16 +71,27 @@ export function readEventTreeRecord(raw: unknown): ReadRecord | null {
   if (!isObj(raw) || !isObj(raw.schema) || raw.schema.id !== 'sneed.event-tree-result') return null;
   const headings = new Map<string, { id: string; name: string; event: string }>();
   if (Array.isArray(raw.headings)) for (const h of raw.headings) if (isObj(h) && str(h.id)) headings.set(h.id, { id: h.id, name: str(h.name) ? h.name : h.id, event: str(h.event) ? h.event : '' });
+  let damaged = false;
   const sequences = new Map<string, { key: string; path: { heading: string; branch: string }[]; end_state: string; frequency: number }>();
+  if (!Array.isArray(raw.sequences)) damaged = true;
   if (Array.isArray(raw.sequences)) {
     for (const s of raw.sequences) {
-      if (!isObj(s) || !str(s.key) || !num(s.frequency)) continue;
+      if (!isObj(s) || !str(s.key) || !num(s.frequency)) {
+        damaged = true;
+        continue;
+      }
       const path = Array.isArray(s.path) ? s.path.filter(isObj).map((p) => ({ heading: str(p.heading) ? p.heading : '?', branch: str(p.branch) ? p.branch : '?' })) : [];
       sequences.set(s.key, { key: s.key, path, end_state: str(s.end_state) ? s.end_state : '', frequency: s.frequency });
     }
   }
   const endStates = new Map<string, { id: string; name: string; frequency: number }>();
-  if (Array.isArray(raw.end_states)) for (const e of raw.end_states) if (isObj(e) && str(e.id) && num(e.frequency)) endStates.set(e.id, { id: e.id, name: str(e.name) ? e.name : e.id, frequency: e.frequency });
+  if (!Array.isArray(raw.end_states)) damaged = true;
+  if (Array.isArray(raw.end_states)) {
+    for (const e of raw.end_states) {
+      if (isObj(e) && str(e.id) && num(e.frequency)) endStates.set(e.id, { id: e.id, name: str(e.name) ? e.name : e.id, frequency: e.frequency });
+      else damaged = true;
+    }
+  }
   const assumptions = new Map<string, string>();
   if (isObj(raw.assumptions)) for (const [k, v] of Object.entries(raw.assumptions)) assumptions.set(k, typeof v === 'string' ? v : JSON.stringify(v) ?? 'undefined');
   const hashes = isObj(raw.input_hashes) ? raw.input_hashes : {};
@@ -98,6 +115,8 @@ export function readEventTreeRecord(raw: unknown): ReadRecord | null {
     endStates,
     total: num(total.frequency) ? total.frequency : null,
     assumptions,
+    // a complete record has a total and rows that can all be read; the check applies only to a record that claims to be complete
+    malformed: status === 'completed' && completeness === 'complete' && (damaged || !num(total.frequency)),
   };
 }
 
@@ -113,7 +132,7 @@ export function diffEventTreeResults(rawA: unknown, rawB: unknown): EtResultDiff
   const a = readEventTreeRecord(rawA);
   const b = readEventTreeRecord(rawB);
   if (!a || !b) return null;
-  const numbers = a.complete && b.complete;
+  const numbers = a.complete && b.complete && !a.malformed && !b.malformed;
 
   const hAdded = [...b.headings.keys()].filter((k) => !a.headings.has(k));
   const hRemoved = [...a.headings.keys()].filter((k) => !b.headings.has(k));
@@ -155,22 +174,29 @@ export function diffEventTreeResults(rawA: unknown, rawB: unknown): EtResultDiff
 
   const keys = [...new Set([...a.assumptions.keys(), ...b.assumptions.keys()])].sort();
   const assumptions = keys.map((key) => ({ key, from: a.assumptions.get(key) ?? null, to: b.assumptions.get(key) ?? null })).filter((x) => x.from !== x.to);
-  const engineA = a.engine === null ? null : `${a.engine}${a.engineSha ? ` build ${a.engineSha.slice(0, 12)}` : ''}`;
-  const engineB = b.engine === null ? null : `${b.engine}${b.engineSha ? ` build ${b.engineSha.slice(0, 12)}` : ''}`;
+  // the identity compared is the full build hash; only the label shows 12 characters of it
+  const identity = (r: ReadRecord): string | null => (r.engine === null || r.engineSha === null || r.engineSha === '' ? null : `${r.engine} build ${r.engineSha}`);
+  const label = (r: ReadRecord): string | null => (r.engine === null ? null : `${r.engine}${r.engineSha ? ` build ${r.engineSha.slice(0, 12)}` : ''}`);
+  const idA = identity(a);
+  const idB = identity(b);
+  const engineA = label(a);
+  const engineB = label(b);
   const sameTree = a.treeHash !== null && a.treeHash === b.treeHash;
   const sameModel = a.modelHash !== null && a.modelHash === b.modelHash;
   return {
     runs: { a: { status: a.status, completeness: a.completeness }, b: { status: b.status, completeness: b.completeness } },
     numbersCompared: numbers,
+    malformed: { a: a.malformed, b: b.malformed },
     initiating: { name: a.ieName !== null && b.ieName !== null && a.ieName !== b.ieName ? { from: a.ieName, to: b.ieName } : null, frequency: a.ieFrequency !== null && b.ieFrequency !== null ? moved(a.ieFrequency, b.ieFrequency) : null },
     headings: { added: hAdded, removed: hRemoved, changed: hChanged },
     sequences: seqs,
     endStates: ends,
     total: numbers && a.total !== null && b.total !== null ? moved(a.total, b.total) : null,
     assumptions,
-    engine: engineA !== null && engineB !== null && engineA !== engineB ? { from: engineA, to: engineB } : null,
+    engine: engineA !== null && engineB !== null && (idA !== idB || engineA !== engineB) ? { from: engineA, to: engineB } : null,
+    engineKnown: idA !== null && idB !== null,
     sameTree,
     sameModel,
-    sameInputs: sameTree && sameModel && engineA !== null && engineA === engineB,
+    sameInputs: sameTree && sameModel && idA !== null && idA === idB,
   };
 }

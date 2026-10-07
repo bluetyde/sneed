@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer, type RunningServer } from '../../src/server/app.js';
-import { listEventTreeRuns, listRuns, readEventTreeRun, RunsError } from '../../src/server/runs.js';
+import { listEventTreeRuns, listRuns, MAX_INSPECTED_EVENT_TREE_RUNS, readEventTreeRun, RunsError } from '../../src/server/runs.js';
 
 let tmp: string;
 let runs: string;
@@ -137,5 +137,33 @@ describe('saved event-tree analyses (plan 13, stage S4)', () => {
     }
     utimesSync(path.join(runs, '2026-10-06T11-00-00-et-bbbbbbbb-222222'), new Date(), new Date());
     expect(listEventTreeRuns(runs).some((r) => r.id === '2026-10-06T11-00-00-et-bbbbbbbb-222222')).toBe(true);
+  });
+
+  it('a listing opens a bounded number of files, whatever they hold, and cuts long strings short', () => {
+    const dir = path.join(tmp, 'many');
+    mkdirSync(dir);
+    const total = MAX_INSPECTED_EVENT_TREE_RUNS + 50;
+    for (let i = 0; i < total; i++) {
+      const id = `junk-${String(i).padStart(5, '0')}`;
+      mkdirSync(path.join(dir, id));
+      writeFileSync(path.join(dir, id, 'event-tree-results.json'), JSON.stringify({ schema: { id: 'other', version: 1 } }));
+    }
+    // the newest names come first: a valid run named to sort last is beyond the budget and is not reached, which is the point of the bound
+    const real = 'a-real-run-1';
+    mkdirSync(path.join(dir, real));
+    writeFileSync(path.join(dir, real, 'event-tree-results.json'), JSON.stringify(record()));
+    expect(listEventTreeRuns(dir)).toEqual([]);
+    // the same folder with fewer junk folders is listed
+    const small = path.join(tmp, 'few');
+    mkdirSync(small);
+    mkdirSync(path.join(small, real));
+    writeFileSync(path.join(small, real, 'event-tree-results.json'), JSON.stringify(record({ status: 'x'.repeat(100000), engine: { name: 'n'.repeat(500), version: 'v'.repeat(500) }, input_hashes: { tree_hash: 'h'.repeat(5000), model_hash: 'm'.repeat(5000) }, initiating_event: { name: 'i'.repeat(5000), frequency: 1 } })));
+    const one = listEventTreeRuns(small)[0]!;
+    expect(one.status!.length).toBe(32);
+    expect(one.engine_name!.length).toBe(64);
+    expect(one.engine_version!.length).toBe(64);
+    expect(one.tree_hash!.length).toBe(128);
+    expect(one.model_hash!.length).toBe(128);
+    expect(one.initiating_event!.length).toBe(200);
   });
 });

@@ -26,6 +26,8 @@ export interface EtFigureOptions {
   result?: EtFigureResult | null;
   generated?: string;
   appName?: string;
+  /** What is in the frequency field while it is not a number: the figure then does not show the last good value as if it were the input. */
+  frequencyDraft?: string | null;
 }
 
 const fmt = (p: number): string => (p === 0 ? '0' : p >= 1e-3 && p < 1e6 ? String(Number(p.toPrecision(6))) : p.toExponential(3));
@@ -95,7 +97,8 @@ export function eventTreeSvg(doc: EtDoc, opts: EtFigureOptions = {}): string {
     return e ? endStateLabel(short(e.name, 30), e.synthetic) : id === '' ? '(no end state)' : id;
   };
 
-  const head = [short(doc.tree.name || 'Untitled event tree', 80), `Initiating event: ${short(doc.initiating_event.name, 60)} · ${doc.initiating_event.frequency} per year · model ${short(doc.fault_tree_model.name, 40)} · ${doc.headings.length} heading${doc.headings.length === 1 ? '' : 's'} · ${doc.sequences.length} sequence${doc.sequences.length === 1 ? '' : 's'}`];
+  const freqText = opts.frequencyDraft != null ? 'FREQUENCY NOT SET (the entry is not a number)' : `${doc.initiating_event.frequency} per year`;
+  const head = [short(doc.tree.name || 'Untitled event tree', 80), `Initiating event: ${short(doc.initiating_event.name, 60)} · ${freqText} · model ${short(doc.fault_tree_model.name, 40)} · ${doc.headings.length} heading${doc.headings.length === 1 ? '' : 's'} · ${doc.sequences.length} sequence${doc.sequences.length === 1 ? '' : 's'}`];
   const headingLines = doc.headings.map((h, i) => {
     const c = h.asked_only_if;
     const when = c ? `; asked only if ${doc.headings.find((x) => x.id === c.heading)?.name ?? c.heading} ${c.branch}` : '';
@@ -123,7 +126,7 @@ export function eventTreeSvg(doc: EtDoc, opts: EtFigureOptions = {}): string {
     const rx = root.kind === 'node' ? colX(root.col) : leafX;
     g.push(`<rect x="0" y="${num(root.y - 24)}" width="${IE_W - 20}" height="48" rx="6" fill="#fff" stroke="#000" stroke-width="2"/>`);
     g.push(`<text x="${(IE_W - 20) / 2}" y="${num(root.y - 4)}" text-anchor="middle" font-size="11" font-weight="bold">${esc(short(doc.initiating_event.name, 20))}</text>`);
-    g.push(`<text x="${(IE_W - 20) / 2}" y="${num(root.y + 12)}" text-anchor="middle" font-size="10">${esc(`${short(String(doc.initiating_event.frequency), 12)} per year`)}</text>`);
+    g.push(`<text x="${(IE_W - 20) / 2}" y="${num(root.y + 12)}" text-anchor="middle" font-size="10">${esc(opts.frequencyDraft != null ? 'not set' : `${short(String(doc.initiating_event.frequency), 12)} per year`)}</text>`);
     g.push(`<line x1="${IE_W - 20}" y1="${num(root.y)}" x2="${num(rx)}" y2="${num(root.y)}" stroke="#000" stroke-width="1.5"/>`);
     const draw = (it: Item): void => {
       if (it.kind === 'leaf') {

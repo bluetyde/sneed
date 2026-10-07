@@ -193,4 +193,15 @@ describe('the figure of an event tree', () => {
     const svg = eventTreeSvg(d, { result: { record: record(d, { caveats: ['A distinct caveat for this run.'] }), stale: false } });
     expect(svg).toContain('A distinct caveat for this run.');
   });
+
+  it('does not draw the last good frequency as the input while the entry is not a number', () => {
+    const d = twoHeadings();
+    const ok = eventTreeSvg(d);
+    expect(ok).toContain('0.5 per year');
+    const draft = eventTreeSvg(d, { frequencyDraft: 'lots' });
+    expect(draft).toContain('FREQUENCY NOT SET');
+    expect(draft).not.toContain('· 0.5 per year');
+    expect(draft).toContain('>not set<');
+    expect(eventTreeSvg(d, { frequencyDraft: null })).toContain('0.5 per year');
+  });
 });

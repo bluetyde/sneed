@@ -135,7 +135,7 @@ export class EventTreeEditor {
   }
   /** The figure of the tree on screen, with the result only while it is current: a drawing never pairs old numbers with a new tree. */
   figureSvg(): string {
-    return eventTreeSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.stale } : null });
+    return eventTreeSvg(this.doc, { result: this.result?.kind === 'ran' ? { record: this.result.record, stale: this.stale } : null, frequencyDraft: this.frequencyDraft });
   }
 
   // ---- validation
