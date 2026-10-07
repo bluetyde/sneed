@@ -151,6 +151,7 @@ describe('a student who follows the steps', () => {
     const extraHeading = E.setUnsetEnds(E.addHeading(d, 'INJ', NOW), 'ES1', NOW); // INJ, COOL, INJ: the events asked for plus one more
     expect(runEtCheck({ kind: 'heading-events', events: ['INJ', 'COOL'] }, extraHeading)).toBe(false);
     expect(runEtCheck({ kind: 'heading-events', events: ['INJ', 'COOL'] }, d)).toBe(true);
+    expect(runEtCheck({ kind: 'heading-events', events: ['INJ', 'COOL'] }, start(l1))).toBe(false); // one heading of the two asked for
     const twoEnds = E.removeEndState(d, 'ES3', NOW);
     expect(runEtCheck({ kind: 'end-states-min', count: 3 }, d)).toBe(true);
     expect(runEtCheck({ kind: 'end-states-min', count: 3 }, twoEnds)).toBe(false);
