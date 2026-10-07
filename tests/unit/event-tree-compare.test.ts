@@ -109,6 +109,7 @@ describe('comparing two saved event-tree analyses', () => {
     expect(diffEventTreeResults(rec(), rec([0.252, 0.108, 0.063, 0.077], { input_hashes: { tree_hash: 't1', model_hash: 'other', document_hash: 'd' } }))!.sameInputs).toBe(false);
     const noHash = rec([0.252, 0.108, 0.063, 0.077], { input_hashes: {} });
     expect(diffEventTreeResults(noHash, noHash)!.sameTree).toBe(false);
+    expect(diffEventTreeResults(noHash, noHash)!.sameModel).toBe(false);
   });
 
   it('numbers are compared only when both analyses are complete; a failed one says so and removes nothing', () => {
@@ -123,7 +124,9 @@ describe('comparing two saved event-tree analyses', () => {
     const d = diffEventTreeResults(rec(), failed)!;
     expect(d.runs.b).toEqual({ status: 'failed', completeness: 'unknown' });
     const partial = rec(undefined, { completeness: 'unknown' });
-    expect(diffEventTreeResults(rec(), partial)!.numbersCompared).toBe(false);
+    const dp = diffEventTreeResults(rec(), partial)!;
+    expect(dp.numbersCompared).toBe(false);
+    expect(dp.total).toBeNull();
   });
 
   it('a heading unknown to the later analysis is named from the earlier one, else by its id', () => {

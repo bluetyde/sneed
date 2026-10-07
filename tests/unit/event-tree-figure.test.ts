@@ -152,4 +152,39 @@ describe('the figure of an event tree', () => {
     expect(eventTreeFileStem(E.setTreeName(d, '///', NOW), null)).toBe('event-tree');
     expect(eventTreeFileStem(d, '../../etc/passwd')).toBe('etc-passwd');
   });
+
+  it('puts each frequency beside its own sequence, in the order of the table', () => {
+    const d = twoHeadings();
+    const svg = eventTreeSvg(d, { result: { record: record(d), stale: false } });
+    const order = [...svg.matchAll(/>(\d)\. End state[^<]*<\/text><text[^>]*>([\d.]+) per year</g)].map((m) => [m[1], m[2]]);
+    expect(order).toEqual([['1', '0.252'], ['2', '0.108'], ['3', '0.063'], ['4', '0.077']]);
+  });
+
+  it('a result that says completed but not complete is diagnostic only, never drawn as numbers', () => {
+    const d = twoHeadings();
+    const r = { record: record(d, { completeness: 'unknown' }), stale: false };
+    expect(eventTreeResultLines(r)[0]).toMatch(/^DIAGNOSTIC ONLY/);
+    expect(eventTreeSvg(d, { result: r })).not.toContain('0.252');
+    const r2 = { record: record(d, { status: 'cancelled' }), stale: false };
+    expect(eventTreeResultLines(r2)[0]).toMatch(/^DIAGNOSTIC ONLY/);
+  });
+
+  it('says an example end state is an example even when its name does not, and shows a missing one as missing', () => {
+    let d = twoHeadings();
+    d = E.patchEndState(d, 'ES1', { name: 'Safe', synthetic: true }, NOW);
+    expect(eventTreeSvg(d)).toContain('1. Safe (example)');
+    d = E.patchEndState(d, 'ES1', { synthetic: false }, NOW);
+    expect(eventTreeSvg(d)).toContain('1. Safe<');
+    d = E.setSequenceEnd(d, 'H1:fails,H2:fails', '', NOW);
+    expect(eventTreeSvg(d)).toContain('4. (no end state)');
+  });
+
+  it('shows the check and the warnings of a current result', () => {
+    const d = twoHeadings();
+    const lines = eventTreeResultLines({ record: record(d, { total: { frequency: 0.5, probability_sum: 0.9999999999, partition_error: 1e-10 }, warnings: ['a zero frequency'] }), stale: false }).join(String.fromCharCode(10));
+    expect(lines).toContain('add up to 1 (they must');
+    expect(lines).toContain('difference 1.0e-10');
+    expect(lines).toContain('Warning: a zero frequency');
+    expect(lines).toContain('hash tttttttttttt');
+  });
 });
