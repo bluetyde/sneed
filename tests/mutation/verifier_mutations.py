@@ -957,7 +957,7 @@ MUTATIONS += [
 ]
 
 # Undo and redo in the event-tree view, and the event-tree verbs of the headless runner. The shortcuts and the buttons (src/web/ui/event-tree.ts,
-# shell.ts) are covered by the end-to-end tests, not by mutants here. Duplicated blocks of the event-tree run (the same text as the fault-tree run
+# shell.ts) are covered by the end-to-end tests, not by mutants here. Removed as equivalent in a test: the regular-file check of an input (a folder fails to open or to read, so it is refused as unreadable either way; the check exists for devices and pipes that would block, which a test cannot make). Duplicated blocks of the event-tree run (the same text as the fault-tree run
 # in the same file) cannot be mutated one by one: the tests exercise both.
 UEED = ROOT / "src/web/model/event-tree-editor.ts"
 HL = ROOT / "src/cli/headless.ts"
@@ -1013,7 +1013,6 @@ MUTATIONS += [
     hv("the engine build is not named", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null },\n        limits:", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null },\n        limits:"),
     um("a value written again is an edit", "E.serialize({ ...next, tree: { ...next.tree, updated: this.doc.tree.updated } }) === this.text) return;", "E.serialize(next) === this.text) return;"),
     um("an undone choice of model keeps the other model", "    if (this.model && this.model.name !== doc.fault_tree_model.name) this.model = null;\n", ""),
-    hv("a folder is read as a file", "        if (!st.isFile()) throw new Error('not a plain file');\n", ""),
     hv("a file exactly at the limit is refused", "if (st.size > MAX_INPUT_BYTES) tooBig = true;", "if (st.size >= MAX_INPUT_BYTES) tooBig = true;"),
     ("event tree headless: a gate with many inputs is re-filtered for each of them", ROOT / "src/core/validate.ts", "        childCache.set(top.id, children);\n", "", ("tests/unit/validate.test.ts", 150)),
 ]
