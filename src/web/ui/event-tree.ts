@@ -1,12 +1,13 @@
 // The event-tree view (docs/plans/13-event-trees.md, stage S3). Table first: every part of the tree is a labelled table or form that the
 // keyboard and a screen reader can walk, and the numbers come back as tables too. The branching drawing is a later stage (S4).
 import type { EventTreeEditor } from '../model/event-tree-editor.js';
-import { eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
+import { EVENT_TREE_ASSUMPTIONS_TEXT, endStateLabel, eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
 import type { EtIssue } from '../../core/event-tree.js';
 import { MAX_HEADINGS, pathKey } from '../../core/event-tree-paths.js';
 import { h, rerender, type Child } from './dom.js';
 import { fmt } from './results.js';
 import { confirmDiscard, openEventTreeDialog, saveAsEventTreeDialog } from './dialogs.js';
+import { exportEventTreePng, exportEventTreeSvg } from './event-tree-export.js';
 
 const ASSUMPTION_TEXT: Record<string, string> = {
   frequency_unit: 'frequency unit',
@@ -16,9 +17,6 @@ const ASSUMPTION_TEXT: Record<string, string> = {
   success_branches: 'success branches',
 };
 
-/** The words for what the headings and sequences mean; the numbers say nothing without them. */
-const PLAIN_ASSUMPTIONS =
-  'Static, coherent fault trees with independent basic events of constant probability per demand; one initiating event with a constant frequency that does not depend on any basic event; each heading either works or fails, and "works" is exactly "its event does not occur"; sequence frequencies are exact joint probabilities (events shared by headings count once); no recovery and no change with time. A frequency here is a model result under these assumptions, not a plant figure.';
 
 export class EventTreeView {
   readonly el = h('main', { class: 'et', 'aria-label': 'Event tree editor', 'data-testid': 'et', hidden: true });
@@ -39,7 +37,7 @@ export class EventTreeView {
       this.sig.bar = barSig;
       rerender(this.bar, () => this.toolbar());
     }
-    const editSig = JSON.stringify([e.doc, e.model, e.models, e.frequencyDraft, e.modelChanged]);
+    const editSig = JSON.stringify([e.doc, e.model, e.models, e.frequencyDraft, e.modelChanged, e.figureSvg()]);
     if (editSig !== this.sig.edit) {
       this.sig.edit = editSig;
       rerender(this.edit, () => this.editor());
@@ -62,6 +60,10 @@ export class EventTreeView {
       b('open', 'Open', 'Open a saved event tree', () => void this.open()),
       b('save', 'Save', 'Save the event tree (Ctrl+S)', () => void this.save()),
       b('saveas', 'Save as', 'Save under a new name', () => void this.saveAs()),
+      h('span', { class: 'sep', 'aria-hidden': 'true' }),
+      b('svg', 'SVG', 'Save the drawing and its result as an SVG file', () => exportEventTreeSvg(e)),
+      b('png', 'PNG', 'Save the drawing and its result as a PNG image', () => void exportEventTreePng(e)),
+      b('print', 'Print', 'Print the drawing, its result and the tables', () => window.print()),
       h('span', { class: 'sep', 'aria-hidden': 'true' }),
       e.running ? b('cancel', 'Cancel', 'Stop the analysis', () => void e.cancel()) : b('run', 'Analyse', 'Compute the sequence and end-state frequencies', () => void e.run(), { primary: true, disabled: !e.canRun }),
       h('label', { class: 'check', for: 'et-approx' }, h('input', { type: 'checkbox', id: 'et-approx', 'data-field': 'et-approx', checked: e.approximation, disabled: e.running, onchange: (ev) => e.setApproximation((ev.target as HTMLInputElement).checked) }), ' Also show the "success branches ignored" approximation'),
@@ -199,6 +201,15 @@ export class EventTreeView {
             h('option', { value: '', selected: s.end_state === '' }, 'choose…'), ...d.end_states.map((x) => h('option', { value: x.id, selected: x.id === s.end_state }, x.name)))));
       }))));
     void endName;
+
+    // drawing: a picture of the tables above, not a second source of numbers
+    out.push(h('h2', {}, 'Drawing'));
+    out.push(h('p', { class: 'hint' }, 'The same tree as a picture. The tables above hold exactly the same information, in an order a keyboard and a screen reader can follow.'));
+    const doc = new DOMParser().parseFromString(e.figureSvg(), 'image/svg+xml').documentElement;
+    const svg = document.importNode(doc, true) as unknown as SVGSVGElement;
+    svg.removeAttribute('height');
+    svg.setAttribute('class', 'et-figure');
+    out.push(h('div', { class: 'et-drawing', 'data-testid': 'et-drawing' }, svg));
     return out;
   }
 
@@ -273,7 +284,7 @@ export class EventTreeView {
     out.push(h('table', { class: 'cutsets et-result-ends', 'aria-label': 'End-state frequencies', 'data-testid': 'et-result-ends' },
       h('thead', {}, h('tr', {}, ...['End state', 'Frequency per year', 'Share of the total', 'Sequences'].map((c) => h('th', { scope: 'col' }, c)))),
       h('tbody', {}, ...rec.end_states.map((x) => h('tr', { 'data-end': x.id },
-        h('th', { scope: 'row' }, x.name, synthetic.get(x.id) ? h('span', { class: 'hint' }, ' (example)') : null),
+        h('th', { scope: 'row' }, endStateLabel(x.name, synthetic.get(x.id) === true)),
         h('td', { class: 'num', 'data-value': String(x.frequency) }, fmt(x.frequency)),
         h('td', { class: 'num' }, fmt(x.probability)),
         h('td', { class: 'num' }, String(x.sequences.length)))))));
@@ -290,7 +301,7 @@ export class EventTreeView {
 
     out.push(h('h3', {}, 'Assumptions'));
     out.push(h('dl', { class: 'kv', 'data-testid': 'et-assumptions' }, ...Object.entries(rec.assumptions).flatMap(([k, v]) => [h('dt', {}, ASSUMPTION_TEXT[k] ?? k), h('dd', {}, String(v))])));
-    out.push(h('p', { class: 'hint' }, PLAIN_ASSUMPTIONS));
+    out.push(h('p', { class: 'hint' }, EVENT_TREE_ASSUMPTIONS_TEXT));
     out.push(h('h3', {}, 'How this was produced'));
     out.push(h('dl', { class: 'kv' },
       h('dt', {}, 'Engine'), h('dd', {}, `${rec.engine.name} ${rec.engine.version}`),

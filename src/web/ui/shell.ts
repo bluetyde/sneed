@@ -7,7 +7,8 @@ import type { EventTreeEditor } from '../model/event-tree-editor.js';
 import { EventTreeView } from './event-tree.js';
 import { Canvas } from './canvas.js';
 import { confirmDiscard, importDialog, openDialog, saveAsDialog } from './dialogs.js';
-import { exportPng, exportSvg, installPrint } from './exporter.js';
+import { buildPrintSheet, exportPng, exportSvg, installPrint } from './exporter.js';
+import { buildEventTreePrintSheet } from './event-tree-export.js';
 import { h } from './dom.js';
 import { METHOD_TEXT } from './hints.js';
 import { icon } from './icons.js';
@@ -104,7 +105,7 @@ export function mountShell(root: HTMLElement, editor: Editor, eventTree?: EventT
     group('Add', btn.event, btn.and, btn.or, btn.vote),
     group('View', btn.fit, btn.zin, btn.zout, btn.reset),
     group('Export', btn.svg, btn.png, btn.print));
-  installPrint(editor);
+  installPrint(() => (mode === 'event-tree' && eventTree ? buildEventTreePrintSheet(eventTree) : buildPrintSheet(editor)));
 
   // ---- title bar ----
   const docName = h('div', { class: 'doc-name', 'data-testid': 'doc-name' });

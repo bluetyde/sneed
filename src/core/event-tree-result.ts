@@ -54,6 +54,13 @@ export interface EventTreeResult {
   caveats: string[];
 }
 
+/** The assumptions in words: printed with every result, in the editor and on every figure, because the numbers say nothing without them. */
+export const EVENT_TREE_ASSUMPTIONS_TEXT =
+  'Static, coherent fault trees with independent basic events of constant probability per demand; one initiating event with a constant frequency that does not depend on any basic event; each heading either works or fails, and "works" is exactly "its event does not occur"; sequence frequencies are exact joint probabilities (events shared by headings count once); no recovery and no change with time. A frequency here is a model result under these assumptions, not a plant figure.';
+
+/** An end state's name with "(example)" after it when it is marked as an example, unless the name already says so. */
+export const endStateLabel = (name: string, synthetic: boolean): string => (synthetic && !/\(example\)\s*$/i.test(name) ? `${name} (example)` : name);
+
 /** Why a failure happened, in words (the codes are the solver's, plus this stage's two). */
 export function eventTreeFailureText(code: string): string {
   switch (code) {
