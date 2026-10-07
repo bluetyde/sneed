@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneed.invalid/schema/th-mutation-1.json",
+  "title": "SNEED plant-model mutation record, schema version 1",
+  "description": "Structural rules only (docs/plans/14-th-link.md, stage T1). A reviewed statement that a second plant model is the first one with the listed edits, pinned by hash. SNEED applies and runs nothing, and the record carries no probability. Unknown fields are allowed and preserved.",
+  "type": "object",
+  "required": ["schema", "mutation", "base_model", "mutated_model", "edits", "applies"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": { "id": { "const": "sneed.th-mutation" }, "version": { "const": 1 } }
+    },
+    "mutation": {
+      "type": "object",
+      "required": ["id", "name", "description", "synthetic", "created", "updated"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "synthetic": { "type": "boolean" },
+        "created": { "type": "string", "minLength": 1 },
+        "updated": { "type": "string", "minLength": 1 }
+      }
+    },
+    "base_model": {
+      "type": "object",
+      "required": ["name", "hash"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    },
+    "mutated_model": {
+      "type": "object",
+      "required": ["name", "hash"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    },
+    "edits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["component", "field", "from", "to"],
+        "properties": {
+          "component": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "field": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "from": { "anyOf": [{ "type": "number" }, { "type": "string", "maxLength": 200 }, { "type": "boolean" }] },
+          "to": { "anyOf": [{ "type": "number" }, { "type": "string", "maxLength": 200 }, { "type": "boolean" }] }
+        }
+      }
+    },
+    "applies": { "const": "from-start" }
+  }
+}

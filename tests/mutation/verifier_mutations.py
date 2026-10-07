@@ -1094,6 +1094,56 @@ MUTATIONS += [
 ]
 
 
+THM = ROOT / "src/core/th-mutation.ts"
+THMS = ROOT / "schema/th-mutation.schema.json"
+T1_SUITE = ("tests/unit/th-mutation.test.ts", 60)
+
+
+def tx(name: str, old: str, new: str, f: pathlib.Path = THM) -> tuple:
+    return (f"th mutation: {name}", f, old, new, T1_SUITE)
+
+
+MUTATIONS += [
+    tx("a record whose models are identical is valid", "if (d.base_model.hash === d.mutated_model.hash) errors.push(", "if (false as boolean) errors.push("),
+    tx("a record whose models share a name is valid", "if (d.base_model.name === d.mutated_model.name) errors.push(", "if (false as boolean) errors.push("),
+    tx("an edit that changes nothing is valid", "if (e.from === e.to) errors.push(", "if (false as boolean) errors.push("),
+    tx("a value is compared loosely", "if (e.from === e.to) errors.push(", "if (e.from == e.to) errors.push("),
+    tx("a field edited twice is valid", "    if (seen.has(key)) errors.push(", "    if (false as boolean) errors.push("),
+    tx("the duplicate key joins the names", "const key = canon([e.component, e.field]);", "const key = e.component + '.' + e.field;"),
+    tx("the duplicate key ignores the component", "const key = canon([e.component, e.field]);", "const key = canon([e.field]);"),
+    tx("the duplicate key ignores the field", "const key = canon([e.component, e.field]);", "const key = canon([e.component]);"),
+    tx("a missing base model is not noticed", "if (!base) errors.push(", "if (false as boolean) errors.push("),
+    tx("a changed base model is not noticed", "else if (base.hash !== d.base_model.hash) errors.push(", "else if (false as boolean) errors.push("),
+    tx("a missing mutated model is not noticed", "if (!mut) errors.push(", "if (false as boolean) errors.push("),
+    tx("a changed mutated model is not noticed", "else if (mut.hash !== d.mutated_model.hash) errors.push(", "else if (false as boolean) errors.push("),
+    tx("the base model is looked up under the mutated name", "const base = ctx.resolveModel(d.base_model.name);", "const base = ctx.resolveModel(d.mutated_model.name);"),
+    tx("the mutated model is looked up under the base name", "const mut = ctx.resolveModel(d.mutated_model.name);", "const mut = ctx.resolveModel(d.base_model.name);"),
+    tx("the hash ignores the base model name", "base_model: { name: d.base_model.name, hash: d.base_model.hash },", "base_model: { hash: d.base_model.hash },"),
+    tx("the hash ignores the base model hash", "base_model: { name: d.base_model.name, hash: d.base_model.hash },", "base_model: { name: d.base_model.name },"),
+    tx("the hash ignores the mutated model name", "mutated_model: { name: d.mutated_model.name, hash: d.mutated_model.hash },", "mutated_model: { hash: d.mutated_model.hash },"),
+    tx("the hash ignores the mutated model hash", "mutated_model: { name: d.mutated_model.name, hash: d.mutated_model.hash },", "mutated_model: { name: d.mutated_model.name },"),
+    tx("the hash ignores the edits", "    edits,\n    applies: d.applies,", "    applies: d.applies,"),
+    tx("the hash ignores when the edits apply", "    edits,\n    applies: d.applies,", "    edits,"),
+    tx("the hash ignores the old value", ".map((e) => ({ component: e.component, field: e.field, from: e.from, to: e.to }))", ".map((e) => ({ component: e.component, field: e.field, to: e.to }))"),
+    tx("the hash ignores the new value", ".map((e) => ({ component: e.component, field: e.field, from: e.from, to: e.to }))", ".map((e) => ({ component: e.component, field: e.field, from: e.from }))"),
+    tx("the hash ignores the component", ".map((e) => ({ component: e.component, field: e.field, from: e.from, to: e.to }))", ".map((e) => ({ field: e.field, from: e.from, to: e.to }))"),
+    tx("the hash follows the order of the edits", "    .sort((a, b) => (a.component < b.component ? -1 : a.component > b.component ? 1 : a.field < b.field ? -1 : a.field > b.field ? 1 : 0));", "    ;"),
+    tx("the hash orders edits by component only", "a.component > b.component ? 1 : a.field < b.field ? -1 : a.field > b.field ? 1 : 0)", "a.component > b.component ? 1 : 0)"),
+    tx("an invalid record is current", "  if (!validateMutation(mutation, ctx).valid) return MUTATION_NOT_CURRENT;\n", ""),
+    tx("the current record is checked against no models", "if (!validateMutation(mutation, ctx).valid) return", "if (!validateMutation(mutation).valid) return"),
+    tx("an invalid record can be linked", "  if (!v.valid) return { valid: false, errors: [err('E_LINK_INVALID'", "  if (false as boolean) return { valid: false, errors: [err('E_LINK_INVALID'"),
+    tx("a criterion that pins another record is linked", "if (criterion.plant.mutation_list_hash !== mutationHash(m)) errors.push(", "if (false as boolean) errors.push("),
+    tx("a criterion that runs another model name is linked", "if (criterion.plant.model_name !== m.mutated_model.name || criterion.plant.model_hash !== m.mutated_model.hash) {", "if (criterion.plant.model_hash !== m.mutated_model.hash) {"),
+    tx("a criterion that runs another model hash is linked", "if (criterion.plant.model_name !== m.mutated_model.name || criterion.plant.model_hash !== m.mutated_model.hash) {", "if (criterion.plant.model_name !== m.mutated_model.name) {"),
+    tx("a record may have no edits", '"minItems": 1,', '"minItems": 0,', THMS),
+    tx("a record may have any number of edits", '"maxItems": 50,', '"maxItems": 5000,', THMS),
+    tx("a record may apply at any time", '"applies": { "const": "from-start" }', '"applies": { "type": "string" }', THMS),
+    tx("an edit value may be anything", '"to": { "anyOf": [{ "type": "number" }, { "type": "string", "maxLength": 200 }, { "type": "boolean" }] }', '"to": {}', THMS),
+    tx("an edit text may be any length", '"to": { "anyOf": [{ "type": "number" }, { "type": "string", "maxLength": 200 }, { "type": "boolean" }] }', '"to": { "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] }', THMS),
+    tx("a record may lack its models", '"required": ["schema", "mutation", "base_model", "mutated_model", "edits", "applies"],', '"required": ["schema", "mutation", "edits", "applies"],', THMS),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1184,6 +1234,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith(("event tree undo:", "event tree headless:"))]
     if only == "thlink":  # just the thermal-hydraulic criterion (plan 14, stage T0) mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("th criterion:")]
+    if only == "thmutation":  # just the plant-model mutation record (plan 14, stage T1) mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("th mutation:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
