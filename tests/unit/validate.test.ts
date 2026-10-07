@@ -120,3 +120,33 @@ describe('behaviour beyond the fixtures', () => {
     }
   });
 });
+
+describe('a gate with very many inputs (Codex review)', () => {
+  it('is validated in linear time: 30,000 references to one gate are not re-filtered for each of them', () => {
+    const doc = {
+      schema: { id: 'sneed.fault-tree', version: 1 },
+      model: { id: 'm', name: 'Many', created: '2026-10-07T00:00:00Z', updated: '2026-10-07T00:00:00Z' },
+      assumptions: { probability_model: 'constant', independence: 'declared-independent', coherence: 'coherent', time: 'none' },
+      top: 'TOP',
+      events: [{ id: 'A', probability: 0.1 }],
+      gates: [{ id: 'TOP', type: 'or', inputs: Array.from({ length: 30000 }, () => 'G') }, { id: 'G', type: 'and', inputs: ['A', 'A'] }],
+    };
+    const t0 = performance.now();
+    const v = validateModel(doc);
+    expect(performance.now() - t0).toBeLessThan(3000); // it took about 17 seconds before
+    expect(v.errors.map((e) => e.code)).not.toContain('E_CYCLE');
+  });
+
+  it('still finds a cycle through a gate that has many inputs, once', () => {
+    const inputs = [...Array.from({ length: 2000 }, () => 'B'), 'B'];
+    const doc = {
+      schema: { id: 'sneed.fault-tree', version: 1 },
+      model: { id: 'm', name: 'Cycle', created: '2026-10-07T00:00:00Z', updated: '2026-10-07T00:00:00Z' },
+      assumptions: { probability_model: 'constant', independence: 'declared-independent', coherence: 'coherent', time: 'none' },
+      top: 'A',
+      events: [{ id: 'E', probability: 0.1 }],
+      gates: [{ id: 'A', type: 'or', inputs: [...inputs, 'E'] }, { id: 'B', type: 'or', inputs: ['A', 'E'] }],
+    };
+    expect(validateModel(doc).errors.filter((e) => e.code === 'E_CYCLE')).toHaveLength(1);
+  });
+});

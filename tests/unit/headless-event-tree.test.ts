@@ -417,4 +417,25 @@ describe('run-event-tree', () => {
     expect(await main(['launch-missiles'], c.d)).toBe(2);
     expect(reply(c.calls).errors[0].message).toBe('verbs: describe, validate, run, cancel, describe-event-trees, validate-event-tree, run-event-tree');
   });
+
+  it('an input is read at most up to the limit: exactly 4 MiB is read (and is not JSON), one byte more is refused; a folder or a missing file is not read at all', async () => {
+    const limit = 4 * 1024 * 1024;
+    const atLimit = path.join(tmp, 'at.json');
+    writeFileSync(atLimit, ' '.repeat(limit));
+    const c1 = deps();
+    expect(await main(['validate-event-tree', atLimit, '--model', modelFile], c1.d)).toBe(2);
+    expect(reply(c1.calls).errors[0].code).toBe('E_SCHEMA_INVALID'); // read in full, and not a tree
+    const over = path.join(tmp, 'over.json');
+    writeFileSync(over, ' '.repeat(limit + 1));
+    const c2 = deps();
+    expect(await main(['validate-event-tree', over, '--model', modelFile], c2.d)).toBe(2);
+    expect(reply(c2.calls).errors[0].code).toBe('E_BOUNDS_EXCEEDED');
+    const c3 = deps();
+    expect(await main(['validate-event-tree', tmp, '--model', modelFile], c3.d)).toBe(2); // a folder is not a file
+    expect(reply(c3.calls).errors[0].code).toBe('E_NOT_FOUND');
+    // the model file is held to the same limit
+    const c4 = deps();
+    expect(await main(['validate-event-tree', treeFile, '--model', over], c4.d)).toBe(2);
+    expect(reply(c4.calls).errors[0].code).toBe('E_BOUNDS_EXCEEDED');
+  });
 });

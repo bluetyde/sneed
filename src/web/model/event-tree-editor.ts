@@ -414,7 +414,8 @@ export class EventTreeEditor {
 
   // ---- editing
   private commit(next: E.EtDoc, label: string): void {
-    if (E.serialize(next) === this.text) return;
+    // only a change of meaning or content is an edit: a value written again (0.1 as 0.10) differs only by the time stamp, which is not
+    if (E.serialize({ ...next, tree: { ...next.tree, updated: this.doc.tree.updated } }) === this.text) return;
     this.undoStack.push({ doc: this.doc, label });
     if (this.undoStack.length > EventTreeEditor.HISTORY) this.undoStack.shift();
     this.redoStack = [];
@@ -463,6 +464,8 @@ export class EventTreeEditor {
   }
   private restore(doc: E.EtDoc, message: string): void {
     const modelBefore = this.doc.fault_tree_model.name;
+    // what is known of the model belongs to the document that was on screen: for another model it is dropped at once (not kept until the new one is read), so nothing acts on the wrong model meanwhile
+    if (this.model && this.model.name !== doc.fault_tree_model.name) this.model = null;
     this.doc = doc;
     this.revision++;
     this.frequencyDraft = null;

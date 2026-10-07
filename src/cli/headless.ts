@@ -23,7 +23,7 @@
 // assumptions: not a frequency and not a plant risk figure.
 
 import { createHash } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { modelHash } from '../core/canonical.js';
@@ -219,13 +219,35 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
   /** A file argument of the event-tree verbs: refused (exit 2) when missing, unreadable or larger than the limit. */
   const readInput = (file: string | undefined, what: string): { text: string; bytes: Buffer } => {
     if (!file) return fail('E_SCHEMA_INVALID', `give the ${what} path`, '', 2);
+    // opened once: it must be a plain file within the limit, and no more than the limit (plus one byte, to see that there is more) is ever read,
+    // whatever the file is or becomes while it is read
     let bytes: Buffer;
+    let tooBig = false;
     try {
-      bytes = readFileSync(file);
+      const fd = openSync(file, 'r');
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile()) throw new Error('not a plain file');
+        if (st.size > MAX_INPUT_BYTES) tooBig = true;
+        const buf = Buffer.alloc(Math.min(st.size, MAX_INPUT_BYTES) + 1);
+        let n = 0;
+        for (;;) {
+          const got = readSync(fd, buf, n, buf.length - n, null);
+          if (got === 0) break;
+          n += got;
+          if (n >= buf.length) {
+            tooBig = true; // the file grew while it was read, or is larger than it said
+            break;
+          }
+        }
+        bytes = buf.subarray(0, Math.min(n, MAX_INPUT_BYTES));
+      } finally {
+        closeSync(fd);
+      }
     } catch {
       return fail('E_NOT_FOUND', `the ${what} cannot be read`, '', 2);
     }
-    if (bytes.length > MAX_INPUT_BYTES) return fail('E_BOUNDS_EXCEEDED', `the ${what} is larger than ${MAX_INPUT_BYTES} bytes`, '', 2);
+    if (tooBig) return fail('E_BOUNDS_EXCEEDED', `the ${what} is larger than ${MAX_INPUT_BYTES} bytes`, '', 2);
     return { text: bytes.toString('utf8'), bytes };
   };
 

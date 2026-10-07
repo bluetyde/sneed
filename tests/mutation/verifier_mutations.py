@@ -977,7 +977,7 @@ MUTATIONS += [
     um("the history has no end", "    if (this.undoStack.length > EventTreeEditor.HISTORY) this.undoStack.shift();\n", ""),
     um("the history is one step short", "static readonly HISTORY = 200;", "static readonly HISTORY = 199;"),
     um("a new edit keeps what could be redone", "    this.redoStack = [];\n    this.doc = next;", "    this.doc = next;"),
-    um("an edit that changes nothing is a step", "    if (E.serialize(next) === this.text) return;\n    this.undoStack.push", "    this.undoStack.push"),
+    um("an edit that changes nothing is a step", "this.text) return;\n    this.undoStack.push", "this.text) void 0;\n    this.undoStack.push"),
     um("undo cannot be redone", "    this.redoStack.push({ doc: this.doc, label: step.label });\n", ""),
     um("redo cannot be undone", "    this.undoStack.push({ doc: this.doc, label: step.label });\n    this.restore(step.doc, `Redid:", "    this.restore(step.doc, `Redid:"),
     um("a frequency that is not a number is not undone first", "    if (this.frequencyDraft !== null) {\n      this.frequencyDraft = null;\n      this.revision++;", "    if (false as boolean) {\n      this.frequencyDraft = null;\n      this.revision++;"),
@@ -993,7 +993,7 @@ MUTATIONS += [
     um("an undo is not announced", "    this.restore(step.doc, `Undid: ${step.label}.`);", "    this.restore(step.doc, '');"),
     um("a heading removal is not named", "'removing a heading');", "'x');"),
     um("the choice of a model is not named", "'choosing the fault-tree model');", "'x');"),
-    hv("a file over the limit is read", "    if (bytes.length > MAX_INPUT_BYTES) return fail(", "    if (false as boolean) return fail("),
+    hv("a file over the limit is read", "    if (tooBig) return fail(", "    if (false as boolean) return fail("),
     hv("an invalid model is not refused", "    if (!mv.valid) return reply({ ok: false, errors: mv.errors.map(", "    if (false as boolean) return reply({ ok: false, errors: mv.errors.map("),
     hv("the fields of a model problem are not named under model", "typed({ ...e, path: `model${e.path === '/' ? '' : e.path}` })", "typed(e)"),
     hv("a tree is checked against no model", "resolveModel: (n) => (n === named ? ref : null) });\n    if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed)", "resolveModel: () => null });\n    if (!v.valid) return reply({ ok: false, errors: v.errors.map(typed)"),
@@ -1011,6 +1011,11 @@ MUTATIONS += [
     hv("describe-event-trees is missing", "    else if (verb === 'describe-event-trees') describeEventTrees();\n", ""),
     hv("validate-event-tree is missing", "    else if (verb === 'validate-event-tree') validateEventTreeVerb(args);\n", ""),
     hv("the engine build is not named", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null },\n        limits:", "engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: null, runtime: null },\n        limits:"),
+    um("a value written again is an edit", "E.serialize({ ...next, tree: { ...next.tree, updated: this.doc.tree.updated } }) === this.text) return;", "E.serialize(next) === this.text) return;"),
+    um("an undone choice of model keeps the other model", "    if (this.model && this.model.name !== doc.fault_tree_model.name) this.model = null;\n", ""),
+    hv("a folder is read as a file", "        if (!st.isFile()) throw new Error('not a plain file');\n", ""),
+    hv("a file exactly at the limit is refused", "if (st.size > MAX_INPUT_BYTES) tooBig = true;", "if (st.size >= MAX_INPUT_BYTES) tooBig = true;"),
+    ("event tree headless: a gate with many inputs is re-filtered for each of them", ROOT / "src/core/validate.ts", "        childCache.set(top.id, children);\n", "", ("tests/unit/validate.test.ts", 150)),
 ]
 
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
