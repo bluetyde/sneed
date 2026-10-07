@@ -131,3 +131,12 @@ The NODAL session reported (2026-10-07, `messages/pipe-studio.md`) that on its c
 
 Not built: folder, routes and screen for criteria, answers and mutation records; how an answer sets a branch; the check that the edits really produce the second model (needs a reader of NODAL models).
 
+## Folder and routes for criteria as built (2026-10-07; the owner: "build the folder and routes for criteria")
+
+Criteria only: `th-criteria/` beside the models and event trees, with list, read, save and validate routes ([docs/SCHEMA.md](../SCHEMA.md)). Answers and mutation records have no folder or route yet, and nothing judges over the API.
+
+Decisions taken while building, for the owner to overrule:
+1. **A criterion is checked against the saved event tree by the tree's own structure, not its fault-tree model.** A tree that is not structurally valid is "no such tree". The tree pins its model's hash, so a model change reaches the criterion once the tree is updated.
+2. **Same storage rules as models and event trees** (names, 2 MiB, text saved as written, work in progress allowed). No delete route, as for event trees.
+3. **A known weakness, shared with models and event trees and not fixed here:** the storage layer checks file names but not symbolic links or junctions (Codex review, security-boundary). It needs a planted link in the project folder, so it is a local-hardening item for all three folders together.
+
