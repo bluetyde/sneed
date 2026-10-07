@@ -6,3 +6,4 @@ dist/
 *.log
 .backup/
 /test-results/
+.cli-build-*/
