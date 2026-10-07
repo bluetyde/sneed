@@ -233,7 +233,7 @@ MUTATIONS = [
     ("editor: lesson merges two nodes with the same name", WE, "if (name && counts.get(name) === 1) label.set(n.id, name);", "if (name) label.set(n.id, name);"),
     ("editor: hand calculation shown before a run", WE, "if (this.lesson && this.hasTried) {", "if (this.lesson) {"),
     ("server lessons: an invalid lesson is skipped", SL, "      throw new LessonsUnavailable(`lesson file ${f} is refused (${why})`);", "      continue;"),
-    ("server: lessons served without configuration", SA, "if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');", ""),
+    ("server: lessons served without configuration", SA, "if (!opts.lessonsDir || !opts.oraclesFile) throw new HttpError(503, 'E_LESSONS_UNAVAILABLE', 'lessons are not configured');\n      return send(res, 200, { lessons: loadLessons(", "return send(res, 200, { lessons: loadLessons("),
     ("ui lesson: hand calculation button always enabled", WL, "disabled: !ed.hasTried,", "disabled: false as boolean,", E2E),
     ("ui lesson: completion shown when only the steps are done", WL, "if (p.complete) {", "if (allSteps) {", E2E),
     # compare runs (plan 03): the pure diff, the read-only run store, the editor and the panel
@@ -885,6 +885,66 @@ MUTATIONS += [
     sf("the number of files opened is not bounded in total", "    inspected++;\n", "", ERUNS),
 ]
 
+# Event-tree lessons (plan 13, stage S5): the checker, the loader that refuses an unchecked lesson, the route that withholds the instructor's
+# answers, and the editor's lesson state. The lesson panel itself (src/web/ui/event-tree-lesson.ts) is covered by the end-to-end tests and the axe audit.
+ELC = ROOT / "src/core/event-tree-lesson.ts"
+ELS = ROOT / "src/server/event-tree-lessons.ts"
+ELA = ROOT / "src/server/app.ts"
+ELE = ROOT / "src/web/model/event-tree-editor.ts"
+S5_SUITE = ("tests/unit/event-tree-lesson.test.ts tests/unit/web-event-tree.test.ts tests/unit/event-tree-oracles.test.ts", 150)
+
+
+def lm(name: str, old: str, new: str, f: pathlib.Path = ELC) -> tuple:
+    return (f"event tree lesson: {name}", f, old, new, S5_SUITE)
+
+
+MUTATIONS += [
+    lm("any frequency is the lesson's frequency", "return p.frequency !== null && Math.abs(p.frequency - c.value) <= 1e-12;", "return p.frequency !== null;"),
+    lm("more headings than asked for are accepted", "return p.heads.length === c.events.length && p.heads.every((h, i) => h.event === c.events[i]);", "return p.heads.every((h, i) => h.event === c.events[i]);"),
+    lm("more sequences than asked for are accepted", "return p.seqEnds.length === c.count;", "return p.seqEnds.length >= c.count;"),
+    lm("one end state too few is enough", "return p.endIds.size >= c.count;", "return p.endIds.size >= c.count - 1;"),
+    lm("an end state that does not exist counts as assigned", "p.seqEnds.every((e) => e !== '' && p.endIds.has(e))", "p.seqEnds.every((e) => e !== '')"),
+    lm("the bypass check ignores the branch", "on.event === c.only_if_event && h.ask!.branch === c.branch;", "on.event === c.only_if_event;"),
+    lm("a prediction is always there", "      return ctx.prediction !== null;", "      return true;"),
+    lm("two headings on one event are not noticed", "return new Set(p.heads.map((h) => h.event)).size < p.heads.length;", "return new Set(p.heads.map((h) => h.event)).size < p.heads.length - 1;"),
+    lm("the top event as a heading is not noticed", "return p.heads.some((h) => h.event === d.event);", "return false;"),
+    lm("a zero frequency is not noticed", "return p.frequency === 0;", "return p.frequency === 1;"),
+    lm("the other branch of a bypass is not noticed", "on.event === d.only_if_event && h.ask!.branch !== d.expected;", "on.event === d.only_if_event && h.ask!.branch === d.expected;"),
+    lm("the tolerance of an outcome is ignored", "Math.abs(g - f.frequency) <= o.tolerance.absolute;", "Math.abs(g - f.frequency) <= 1;"),
+    lm("an analysis with extra sequences matches", "lesson.outcomes.find((o) => o.frequencies.length === got.size && o.frequencies.every(", "lesson.outcomes.find((o) => o.frequencies.every("),
+    lm("two headings on one event give a key anyway", "  if (new Set(eventOf.values()).size !== eventOf.size) return null;\n", ""),
+    lm("a lesson is complete without a matching analysis", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null };", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 };"),
+    lm("a lesson is complete with a mistake showing", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null };", "complete: !malformed && steps.every((s) => s.done) && matched !== null };"),
+    lm("a lesson is complete with a step undone", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null };", "complete: !malformed && mistakes.length === 0 && matched !== null };"),
+    lm("a heading that is not asked on a path still gets a prediction", "      if (!step) return null; // not asked on this path\n", ""),
+    lm("the product is not scaled by the frequency", "const product = probs.reduce((a, b) => a * b, 1) * frequency;", "const product = probs.reduce((a, b) => a * b, 1);"),
+    lm("the shortfall of the product is measured against the product", "productBelow: (asked.frequency - product) / asked.frequency,", "productBelow: (asked.frequency - product) / product,"),
+    lm("an outcome with a sequence too few equals the oracle", "  if (want.size !== o.frequencies.length) return false;\n", ""),
+    lm("a model that is not the oracle's is accepted", "if (doc.top !== ref.model.top || !sameEvents || !sameGates)", "if (false as boolean)"),
+    lm("a step may ask for another frequency than the oracle's", "if (c.kind === 'frequency' && Math.abs(c.value - ref.initiating_frequency) > 1e-12)", "if (false as boolean)"),
+    lm("a step may ask for other headings than the oracle's", "if (c.kind === 'heading-events' && c.events.join() !== ref.headings.map((h) => h.event).join())", "if (false as boolean)"),
+    lm("a step may ask for another number of sequences", "if (c.kind === 'sequence-count' && c.count !== ref.sequences.length)", "if (false as boolean)"),
+    lm("a step may ask for a bypass the oracle does not have", "if (c.kind === 'bypass' && !ref.headings.some(", "if (false as boolean && !ref.headings.some("),
+    lm("a prediction may name a sequence the oracle does not have", "if (lesson.prediction && !ref.sequences.some(", "if (false as boolean && !ref.sequences.some("),
+    lm("a loose tolerance is accepted in a lesson file", "o.tolerance.absolute > MAX_ET_TOLERANCE", "o.tolerance.absolute > 1"),
+    lm("a lesson without instructor questions is accepted", "if (!Array.isArray(l.discussion) || !l.discussion.every(", "if (false as boolean || !l.discussion.every("),
+    lm("a lesson with a model name that is not a model name is served", "if (!isValidModelName(lesson.model.name))", "if (false as boolean)", ELS),
+    lm("a lesson with an invalid model is served", "      if (!v.valid) throw new EtLessonError('L_BAD_MODEL'", "      if (false as boolean) throw new EtLessonError('L_BAD_MODEL'", ELS),
+    lm("a lesson that disagrees with its oracle is served", "      if (why) throw new EtLessonError(why.code, why.message);", "      void why;", ELS),
+    lm("two lessons with one id are served", "if (new Set(ids).size !== ids.length)", "if (false as boolean)", ELS),
+    lm("two lessons may save different models under one name", "byName.get(l.model.name) !== doc)", "false)", ELS),
+    lm("the instructor's answers are sent to the browser", ".map(({ discussion: _instructorOnly, ...student }) => student) });", ".map((l) => l) });", ELA),
+    lm("the prediction used is the one typed after the result", "    this.predictionAtRun = this.prediction;\n", "", ELE),
+    lm("a negative prediction is a prediction", "return t === '' || !Number.isFinite(n) || n < 0 ? null : n;", "return t === '' || !Number.isFinite(n) ? null : n;", ELE),
+    lm("a lesson starts with the frequency of the answer", "      doc = E.setInitiating(doc, { frequency: 1 }, this.now());\n", "", ELE),
+    lm("a lesson starts with the top event as the first heading", ".events?.[0]?.id ?? 'none';", ".events?.[0]?.id ? (lesson.model.document as { top: string }).top : 'none';", ELE),
+    lm("a slow lesson start replaces a later one", "      if (gen !== this.docGen) return false;\n      const first", "      const first", ELE),
+    lm("the hand calculation is available before trying", "  get hasTried(): boolean {\n    return this.result?.kind === 'ran';", "  get hasTried(): boolean {\n    return true;", ELE),
+    lm("a reveal is shown for a guess typed after the result", "if (!this.lesson?.prediction || !rec || this.predictionAtRun === null) return null;", "if (!this.lesson?.prediction || !rec) return null;", ELE),
+    lm("a new tree keeps the lesson", "    this.frequencyDraft = null;\n    this.leaveLesson();\n    this.doc = E.newEventTree(", "    this.frequencyDraft = null;\n    this.doc = E.newEventTree(", ELE),
+    lm("opening a tree keeps the lesson", "      this.frequencyDraft = null;\n      this.leaveLesson();\n      this.doc = doc;", "      this.frequencyDraft = null;\n      this.doc = doc;", ELE),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -969,6 +1029,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree editor:")]
     if only == "ets4":  # just the event tree drawing, saved-analysis and compare mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree s4:")]
+    if only == "etlesson":  # just the event tree lesson mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree lesson:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
