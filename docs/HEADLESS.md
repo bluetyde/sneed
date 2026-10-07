@@ -25,6 +25,24 @@ One JSON object on stdout, nothing else. Exit codes: **0** a reply was produced,
 
 `run` owns its output folder for one run. It writes `<out>/active-run.json` (work id, folder, process id, state `running`) **exclusively and before the engine can start**, so a cancel from another process can always find the run; keep that order if the runner is edited. A second run in the same folder, a result folder, work folder or cancel request that is already there, or any of these being a link, is refused (`E_EXISTS` or `E_PATH_TRAVERSAL`) before anything is written; nothing existing is followed or replaced. The result is built in a staging folder and renamed into place, so a half-written result never appears. When the run ends the record is rewritten with state `ended` and the final status.
 
+## Event-tree verbs (plan 13, added 2026-10-07)
+
+Additive: the four verbs above, their outputs and every field of `describe` are unchanged (a test compares the key set of `describe`). SEED's adapter does not use these verbs unless it is changed to.
+
+```
+node dist/node/cli/headless.js describe-event-trees
+node dist/node/cli/headless.js validate-event-tree <tree.json> --model <model.json>
+node dist/node/cli/headless.js run-event-tree <tree.json> --model <model.json> --out <absDir> [--run-id et] [--approximation] [--timeout-seconds 60]
+```
+
+| Verb | Behaviour |
+|---|---|
+| `describe-event-trees` | The formats (`sneed.event-tree` 1, `sneed.fault-tree` 1, result `sneed.event-tree-result` 1), the engine (`sneed-bdd`, its version and source hash, `runtime: null`), the limits (12 headings, 4096 sequences), the option `--approximation`, the quantities (`sequence_frequency`, `end_state_frequency`, both **per-year**) and the meaning statement (a frequency per year under stated assumptions; not a probability of failure, not a plant risk figure; end states are named by the author). |
+| `validate-event-tree` | Checks the event tree against the fault-tree model file it is given with the validator the editor and the server use. `ok: true` with `treeHash` (the hash of what the tree means) and typed warnings, or exit 2 with typed errors labelled `source: "app-content"`. Fields of a problem in the model file are named under `model`. The model name inside the tree is only a label: the file given and the hash the tree pins decide (`E_STALE_MODEL` when they differ). Files over 4 MiB are refused (`E_BOUNDS_EXCEEDED`). |
+| `run-event-tree` | The same ownership protocol as `run`, because it is the same code (one function, `runOwned`, serves both): the run record is created exclusively before the analysis can start, `cancel` stops it the same way (same flag, same record), nothing existing is reused, followed or replaced, and a result is published atomically and only when complete. A tree that is refused is refused **before** any folder or record exists (exit 2). A completed analysis writes `<out>/<run-id>/{event-tree.json, model.json, event-tree-results.json, manifest.json}`: the tree and the model byte for byte, the result record of kind `sneed.event-tree-result` (**never** a `results.json`), and a manifest (`format: "sneed-headless-event-tree-run"`, engine and build, quantity and unit, whether the approximation was asked for, the tree and model hashes, sha256 of every file). A failed, cancelled or incomplete analysis is exit 0 with that status and a reason and writes **no result**. Only the built-in engine analyses event trees; there is no `--engine`. |
+
+Verification: `tests/unit/headless-event-tree.test.ts` (every verb with the real engine and with stand-ins: refusals, the hand numbers of plan 13 case 6.2, hashes, the record before the analysis, cancel, ownership, links) and `tests/unit/headless-event-tree-built.test.ts` (the BUILT JavaScript as a separate process, so the schema file and the worker thread are the built ones); mutation mode `etundo` (headless part) and `seed` (the shared protocol).
+
 ## Engine choice
 
 **The default is the built-in engine** (changed 2026-10-06 at the user's request; it was SCRAM). It runs the decision-diagram engine inside the process: no runtime, no WSL2, same files, and the manifest names `sneed-bdd` with `runtime: null`. `--engine scram` needs the installed SCRAM runtime and answers `E_SETUP_REQUIRED` without it. An explicit `--engine` always wins. A caller that has not been updated can keep the old default without a code change by setting the environment variable `SNEED_ENGINE=scram`. `describe` lists both engines under `engines` and says which is the default. **A caller must read the engine from the results** (`manifest.json` and `results.json` name it); it must not assume SCRAM. See [ENGINES.md](ENGINES.md).
