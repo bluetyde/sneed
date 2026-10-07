@@ -1,0 +1,74 @@
+{
+  "note": "Hand-worked cases for stage T0 of the thermal-hydraulic link (docs/plans/14-th-link.md). Every expected status and reason was decided by reading the rule, not by running the code. The base criterion: the quantity 'core inlet flow' must be ABOVE 5 kg/s THROUGHOUT 0 to 600 s. Patches are dotted paths set on the base before the case runs. '$CRITERION_HASH' stands for the hash of the case's own criterion and '$BASE_CRITERION_HASH' for the hash of the unpatched base criterion; the test fills both in.",
+  "base": {
+    "criterion": {
+      "schema": { "id": "sneed.th-criterion", "version": 1 },
+      "criterion": { "id": "flow-ok", "name": "Flow is kept (example)", "description": "Example criterion for tests.", "synthetic": true, "created": "2026-10-07T00:00:00Z", "updated": "2026-10-07T00:00:00Z" },
+      "applies_to": { "event_tree": { "name": "tree-a", "tree_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "heading": "H1" },
+      "plant": { "model_name": "loop-a", "model_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutation_list_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "condition": { "quantity": "core inlet flow", "comparison": "above", "limit": 5, "unit": "kg/s", "window": { "from": 0, "to": 600, "unit": "s" }, "holds": "throughout" }
+    },
+    "answer": {
+      "schema": { "id": "sneed.th-answer", "version": 1 },
+      "answer": { "id": "run-1", "entered_by": "hand", "entered": "2026-10-07T00:00:00Z", "note": "" },
+      "criterion_hash": "$CRITERION_HASH",
+      "plant": { "model_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutation_list_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "engine": { "name": "hand", "version": "1" },
+      "run": { "status": "completed" },
+      "observed": { "quantity": "core inlet flow", "unit": "kg/s", "window": { "from": 0, "to": 600, "unit": "s" }, "min": 5.2, "max": 9 }
+    },
+    "current": { "treeHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "plantModelHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutationListHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+  },
+  "cases": [
+    { "name": "held: the lowest flow, 5.2, is above 5", "patch": {}, "expect": { "status": "held", "reasons": [] } },
+    { "name": "did not hold: the lowest flow, 4.8, is not above 5 (the maximum does not rescue it)", "patch": { "answer.observed.min": 4.8, "answer.observed.max": 20 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "boundary: exactly 5 is not ABOVE 5", "patch": { "answer.observed.min": 5 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "boundary: exactly 5 is AT LEAST 5", "patch": { "answer.observed.min": 5, "criterion.condition.comparison": "at-least" }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "boundary: just under 5 is not at least 5", "patch": { "answer.observed.min": 4.999, "criterion.condition.comparison": "at-least" }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "below, throughout: the highest value, 7, decides: 7 is not below 6", "patch": { "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 7 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "below, throughout: highest 5.9 is below 6", "patch": { "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 5.9 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "below, throughout: exactly 6 is not below 6", "patch": { "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 6 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "at most, throughout: exactly 6 is at most 6", "patch": { "criterion.condition.comparison": "at-most", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 6 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "at most, throughout: just over 6 is not at most 6", "patch": { "criterion.condition.comparison": "at-most", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 6.001 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "at some time, above: the highest value, 9, is above 5 although the lowest, 2, is not", "patch": { "criterion.condition.holds": "at-some-time", "answer.observed.min": 2, "answer.observed.max": 9 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "at some time, above: even the highest value, 4, is not above 5", "patch": { "criterion.condition.holds": "at-some-time", "answer.observed.min": 1, "answer.observed.max": 4 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "at some time, below 6: the lowest value, 1, is below 6", "patch": { "criterion.condition.holds": "at-some-time", "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 20 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "at some time, below 6: even the lowest value, 6, is not below 6", "patch": { "criterion.condition.holds": "at-some-time", "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 6, "answer.observed.max": 20 }, "expect": { "status": "did-not-hold", "reasons": [] } },
+    { "name": "a negative limit works the same way", "patch": { "criterion.condition.limit": -3, "answer.observed.min": -2, "answer.observed.max": 4 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "not determined: the run failed", "patch": { "answer.run.status": "failed", "answer.observed": null }, "expect": { "status": "not-determined", "reasons": ["run-failed"] } },
+    { "name": "not determined: the run was truncated, even with numbers that would satisfy the condition", "patch": { "answer.run.status": "truncated" }, "expect": { "status": "not-determined", "reasons": ["run-truncated"] } },
+    { "name": "not determined: a trip ended the run", "patch": { "answer.run.status": "terminated-by-trip" }, "expect": { "status": "not-determined", "reasons": ["run-terminated-by-trip"] } },
+    { "name": "not determined: the quantity observed is another quantity", "patch": { "answer.observed.quantity": "core outlet flow" }, "expect": { "status": "not-determined", "reasons": ["quantity-differs"] } },
+    { "name": "not determined: the unit differs (5.2 lb/s is not 5.2 kg/s)", "patch": { "answer.observed.unit": "lb/s" }, "expect": { "status": "not-determined", "reasons": ["unit-differs"] } },
+    { "name": "not determined: the window observed is shorter", "patch": { "answer.observed.window.to": 300 }, "expect": { "status": "not-determined", "reasons": ["window-differs"] } },
+    { "name": "not determined: the window observed is longer", "patch": { "answer.observed.window.to": 900 }, "expect": { "status": "not-determined", "reasons": ["window-differs"] } },
+    { "name": "not determined: the window observed starts later", "patch": { "answer.observed.window.from": 10 }, "expect": { "status": "not-determined", "reasons": ["window-differs"] } },
+    { "name": "not determined: several reasons are all named", "patch": { "answer.run.status": "truncated", "answer.observed.unit": "lb/s", "answer.observed.window.to": 300 }, "expect": { "status": "not-determined", "reasons": ["run-truncated", "unit-differs", "window-differs"] } },
+    { "name": "stale: the plant model changed since", "patch": { "current.plantModelHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }, "expect": { "status": "stale", "reasons": ["plant-changed"] } },
+    { "name": "stale: the answer was made with another plant model than the criterion names", "patch": { "answer.plant.model_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }, "expect": { "status": "stale", "reasons": ["plant-changed"] } },
+    { "name": "stale: the change list changed since", "patch": { "current.mutationListHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }, "expect": { "status": "stale", "reasons": ["mutations-changed"] } },
+    { "name": "stale: a change list now exists where the criterion names none", "patch": { "criterion.plant.mutation_list_hash": null, "answer.plant.mutation_list_hash": null }, "expect": { "status": "stale", "reasons": ["mutations-changed"] } },
+    { "name": "stale: the answer was made with a change list, the criterion names none", "patch": { "criterion.plant.mutation_list_hash": null, "current.mutationListHash": null }, "expect": { "status": "stale", "reasons": ["mutations-changed"] } },
+    { "name": "held: no change list in the criterion, the answer or the world (the plain case of this stage)", "patch": { "criterion.plant.mutation_list_hash": null, "answer.plant.mutation_list_hash": null, "current.mutationListHash": null }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "stale: the event tree changed since", "patch": { "current.treeHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }, "expect": { "status": "stale", "reasons": ["tree-changed"] } },
+    { "name": "stale: the criterion was edited after the answer (the limit moved from 5 to 4)", "patch": { "criterion.condition.limit": 4, "answer.criterion_hash": "$BASE_CRITERION_HASH" }, "expect": { "status": "stale", "reasons": ["criterion-changed"] } },
+    { "name": "stale outranks not determined: the plant changed and the run also failed", "patch": { "current.plantModelHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "answer.run.status": "failed", "answer.observed": null }, "expect": { "status": "stale", "reasons": ["plant-changed"] } },
+    { "name": "a renamed criterion is not an edit: the answer stays valid", "patch": { "criterion.criterion.name": "A different title", "criterion.criterion.description": "Other words", "criterion.criterion.synthetic": false, "criterion.criterion.updated": "2027-01-01T00:00:00Z", "answer.criterion_hash": "$BASE_CRITERION_HASH" }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "not determined: the answer is not a valid record (the smallest value is larger than the largest)", "patch": { "answer.observed.min": 9, "answer.observed.max": 5.2 }, "expect": { "status": "not-determined", "reasons": ["answer-invalid"] } },
+    { "name": "not determined: a completed run that observed nothing", "patch": { "answer.observed": null }, "expect": { "status": "not-determined", "reasons": ["answer-invalid"] } },
+    { "name": "not determined: the criterion is not valid (its window ends before it starts)", "patch": { "criterion.condition.window.to": -1, "answer.observed.window.to": -1 }, "expect": { "status": "not-determined", "reasons": ["criterion-invalid", "answer-invalid"] } }
+  ],
+  "headings": {
+    "note": "criterionForHeading: which criterion documents of a folder are found for a heading. 'others' are named variants of the base criterion built by the test: second-for-h1 (same tree and heading, another id), for-h2 (same tree, heading H2), broken-for-h1 (same tree and heading, but its limit is text).",
+    "cases": [
+      { "name": "found: exactly one for tree-a H1", "tree": "tree-a", "heading": "H1", "others": [], "expect": "ok" },
+      { "name": "refused: none for tree-a H2", "tree": "tree-a", "heading": "H2", "others": [], "expect": "E_TH_NO_CRITERION" },
+      { "name": "refused: none for H1 of another tree", "tree": "tree-b", "heading": "H1", "others": [], "expect": "E_TH_NO_CRITERION" },
+      { "name": "refused: two for tree-a H1 (not chosen between)", "tree": "tree-a", "heading": "H1", "others": ["second-for-h1"], "expect": "E_TH_AMBIGUOUS" },
+      { "name": "found: a criterion for another heading does not disturb it", "tree": "tree-a", "heading": "H1", "others": ["for-h2"], "expect": "ok" },
+      { "name": "found: the one for H2 is found when asked for H2", "tree": "tree-a", "heading": "H2", "others": ["for-h2"], "dropBase": true, "expect": "ok" },
+      { "name": "refused, and the invalid one is counted: the only criterion for H1 is not valid", "tree": "tree-a", "heading": "H1", "others": ["broken-for-h1"], "dropBase": true, "expect": "E_TH_NO_CRITERION", "messageHas": "1 criterion document was not valid" },
+      { "name": "found: an invalid second one for H1 does not count as a second", "tree": "tree-a", "heading": "H1", "others": ["broken-for-h1"], "expect": "ok" }
+    ]
+  }
+}
