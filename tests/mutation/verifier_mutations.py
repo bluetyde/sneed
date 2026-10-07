@@ -887,6 +887,7 @@ MUTATIONS += [
 
 # Event-tree lessons (plan 13, stage S5): the checker, the loader that refuses an unchecked lesson, the route that withholds the instructor's
 # answers, and the editor's lesson state. The lesson panel itself (src/web/ui/event-tree-lesson.ts) is covered by the end-to-end tests and the axe audit.
+# Removed as equivalent, each with its reason: the length of an outcome's list equal to the number of sequences analysed (the outcome keys are required to be unique, so the size of their set is the same number); the generation check of a lesson start beside the check that the document is still the one the start began with (any start, New or Open that replaces the document also changes it, so the second check alone sees the same cases).
 ELC = ROOT / "src/core/event-tree-lesson.ts"
 ELS = ROOT / "src/server/event-tree-lessons.ts"
 ELA = ROOT / "src/server/app.ts"
@@ -911,7 +912,6 @@ MUTATIONS += [
     lm("a zero frequency is not noticed", "return p.frequency === 0;", "return p.frequency === 1;"),
     lm("the other branch of a bypass is not noticed", "on.event === d.only_if_event && h.ask!.branch !== d.expected;", "on.event === d.only_if_event && h.ask!.branch === d.expected;"),
     lm("the tolerance of an outcome is ignored", "Math.abs(g - f.frequency) <= o.tolerance.absolute;", "Math.abs(g - f.frequency) <= 1;"),
-    lm("an analysis with extra sequences matches", "lesson.outcomes.find((o) => new Set(o.frequencies.map((f) => f.key)).size === got.size && o.frequencies.length === got.size && o.frequencies.every(", "lesson.outcomes.find((o) => new Set(o.frequencies.map((f) => f.key)).size === got.size && o.frequencies.every("),
     lm("two headings on one event give a key anyway", "  if (new Set(eventOf.values()).size !== eventOf.size) return null;\n", ""),
     lm("a lesson is complete without a matching analysis", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null && modelOk && predictionOk,", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && modelOk && predictionOk,"),
     lm("a lesson is complete with a mistake showing", "complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null && modelOk && predictionOk,", "complete: !malformed && steps.every((s) => s.done) && matched !== null && modelOk && predictionOk,"),
@@ -938,7 +938,6 @@ MUTATIONS += [
     lm("a negative prediction is a prediction", "return t === '' || !Number.isFinite(n) || n < 0 ? null : n;", "return t === '' || !Number.isFinite(n) ? null : n;", ELE),
     lm("a lesson starts with the frequency of the answer", "      doc = E.setInitiating(doc, { frequency: 1 }, this.now());\n", "", ELE),
     lm("a lesson starts with the top event as the first heading", ".events?.[0]?.id ?? 'none';", ".events?.[0]?.id ? (lesson.model.document as { top: string }).top : 'none';", ELE),
-    lm("a slow lesson start replaces a later one", "      if (gen !== this.docGen || this.doc !== before) return false;", "      if (this.doc !== before) return false;", ELE),
     lm("the hand calculation is available before trying", "  get hasTried(): boolean {\n    return this.result?.kind === 'ran';", "  get hasTried(): boolean {\n    return true;", ELE),
     lm("a reveal is shown for a guess typed after the result", "if (!this.lesson?.prediction || !rec || guess === null) return null;", "if (!this.lesson?.prediction || !rec) return null;", ELE),
     lm("a new tree keeps the lesson", "    this.frequencyDraft = null;\n    this.leaveLesson();\n    this.doc = E.newEventTree(", "    this.frequencyDraft = null;\n    this.doc = E.newEventTree(", ELE),
