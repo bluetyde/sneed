@@ -1283,4 +1283,44 @@ describe('EventTreeEditor', () => {
     expect(ed.frequencyDraft).toBeNull();
     expect(ed.text).toBe(edited);
   });
+
+  it('a value written again is not an edit even when the clock has moved: no history step, and what could be redone is kept', async () => {
+    let t = 0;
+    const api = fakeApi();
+    const ed = new EventTreeEditor(api, { debounceMs: 0, now: () => new Date(Date.UTC(2026, 9, 7, 0, 0, ++t)).toISOString() });
+    await ed.newTree();
+    await ed.settle();
+    ed.setInitiating({ frequency: 0.7 });
+    ed.undo();
+    expect(ed.canRedo).toBe(true);
+    ed.setInitiating({ frequency: ed.doc.initiating_event.frequency }); // the same value
+    ed.setFrequencyText('0.10'); // the same number written another way
+    ed.patchHeading('H1', { name: ed.doc.headings[0]!.name });
+    expect(ed.canRedo).toBe(true);
+    expect(ed.canUndo).toBe(false);
+    const stamp = ed.doc.tree.updated;
+    ed.setInitiating({ frequency: 0.8 }); // a real edit does stamp the time
+    expect(ed.doc.tree.updated).not.toBe(stamp);
+    expect(ed.canRedo).toBe(false);
+  });
+
+  it('undoing a choice of model drops what was known of the other model at once: nothing acts on the wrong model while the right one is being read', async () => {
+    const { ed, api } = await make();
+    api.models.set('other', modelText(0.3).replace('"top": "TOP"', '"top": "Y"'));
+    await ed.chooseModel('other');
+    await ed.settle();
+    expect(ed.model?.name).toBe('other');
+    const realLoad = api.loadModel;
+    api.loadModel = async (n) => {
+      await new Promise((r) => setTimeout(r, 30));
+      return realLoad(n);
+    };
+    ed.undo();
+    expect(ed.doc.fault_tree_model.name).toBe('shared');
+    expect(ed.model).toBeNull(); // the other model's events and top are not kept for this document
+    ed.addHeading(); // acts without a model: the new heading takes the last heading's event, not the other model's top
+    expect(ed.doc.headings.at(-1)!.event).toBe(ed.doc.headings[0]!.event);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(ed.model?.name).toBe('shared');
+  });
 });

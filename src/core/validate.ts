@@ -186,6 +186,8 @@ function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings:
   // cycles among gates (iterative three-colour DFS; first definition of an id wins)
   const color = new Map<string, 0 | 1 | 2>();
   const seenCycles = new Set<string>();
+  // the gate inputs that are themselves gates, listed once per gate: a gate with thousands of inputs must not be re-filtered for each of them
+  const childCache = new Map<string, string[]>();
   for (const start of gates.keys()) {
     if (color.get(start)) continue;
     const stack: { id: string; next: number }[] = [{ id: start, next: 0 }];
@@ -193,7 +195,11 @@ function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings:
     color.set(start, 1);
     while (stack.length) {
       const top = stack[stack.length - 1]!;
-      const children = (gates.get(top.id)?.inputs ?? []).filter((c) => gates.has(c));
+      let children = childCache.get(top.id);
+      if (!children) {
+        children = (gates.get(top.id)?.inputs ?? []).filter((c) => gates.has(c));
+        childCache.set(top.id, children);
+      }
       if (top.next >= children.length) {
         color.set(top.id, 2);
         stack.pop();
