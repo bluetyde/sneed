@@ -1264,4 +1264,23 @@ describe('EventTreeEditor', () => {
     ed.undo(); // drops the draft
     expect(ed.revision).toBe(r0 + 4);
   });
+
+  it('a redone edit can be undone again, and a redo drops a frequency that is not a number yet', async () => {
+    const { ed } = await make();
+    const start = ed.text;
+    ed.setInitiating({ frequency: 0.7 });
+    const edited = ed.text;
+    ed.undo();
+    ed.redo();
+    expect(ed.text).toBe(edited);
+    expect(ed.canUndo).toBe(true);
+    expect(ed.undo()).toBe('editing the initiating event');
+    expect(ed.text).toBe(start);
+    expect(ed.canRedo).toBe(true);
+    ed.setFrequencyText('lots'); // typed while there is something to redo
+    expect(ed.frequencyDraft).toBe('lots');
+    ed.redo();
+    expect(ed.frequencyDraft).toBeNull();
+    expect(ed.text).toBe(edited);
+  });
 });
