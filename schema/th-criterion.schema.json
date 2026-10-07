@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sneed.invalid/schema/th-criterion-1.json",
   "title": "SNEED thermal-hydraulic success criterion, schema version 1",
-  "description": "Structural rules only (docs/plans/14-th-link.md). The heading and tree references, the window order and the finite-number rules are in src/core/th-criterion.ts. A criterion says what a thermal-hydraulic run must show for one heading of an event tree to count as working. It carries no probability. Unknown fields are allowed and preserved.",
+  "description": "Structural rules only (docs/plans/14-th-link.md). The heading and tree references, the window order and the finite-number rules are in src/core/th-criterion.ts. The window includes both its end points: the value at `to` counts. A criterion says what a thermal-hydraulic run must show for one heading of an event tree to count as working. It carries no probability. Unknown fields are allowed and preserved.",
   "type": "object",
   "required": ["schema", "criterion", "applies_to", "plant", "condition"],
   "properties": {

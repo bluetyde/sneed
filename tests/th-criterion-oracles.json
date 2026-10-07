@@ -13,11 +13,11 @@
       "answer": { "id": "run-1", "entered_by": "hand", "entered": "2026-10-07T00:00:00Z", "note": "" },
       "criterion_hash": "$CRITERION_HASH",
       "plant": { "model_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutation_list_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
-      "engine": { "name": "hand", "version": "1" },
+      "engine": { "name": "hand", "version": "1", "build": "hand-entry-1" },
       "run": { "status": "completed" },
       "observed": { "quantity": "core inlet flow", "unit": "kg/s", "window": { "from": 0, "to": 600, "unit": "s" }, "min": 5.2, "max": 9 }
     },
-    "current": { "treeHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "plantModelHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutationListHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+    "current": { "treeHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "plantModelHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mutationListHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "engine": { "name": "hand", "version": "1", "build": "hand-entry-1" }, "treeHeadings": ["H1", "H2"] }
   },
   "cases": [
     { "name": "held: the lowest flow, 5.2, is above 5", "patch": {}, "expect": { "status": "held", "reasons": [] } },
@@ -35,6 +35,12 @@
     { "name": "at some time, below 6: the lowest value, 1, is below 6", "patch": { "criterion.condition.holds": "at-some-time", "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 1, "answer.observed.max": 20 }, "expect": { "status": "held", "reasons": [] } },
     { "name": "at some time, below 6: even the lowest value, 6, is not below 6", "patch": { "criterion.condition.holds": "at-some-time", "criterion.condition.comparison": "below", "criterion.condition.limit": 6, "answer.observed.min": 6, "answer.observed.max": 20 }, "expect": { "status": "did-not-hold", "reasons": [] } },
     { "name": "a negative limit works the same way", "patch": { "criterion.condition.limit": -3, "answer.observed.min": -2, "answer.observed.max": 4 }, "expect": { "status": "held", "reasons": [] } },
+    { "name": "stale: the engine version changed since (same tree, plant and criterion)", "patch": { "current.engine.version": "2" }, "expect": { "status": "stale", "reasons": ["engine-changed"] } },
+    { "name": "stale: another build of the same engine version", "patch": { "current.engine.build": "hand-entry-2" }, "expect": { "status": "stale", "reasons": ["engine-changed"] } },
+    { "name": "stale: another engine", "patch": { "current.engine.name": "nodal" }, "expect": { "status": "stale", "reasons": ["engine-changed"] } },
+    { "name": "not determined: the criterion names a heading the tree does not have (the tree hash still matches)", "patch": { "current.treeHeadings": ["H2"] }, "expect": { "status": "not-determined", "reasons": ["heading-unknown"] } },
+    { "name": "stale outranks an unknown heading: the tree changed", "patch": { "current.treeHeadings": ["H2"], "current.treeHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }, "expect": { "status": "stale", "reasons": ["tree-changed"] } },
+    { "name": "the end points count: flow above 5 and the only low value, 4, is the one AT 600 s (recorded in the minimum) did not hold", "patch": { "answer.observed.min": 4, "answer.observed.max": 6 }, "expect": { "status": "did-not-hold", "reasons": [] } },
     { "name": "not determined: the run failed", "patch": { "answer.run.status": "failed", "answer.observed": null }, "expect": { "status": "not-determined", "reasons": ["run-failed"] } },
     { "name": "not determined: the run was truncated, even with numbers that would satisfy the condition", "patch": { "answer.run.status": "truncated" }, "expect": { "status": "not-determined", "reasons": ["run-truncated"] } },
     { "name": "not determined: a trip ended the run", "patch": { "answer.run.status": "terminated-by-trip" }, "expect": { "status": "not-determined", "reasons": ["run-terminated-by-trip"] } },
