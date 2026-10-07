@@ -215,9 +215,9 @@ MUTATIONS = [
     ("ui canvas: a finished drag is not recorded", WC, "if (n) this.editor.moveNode(d.key!, n.x, n.y);", "", E2E),
     ("ui canvas: drag-to-connect does nothing", WC, "if (node && target !== d.key) this.editor.connect(d.fromGate!, node.id);", "if (false as boolean) this.editor.connect(d.fromGate!, node.id);", E2E),
     ("ui properties: an out-of-range probability is accepted", WP, "if (v < 0 || v > 1) return this.refuse(", "if (false as boolean) return this.refuse(", E2E),
-    ("ui shell: Ctrl+Enter does not run", WS, "} else if (mod && e.key === 'Enter') {", "} else if (false as boolean) {", E2E),
+    ("ui shell: Ctrl+Enter does not run", WS, "} else if (mod && e.key === 'Enter') {\n      e.preventDefault();\n      if (editor.canRun) run();", "} else if (false as boolean) {\n      e.preventDefault();\n      if (editor.canRun) run();", E2E),
     ("ui shell: Escape does not cancel a run", WS, "if (editor.running) void editor.cancel();", "", E2E),
-    ("ui shell: no guard against leaving with unsaved work", WS, "window.addEventListener('beforeunload', (e) => {\n    if (editor.dirty) {", "window.addEventListener('beforeunload', (e) => {\n    if (false as boolean) {", E2E),
+    ("ui shell: no guard against leaving with unsaved work", WS, "window.addEventListener('beforeunload', (e) => {\n    if (editor.dirty || eventTree?.dirty) {", "window.addEventListener('beforeunload', (e) => {\n    if (false as boolean) {", E2E),
     ("ui results: no stale banner", WR, "if (ed.stale) {", "if (false as boolean) {", E2E),
     ("ui results: a caveat is not shown", WR, "for (const c of rec.caveats)", "for (const c of [] as string[])", E2E),
     # lessons (plan 04): the checker, the loader, the editor's use of results, the server, and the panel
@@ -641,6 +641,7 @@ MUTATIONS += [
 
 # Event tree (plan 13, stage S1) mutations. One mutant was removed as equivalent: with at most 12 headings there are at most 4096 paths, so the cap inside enumeratePaths (a second guard) cannot fire. A second one was removed: the hash only reads known fields, so it cannot throw and the route's catch around it is a guard that cannot fire.
 ET = ROOT / "src/core/event-tree.ts"
+ETP = ROOT / "src/core/event-tree-paths.ts"
 ET_SUITE = ("tests/unit/event-tree.test.ts tests/unit/server.test.ts", 200)
 
 
@@ -649,13 +650,13 @@ def tm(name: str, old: str, new: str, f: pathlib.Path = ET) -> tuple:
 
 
 MUTATIONS += [
-    tm("a heading with a condition is always asked", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = true;"),
-    tm("a condition on a heading that was not asked is satisfied", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier === undefined || earlier.branch === h.asked_only_if.branch;"),
-    tm("a condition ignores the branch taken", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier !== undefined;"),
-    tm("only the works branch is walked", "    walk(i + 1, [...path, { heading: h.id, branch: 'fails' }]);\n", ""),
-    tm("too many headings are enumerated", "  if (headings.length > MAX_HEADINGS) return out;\n", ""),
-    tm("the heading limit is off by one", "export const MAX_HEADINGS = 12;", "export const MAX_HEADINGS = 13;"),
-    tm("the sequence limit is off by one", "export const MAX_SEQUENCES = 4096;", "export const MAX_SEQUENCES = 4097;"),
+    tm("a heading with a condition is always asked", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = true;", ETP),
+    tm("a condition on a heading that was not asked is satisfied", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier === undefined || earlier.branch === h.asked_only_if.branch;", ETP),
+    tm("a condition ignores the branch taken", "asked = earlier !== undefined && earlier.branch === h.asked_only_if.branch;", "asked = earlier !== undefined;", ETP),
+    tm("only the works branch is walked", "    walk(i + 1, [...path, { heading: h.id, branch: 'fails' }]);\n", "", ETP),
+    tm("too many headings are enumerated", "  if (headings.length > MAX_HEADINGS) return out;\n", "", ETP),
+    tm("the heading limit is off by one", "export const MAX_HEADINGS = 12;", "export const MAX_HEADINGS = 13;", ETP),
+    tm("the sequence limit is off by one", "export const MAX_SEQUENCES = 4096;", "export const MAX_SEQUENCES = 4097;", ETP),
     tm("no frequency is not refused as that", "if (path === '/initiating_event' && missing === 'frequency') return issue('E_NO_FREQUENCY'", "if (false as boolean) return issue('E_NO_FREQUENCY'"),
     tm("no unit is not refused as that", "if (path === '/initiating_event' && missing === 'unit') return issue('E_NO_UNIT'", "if (false as boolean) return issue('E_NO_UNIT'"),
     tm("a frequency in range is mapped wrongly", "if (path === '/initiating_event/frequency') return issue('E_FREQUENCY_RANGE'", "if (false as boolean) return issue('E_FREQUENCY_RANGE'"),
@@ -758,6 +759,50 @@ MUTATIONS += [
     ee("the approximation flag is ignored", "approximation: body.approximation === true });", "approximation: false });", SA),
 ]
 
+# Event tree editor (plan 13, stage S3): the document operations and the editor's state. The view itself (src/web/ui/event-tree.ts) is covered by the
+# end-to-end tests and the axe audit, not by mutants here.
+EDOC = ROOT / "src/web/model/event-tree-doc.ts"
+EED = ROOT / "src/web/model/event-tree-editor.ts"
+EUI_SUITE = ("tests/unit/web-event-tree.test.ts tests/unit/event-tree.test.ts", 120)
+
+
+def eu(name: str, old: str, new: str, f: pathlib.Path = EDOC) -> tuple:
+    return (f"event tree editor: {name}", f, old, new, EUI_SUITE)
+
+
+MUTATIONS += [
+    eu("the heading ceiling is not enforced", "  if (doc.headings.length >= MAX_HEADINGS) return doc;\n", ""),
+    eu("the last heading can be removed", "  if (doc.headings.length <= 1) return doc;", "  if (doc.headings.length <= 0) return doc;"),
+    eu("the last end state can be removed", "  if (doc.end_states.length <= 1) return doc;", "  if (doc.end_states.length <= 0) return doc;"),
+    eu("removing a heading keeps conditions that name it", "  for (const h of next.headings) if (h.asked_only_if?.heading === id) delete h.asked_only_if;\n", ""),
+    eu("moving a heading keeps a condition that now points forward", "    if (h.asked_only_if && next.headings.findIndex((x) => x.id === h.asked_only_if!.heading) >= k) delete h.asked_only_if;", "    void k;"),
+    eu("a move past the end is allowed", "  if (i < 0 || j < 0 || j >= doc.headings.length) return doc;", "  if (i < 0) return doc;"),
+    eu("end states are not kept for a path that still exists", "end_state: had.get(pathKey(path)) ?? '' }", "end_state: '' }"),
+    eu("a new path is given an end state by a guess", "end_state: had.get(pathKey(path)) ?? '' }", "end_state: had.get(pathKey(path)) ?? previous[0]?.end_state ?? '' }"),
+    eu("a new id can repeat an existing one", "  for (let i = taken.length + 1; ; i++) if (!taken.includes(`${prefix}${i}`)) return `${prefix}${i}`;", "  return `${prefix}${taken.length + 1}`;"),
+    eu("removing an end state leaves sequences pointing at it", "  for (const s of next.sequences) if (s.end_state === id) s.end_state = '';\n", ""),
+    eu("giving the unset an end state overwrites the chosen ones", "  for (const s of next.sequences) if (s.end_state === '') s.end_state = endState;", "  for (const s of next.sequences) s.end_state = endState;"),
+    eu("an edit does not touch the updated time", "const stamp = (doc: EtDoc, now: string): EtDoc => ({ ...doc, tree: { ...doc.tree, updated: now } });", "const stamp = (doc: EtDoc, now: string): EtDoc => doc;"),
+    eu("a new tree has other assumptions", "    assumptions: { ...V1_ASSUMPTIONS },", "    assumptions: {},"),
+    eu("a bypass is not applied", "  if (cond) h.asked_only_if = { heading: cond.heading, branch: cond.branch };", "  if (cond) h.asked_only_if = undefined;"),
+    eu("a run is allowed on text that was not checked", "    return !this.running && this.checked && this.validation!.valid;", "    return !this.running && this.validation!.valid;", EED),
+    eu("an unchecked edit leaves the result looking current", "    return !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;", "    return r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;", EED),
+    eu("the approximation setting does not make a result old", "    return !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash || this.resultApproximation !== this.approximation;", "    return !this.checked || r.input_hashes.tree_hash !== this.validation?.tree_hash;", EED),
+    eu("a changed model is not noticed", "    return this.model !== null && this.model.hash !== null && this.model.hash !== this.doc.fault_tree_model.model_hash;", "    return false;", EED),
+    eu("dropped end states are not mentioned only when dropped", "(s) => s.end_state !== '' && !kept.has(pathKey(s.path))", "(s) => !kept.has(pathKey(s.path))", EED),
+    eu("dropped end states are never mentioned", "    if (lost > 0) this.setNotice(", "    if (lost > 999999) this.setNotice(", EED),
+    eu("a second run starts while one is in progress", "  async run(): Promise<void> {\n    if (this.running) return;", "  async run(): Promise<void> {", EED),
+    eu("the run carries no request id", "await this.api.runEventTree(text, approximation, requestId);", "await this.api.runEventTree(text, approximation);", EED),
+    eu("the run ignores the approximation setting", "await this.api.runEventTree(text, approximation, requestId);", "await this.api.runEventTree(text, false, requestId);", EED),
+    eu("cancel carries no request id", "await this.api.cancel(this.requestId ?? undefined)", "await this.api.cancel()", EED),
+    eu("the queue position forgets the run in front", "const ahead = st.running?.request_id === requestId ? 0 : waiting >= 0 ? waiting + (st.running ? 1 : 0) : 0;", "const ahead = st.running?.request_id === requestId ? 0 : waiting >= 0 ? waiting : 0;", EED),
+    eu("an invalid model can be chosen", "    if (!v.valid || !v.model_hash) {", "    if (false as boolean) {", EED),
+    eu("a late answer about another model is kept", "    if (mine !== this.modelSeq || name !== this.doc.fault_tree_model.name) return;", "    if (false as boolean) return;", EED),
+    eu("the first saved model is not adopted by a new tree", "    const first = this.models[0];", "    const first = undefined as ModelInfo | undefined;", EED),
+    eu("an error from the run is shown as a result", "      this.runError = e instanceof ApiError ? `${e.message} (${e.code})` : (e as Error).message;", "      this.runError = null;", EED),
+    eu("a file that is not an event tree is opened", "!Array.isArray(doc.headings) || !Array.isArray(doc.sequences) || !doc.fault_tree_model || !doc.initiating_event", "false", EED),
+]
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -838,6 +883,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree:")]
     if only == "etengine":  # just the event tree engine mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("event tree engine:")]
+    if only == "etui":  # just the event tree editor mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree editor:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

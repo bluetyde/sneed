@@ -185,6 +185,25 @@ describe('event-tree document operations', () => {
     }
   });
 
+  it('an edit stamps the updated time and leaves the created time alone', () => {
+    const d = E.newEventTree(ref, 'T', NOW);
+    const later = '2026-10-07T00:00:00Z';
+    for (const e of [E.setTreeName(d, 'x', later), E.addHeading(d, 'TOP', later), E.addEndState(d, later), E.setInitiating(d, { frequency: 1 }, later), E.setBypass(d, 'H1', null, later)]) {
+      expect(e.tree.updated).toBe(later);
+      expect(e.tree.created).toBe(NOW);
+    }
+  });
+
+  it('a bypass is stored as the condition given, and cleared by null', () => {
+    let d = E.addHeading(E.newEventTree(ref, 'T', NOW), 'TOP', NOW);
+    d = E.setBypass(d, 'H2', { heading: 'H1', branch: 'fails' }, NOW);
+    expect(d.headings[1]!.asked_only_if).toEqual({ heading: 'H1', branch: 'fails' });
+    expect(d.sequences.map((s) => pathKey(s.path))).toEqual(['H1:works,H2:works', 'H1:works,H2:fails', 'H1:fails']);
+    d = E.setBypass(d, 'H2', null, NOW);
+    expect(d.headings[1]!.asked_only_if).toBeUndefined();
+    expect(d.sequences).toHaveLength(4);
+  });
+
   it('operations never change their input', () => {
     const d = E.newEventTree(ref, 'T', NOW);
     const before = E.serialize(d);
