@@ -898,6 +898,9 @@ describe('EventTreeEditor', () => {
     expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared-2');
     expect(JSON.parse(api.models.get('lesson-et-shared-2')!)).toEqual(SHARED_LESSON.model.document);
     expect(ed.notice?.text).toMatch(/already exists and is not this lesson's/);
+    // (back to a numbered name that holds the lesson's own model)
+    api.models.set('lesson-et-shared-2', JSON.stringify(SHARED_LESSON.model.document, null, 2) + String.fromCharCode(10));
+    api.models.delete('lesson-et-shared-3');
     // starting again finds its own model under the numbered name and writes nothing more
     let writes = 0;
     const realSave = api.saveModel;
@@ -908,6 +911,11 @@ describe('EventTreeEditor', () => {
     await ed.startLesson(SHARED_LESSON.id);
     expect(writes).toBe(0);
     expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared-2');
+    // with the first numbered name taken by another model too, the next one is used
+    api.models.set('lesson-et-shared-2', modelText(0.66));
+    await ed.startLesson(SHARED_LESSON.id);
+    expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared-3');
+    expect(JSON.parse(api.models.get('lesson-et-shared-2')!).events[0].probability).toBe(0.66);
     // the same lesson's model under its own name (as saved by an earlier start) is reused, not duplicated
     const { ed: ed2, api: api2 } = await make(lessonApi());
     await ed2.loadLessons();
@@ -1026,5 +1034,23 @@ describe('EventTreeEditor', () => {
     await ed.run();
     expect(ed.lessonProgress!.modelMismatch).toBe(false);
     expect(ed.lessonProgress!.complete).toBe(true);
+  });
+
+  it('the prediction is the one typed when Analyse was pressed, even if it is changed while the analysis is under way', async () => {
+    let release: () => void = () => undefined;
+    const { ed, api } = await make(lessonApi());
+    await solved(ed);
+    ed.setPrediction('0.05');
+    const realRun = api.runEventTree;
+    api.runEventTree = async (t, a, id) => {
+      await new Promise<void>((res) => (release = res));
+      return realRun(t, a, id);
+    };
+    const running = ed.run();
+    await new Promise((r) => setTimeout(r, 5));
+    ed.setPrediction('0.9'); // typed while the analysis runs
+    release();
+    await running;
+    expect(ed.reveal!.predicted).toBe(0.05);
   });
 });
