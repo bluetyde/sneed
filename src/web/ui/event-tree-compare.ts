@@ -31,6 +31,8 @@ export class EventTreeComparePanel {
       this.b = ids[0] ?? '';
       this.a = ids[1] ?? '';
     }
+    // a comparison on show belongs to the pair it was made for: another choice, by hand or because a newer analysis arrived, removes it
+    if (ed.comparison && (ed.comparison.a !== this.a || ed.comparison.b !== this.b)) queueMicrotask(() => ed.clearComparison());
     const sig = JSON.stringify([ids, this.a, this.b, ed.comparison?.a, ed.comparison?.b, ed.comparison?.diff, ed.compareError, ed.runsError]);
     if (sig === this.signature) return;
     this.signature = sig;
@@ -41,6 +43,7 @@ export class EventTreeComparePanel {
     const sel = h('select', { id: `et-cmp-${name}`, 'data-field': `et-compare-${name}`, onchange: (e) => {
       this[name] = (e.target as HTMLSelectElement).value;
       this.chosen = true;
+      this.ed.clearComparison();
       this.signature = '';
       this.render();
     } }, ...this.ed.runs.map((r) => h('option', { value: r.id, selected: r.id === this[name] }, label(r))));
@@ -68,18 +71,18 @@ export class EventTreeComparePanel {
     if (this.a === this.b) out.push(h('p', { class: 'hint' }, 'Choose two different analyses.'));
     if (ed.compareError) out.push(h('div', { class: 'notice error', role: 'alert', 'data-testid': 'et-compare-error' }, ed.compareError));
     const c = ed.comparison;
-    if (!c) return out;
+    if (!c || c.a !== this.a || c.b !== this.b) return out;
     const d = c.diff;
     const state = (x: { status: string | null; completeness: string | null }): string => `${x.status ?? 'unknown'} / ${x.completeness ?? 'unknown'}`;
     out.push(h('div', { 'data-testid': 'et-compare-result' },
       h('p', {}, `Earlier: ${state(d.runs.a)}. Later: ${state(d.runs.b)}.`),
-      d.numbersCompared ? null : h('div', { class: 'caveat', role: 'status', 'data-testid': 'et-compare-nonumbers' }, h('strong', {}, 'No numbers compared. '), 'At least one of these analyses has no frequencies (it failed or was cancelled), so only what the analyses were made from is compared.'),
+      d.numbersCompared ? null : h('div', { class: 'caveat', role: 'status', 'data-testid': 'et-compare-nonumbers' }, h('strong', {}, 'No numbers compared. '), d.malformed.a || d.malformed.b ? `The ${d.malformed.a && d.malformed.b ? 'files of both analyses are' : d.malformed.a ? 'file of the earlier analysis is' : 'file of the later analysis is'} damaged: it says it is complete but a total or a row cannot be read, so its numbers are not trusted. Only what the analyses were made from is compared.` : 'At least one of these analyses has no frequencies (it failed or was cancelled), so only what the analyses were made from is compared.'),
       d.sameInputs
         ? h('p', { 'data-testid': 'et-compare-same' }, 'Same event tree, same fault-tree model and same engine build: the numbers should be identical. Any difference below is unexpected.')
         : h('ul', { 'data-testid': 'et-compare-inputs' },
             h('li', {}, d.sameTree ? 'The event tree is the same.' : 'The event tree differs.'),
             h('li', {}, d.sameModel ? 'The fault-tree model is the same.' : 'The fault-tree model differs.'),
-            h('li', {}, d.engine ? `The engine differs: ${d.engine.from} → ${d.engine.to}.` : 'The engine is the same.')),
+            h('li', {}, d.engine ? `The engine differs: ${d.engine.from} → ${d.engine.to}.` : d.engineKnown ? 'The engine is the same.' : 'The engine build is not recorded in one or both files, so it cannot be said to be the same.')),
       d.initiating.name || d.initiating.frequency ? h('p', {}, 'Initiating event: ', d.initiating.name ? `renamed ${d.initiating.name.from} → ${d.initiating.name.to}. ` : '', d.initiating.frequency ? `frequency ${this.moved(d.initiating.frequency)} per year.` : '') : null,
       d.numbersCompared ? h('p', { 'data-testid': 'et-compare-total' }, 'Total frequency: ', this.moved(d.total), d.total ? ' per year.' : '.') : null,
       d.headings.added.length || d.headings.removed.length || d.headings.changed.length

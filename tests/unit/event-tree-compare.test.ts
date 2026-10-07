@@ -103,7 +103,10 @@ describe('comparing two saved event-tree analyses', () => {
 
   it('the same inputs need all three to be the same and stated: a missing engine build is not "the same engine"', () => {
     const noBuild = (): Rec => rec([0.252, 0.108, 0.063, 0.077], { engine: { name: 'sneed-bdd', version: '0.1.0' } });
-    expect(diffEventTreeResults(noBuild(), noBuild())!.sameInputs).toBe(true); // both state the same engine, with no build
+    const nb = diffEventTreeResults(noBuild(), noBuild())!;
+    expect(nb.sameInputs).toBe(false); // the same name and version without a build hash is not evidence of the same build
+    expect(nb.engineKnown).toBe(false);
+    expect(diffEventTreeResults(rec(), rec())!.engineKnown).toBe(true);
     const missing = rec([0.252, 0.108, 0.063, 0.077], { engine: undefined });
     expect(diffEventTreeResults(missing, missing)!.sameInputs).toBe(false);
     expect(diffEventTreeResults(rec(), rec([0.252, 0.108, 0.063, 0.077], { input_hashes: { tree_hash: 't1', model_hash: 'other', document_hash: 'd' } }))!.sameInputs).toBe(false);
@@ -173,5 +176,36 @@ describe('comparing two saved event-tree analyses', () => {
   it('never calls one analysis better: nothing in a difference carries a verdict', () => {
     const d = diffEventTreeResults(rec(), rec([0.01, 0.01, 0.01, 0.01]))!;
     expect(JSON.stringify(d)).not.toMatch(/better|worse|safer|improv|degrad|regress/i);
+  });
+
+  it('builds that share the first twelve characters of their hash are still different builds', () => {
+    const a = rec(undefined, { engine: { name: 'sneed-bdd', version: '0.1.0', sha256: 'ab12cd34ef56' + '0'.repeat(52) } });
+    const b = rec(undefined, { engine: { name: 'sneed-bdd', version: '0.1.0', sha256: 'ab12cd34ef56' + '1'.repeat(52) } });
+    const d = diffEventTreeResults(a, b)!;
+    expect(d.sameInputs).toBe(false);
+    expect(d.engine).not.toBeNull(); // reported as a difference even though the shown labels read the same
+    expect(diffEventTreeResults(a, a)!.sameInputs).toBe(true);
+  });
+
+  it('a record that claims to be complete but has a damaged row or no total is not trusted: no numbers are compared, and it is named', () => {
+    const damagedRow = rec();
+    damagedRow.sequences[2].frequency = 'a lot';
+    const noTotal = rec(undefined, { total: undefined });
+    const noRows = rec(undefined, { sequences: undefined });
+    const noEnds = rec(undefined, { end_states: 'x' });
+    const brokenEnd = rec();
+    brokenEnd.end_states[0].frequency = null;
+    for (const bad of [damagedRow, noTotal, noRows, noEnds, brokenEnd]) {
+      const d = diffEventTreeResults(rec(), bad)!;
+      expect(d.numbersCompared).toBe(false);
+      expect(d.malformed).toEqual({ a: false, b: true });
+      expect(d.sequences).toEqual({ added: [], removed: [], changed: [], unchanged: 0 });
+      expect(d.total).toBeNull();
+      expect(diffEventTreeResults(bad, rec())!.malformed).toEqual({ a: true, b: false });
+    }
+    // an analysis that failed has no numbers and is not "damaged"
+    const failed = rec([], { status: 'failed', completeness: 'unknown', sequences: [], end_states: [], total: null });
+    expect(diffEventTreeResults(rec(), failed)!.malformed).toEqual({ a: false, b: false });
+    expect(diffEventTreeResults(rec(), rec())!.malformed).toEqual({ a: false, b: false });
   });
 });

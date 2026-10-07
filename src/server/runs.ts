@@ -160,16 +160,22 @@ export interface EventTreeRunInfo {
 
 const isEtRecord = (rec: unknown): rec is Record<string, unknown> => isObj(rec) && isObj(rec.schema) && rec.schema.id === 'sneed.event-tree-result' && rec.schema.version === 1;
 const finite = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** A string from a saved record, cut short: a hand-edited file must not be able to make the list response large. */
+const text = (v: unknown, max: number): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
+/** How many record files one listing may open, whatever they turn out to hold (the listing shows at most `limit`). */
+export const MAX_INSPECTED_EVENT_TREE_RUNS = 400;
 
 /** The newest saved event-tree analyses. A run whose files cannot be read is left out, never an error for the rest. */
 export function listEventTreeRuns(dir: string, limit = MAX_LISTED_RUNS): EventTreeRunInfo[] {
   if (!existsSync(dir)) return [];
   const ids = readdirSync(dir).filter(isValidRunId).sort().reverse();
   const out: EventTreeRunInfo[] = [];
+  let inspected = 0;
   for (const id of ids) {
-    if (out.length >= limit) break;
+    if (out.length >= limit || inspected >= MAX_INSPECTED_EVENT_TREE_RUNS) break;
     // only folders that are event-tree runs are opened at all: fault-tree runs have no event-tree-results.json
     if (!existsSync(path.join(dir, id, 'event-tree-results.json'))) continue;
+    inspected++;
     try {
       const rec = readJsonFile(dir, [id, 'event-tree-results.json']);
       if (!isEtRecord(rec)) continue;
@@ -187,16 +193,16 @@ export function listEventTreeRuns(dir: string, limit = MAX_LISTED_RUNS): EventTr
       out.push({
         id,
         modified: statSync(path.join(dir, id, 'event-tree-results.json')).mtime.toISOString(),
-        status: typeof rec.status === 'string' ? rec.status : null,
-        completeness: typeof rec.completeness === 'string' ? rec.completeness : null,
+        status: text(rec.status, 32),
+        completeness: text(rec.completeness, 32),
         tree_name,
-        initiating_event: typeof ie.name === 'string' ? ie.name.slice(0, 200) : null,
+        initiating_event: text(ie.name, 200),
         frequency: finite(ie.frequency),
         total_frequency: finite(total.frequency),
-        tree_hash: typeof hashes.tree_hash === 'string' ? hashes.tree_hash : null,
-        model_hash: typeof hashes.model_hash === 'string' ? hashes.model_hash : null,
-        engine_name: typeof eng.name === 'string' ? eng.name : null,
-        engine_version: typeof eng.version === 'string' ? eng.version : null,
+        tree_hash: text(hashes.tree_hash, 128),
+        model_hash: text(hashes.model_hash, 128),
+        engine_name: text(eng.name, 64),
+        engine_version: text(eng.version, 64),
       });
     } catch {
       /* not a readable run */

@@ -73,6 +73,11 @@ test.describe('comparing saved event-tree analyses', () => {
     await page.locator('[data-action="et-compare"]').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('et-compare-result')).toBeVisible();
+    // choosing another analysis removes the comparison: it is never shown under a pair it was not made for
+    await b.selectOption({ index: 0 });
+    await expect(page.getByTestId('et-compare-result')).toHaveCount(0);
+    await page.locator('[data-action="et-compare"]').click();
+    await expect(page.getByTestId('et-compare-result')).toBeVisible();
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(page.getByTestId('et-compare-result')).toHaveCount(0);
   });
