@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
-import { listRuns, MAX_LOOKUP_RUNS, readRun, RunsError } from './runs.js';
+import { listEventTreeRuns, listRuns, MAX_LOOKUP_RUNS, readEventTreeRun, readRun, RunsError } from './runs.js';
 import { analyze as realAnalyze, type AnalyzeOptions, type AnalyzeOutcome } from '../core/analyze.js';
 import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/bdd/analyze.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
@@ -312,6 +312,9 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       return send(res, 200, { lessons: loadLessons(opts.lessonsDir, opts.oraclesFile) });
     }
 
+    if (p === '/api/event-tree-runs' && method === 'GET') return send(res, 200, { runs: listEventTreeRuns(opts.runsDir) });
+    const etr = /^\/api\/event-tree-runs\/([^/]+)$/.exec(p);
+    if (etr && method === 'GET') return send(res, 200, readEventTreeRun(opts.runsDir, safeDecode(etr[1]!)));
     if (p === '/api/runs' && method === 'GET') return send(res, 200, { runs: listRuns(opts.runsDir) });
     const rm = /^\/api\/runs\/([^/]+)$/.exec(p);
     if (rm && method === 'GET') return send(res, 200, readRun(opts.runsDir, safeDecode(rm[1]!)));

@@ -174,3 +174,24 @@ export async function saveSharedModel(page: Page, text: string): Promise<void> {
   const res = await page.request.put('/api/models/shared', { headers: { 'x-sneed-request': '1' }, data: { text } });
   expect(res.ok()).toBe(true);
 }
+
+/** Builds the plan 13 case 6.2 tree through the page (two headings on X and Y, 0.5 per year, every sequence ending in the one example end state). Starts from the fault-tree view. */
+export async function buildSharedEventTree(page: Page): Promise<void> {
+  await saveSharedModel(page, SHARED_MODEL(0.1));
+  await page.locator('[data-mode="event-tree"]').click();
+  await page.locator('[data-action="et-new"]').click();
+  await page.locator('[data-field="et-model"]').selectOption('shared');
+  await expect(page.locator('[data-field="et-h-event-H1"] option[value="X"]')).toHaveCount(1);
+  await page.locator('[data-field="et-h-name-H1"]').fill('Injection');
+  await page.locator('[data-field="et-h-name-H1"]').press('Enter');
+  await page.locator('[data-field="et-h-event-H1"]').selectOption('X');
+  await page.locator('[data-action="et-add-heading"]').click();
+  await page.locator('[data-field="et-h-name-H2"]').fill('Cooling');
+  await page.locator('[data-field="et-h-name-H2"]').press('Enter');
+  await page.locator('[data-field="et-h-event-H2"]').selectOption('Y');
+  await page.locator('[data-field="et-ie-freq"]').fill('0.5');
+  await page.locator('[data-field="et-ie-freq"]').press('Enter');
+  await expect(page.locator('[data-seq]')).toHaveCount(4);
+  await page.locator('[data-field="et-set-all"]').selectOption('ES1');
+  await expect(page.getByTestId('et-no-problems')).toBeVisible();
+}

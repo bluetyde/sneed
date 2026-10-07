@@ -117,6 +117,22 @@ export interface EtValidateResponse {
 }
 export type EtRunResponse = { kind: 'ran'; run_id: string; record: EventTreeResult } | { kind: 'refused'; errors: EtIssue[]; warnings: EtIssue[] } | { kind: 'dequeued' };
 
+/** A saved event-tree analysis, as the Compare list shows it. */
+export interface EtRunInfo {
+  id: string;
+  modified: string;
+  status: string | null;
+  completeness: string | null;
+  tree_name: string | null;
+  initiating_event: string | null;
+  frequency: number | null;
+  total_frequency: number | null;
+  tree_hash: string | null;
+  model_hash: string | null;
+  engine_name: string | null;
+  engine_version: string | null;
+}
+
 /** The event-tree part of the API, apart from `Api` so the fault-tree editor and its tests are unchanged. */
 export interface EtApi {
   validateEventTree(text: string): Promise<EtValidateResponse>;
@@ -124,6 +140,8 @@ export interface EtApi {
   cancel(requestId?: string): Promise<{ cancelled: boolean }>;
   runStatus(): Promise<RunStatus>;
   listEventTrees(): Promise<ModelInfo[]>;
+  listEventTreeRuns(): Promise<EtRunInfo[]>;
+  loadEventTreeRun(id: string): Promise<{ id: string; record: unknown }>;
   loadEventTree(name: string): Promise<string>;
   saveEventTree(name: string, text: string): Promise<ModelInfo>;
   /** The saved fault-tree models the headings can refer to. */
@@ -168,6 +186,8 @@ export function httpApi(base = ''): Api & EtApi {
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
     validateEventTree: (text) => call('POST', '/api/event-tree/validate', { text }),
     runEventTree: (text, approximation, requestId) => call('POST', '/api/event-tree/run', { text, approximation, ...(requestId ? { request_id: requestId } : {}) }),
+    listEventTreeRuns: async () => (await call<{ runs: EtRunInfo[] }>('GET', '/api/event-tree-runs')).runs,
+    loadEventTreeRun: (id) => call('GET', `/api/event-tree-runs/${encodeURIComponent(id)}`),
     listEventTrees: async () => (await call<{ trees: ModelInfo[] }>('GET', '/api/event-trees')).trees,
     loadEventTree: async (name) => (await call<{ text: string }>('GET', `/api/event-trees/${encodeURIComponent(name)}`)).text,
     saveEventTree: (name, text) => call('PUT', `/api/event-trees/${encodeURIComponent(name)}`, { text }),
