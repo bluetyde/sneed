@@ -693,4 +693,13 @@ describe('EventTreeEditor', () => {
     await late;
     expect(ed.comparison).toBeNull();
   });
+
+  it('the figure of the tree on screen does not show the last good frequency while the entry is not a number', async () => {
+    const { ed } = await make();
+    expect(ed.figureSvg()).toContain('0.1 per year');
+    ed.setFrequencyText('lots');
+    expect(ed.figureSvg()).toContain('FREQUENCY NOT SET');
+    ed.setFrequencyText('0.3');
+    expect(ed.figureSvg()).toContain('0.3 per year');
+  });
 });
