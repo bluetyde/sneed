@@ -21,7 +21,7 @@ export class EventTreeLessonPanel {
 
   render(): void {
     const ed = this.ed;
-    const sig = JSON.stringify([ed.lessons.map((l) => l.id), ed.lessonsError, ed.lesson?.id, ed.lessonProgress, ed.calcShown, ed.hasTried, ed.reveal, ed.currentRecord === null, ed.stale, ed.running]);
+    const sig = JSON.stringify([ed.lessons.map((l) => l.id), ed.lessonsError, ed.lesson?.id, ed.lessonProgress, ed.calcShown, ed.hasTried, ed.reveal, ed.currentRecord === null, ed.stale, ed.running, ed.predictionAtResult]);
     if (sig === this.signature) return;
     this.signature = sig;
     if (ed.lesson) this.open = true;
@@ -34,7 +34,7 @@ export class EventTreeLessonPanel {
     if (ed.lessonsError) return [h('div', { class: 'notice error', role: 'alert', 'data-testid': 'et-lessons-error' }, ed.lessonsError)];
     if (ed.lessons.length === 0) return [h('p', { class: 'empty-state', 'data-testid': 'et-no-lessons' }, 'No event-tree lessons are available.')];
     return [
-      h('p', { class: 'hint' }, 'Short guided exercises on event trees. Every number is made up for teaching and describes no real plant. Starting a lesson replaces the event tree on the screen, and saves the lesson\'s own fault-tree model under its own name (replacing a model of that name).'),
+      h('p', { class: 'hint' }, 'Short guided exercises on event trees. Every number is made up for teaching and describes no real plant. Starting a lesson replaces the event tree on the screen, and saves the lesson\'s own fault-tree model under its own name. A model of yours with that name is never replaced: the lesson then uses a numbered name.'),
       h('ol', { class: 'lessons', 'aria-label': 'Event-tree lessons' },
         ...ed.lessons.map((l) =>
           h('li', {},
@@ -74,6 +74,7 @@ export class EventTreeLessonPanel {
         h('input', { type: 'text', id: 'et-prediction', inputmode: 'decimal', 'data-field': 'et-prediction', 'aria-describedby': 'et-prediction-hint', value: ed.predictionText, onchange: (e) => ed.setPrediction((e.target as HTMLInputElement).value) })));
     }
     if (p.malformed) out.push(h('div', { class: 'caveat', role: 'status' }, 'Part of the event tree is not in a form the lesson can read, so no step is credited yet.'));
+    if (p.modelMismatch) out.push(h('div', { class: 'caveat', role: 'status', 'data-testid': 'et-lesson-model-mismatch' }, h('strong', {}, 'Check this. '), 'The analysis on show was made with a different fault-tree model from the lesson\'s, so it cannot complete the lesson. Choose the lesson\'s model in "Headings are events of this saved model" and press Analyse again.'));
     if (p.mistakes.length) out.push(h('div', { class: 'caveat', role: 'status', 'data-testid': 'et-lesson-mistakes' }, h('strong', {}, 'Check this. '), h('ul', {}, ...p.mistakes.map((m) => h('li', { 'data-mistake': m.id }, m.message)))));
     const allSteps = p.steps.every((s) => s.done);
     if (ed.result?.kind === 'ran' && ed.stale) out.push(h('p', { class: 'hint', role: 'status' }, 'The analysis on show is out of date. Press Analyse again to check this version of the event tree.'));

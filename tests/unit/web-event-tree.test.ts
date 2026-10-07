@@ -876,4 +876,155 @@ describe('EventTreeEditor', () => {
     await ed.startLesson(SHARED_LESSON.id);
     expect(ed.predictionText).toBe('');
   });
+
+  const solved = async (ed: EventTreeEditor): Promise<void> => {
+    await ed.loadLessons();
+    await ed.startLesson(SHARED_LESSON.id);
+    ed.setInitiating({ frequency: 0.5 });
+    ed.patchHeading('H1', { event: 'X' });
+    ed.addHeading();
+    ed.patchHeading('H2', { event: 'Y' });
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+  };
+
+  it('a model of the student\'s own with the lesson\'s name is never replaced: the lesson takes a numbered name, and a copy of its own model is reused', async () => {
+    const { ed, api } = await make(lessonApi());
+    const mine = modelText(0.77);
+    api.models.set('lesson-et-shared', mine);
+    await ed.loadLessons();
+    expect(await ed.startLesson(SHARED_LESSON.id)).toBe(true);
+    expect(api.models.get('lesson-et-shared')).toBe(mine); // untouched
+    expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared-2');
+    expect(JSON.parse(api.models.get('lesson-et-shared-2')!)).toEqual(SHARED_LESSON.model.document);
+    expect(ed.notice?.text).toMatch(/already exists and is not this lesson's/);
+    // starting again finds its own model under the numbered name and writes nothing more
+    let writes = 0;
+    const realSave = api.saveModel;
+    api.saveModel = async (n, t) => {
+      writes++;
+      return realSave(n, t);
+    };
+    await ed.startLesson(SHARED_LESSON.id);
+    expect(writes).toBe(0);
+    expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared-2');
+    // the same lesson's model under its own name (as saved by an earlier start) is reused, not duplicated
+    const { ed: ed2, api: api2 } = await make(lessonApi());
+    await ed2.loadLessons();
+    await ed2.startLesson(SHARED_LESSON.id);
+    await ed2.startLesson(SHARED_LESSON.id);
+    expect([...api2.models.keys()].filter((n) => n.startsWith('lesson-et-shared'))).toEqual(['lesson-et-shared']);
+  });
+
+  it('when every numbered name is taken by another model, the lesson is not started and nothing is overwritten', async () => {
+    const { ed, api } = await make(lessonApi());
+    api.models.set('lesson-et-shared', modelText(0.5));
+    for (let i = 2; i <= 20; i++) api.models.set(`lesson-et-shared-${i}`, modelText(0.5));
+    await ed.loadLessons();
+    expect(await ed.startLesson(SHARED_LESSON.id)).toBe(false);
+    expect(ed.lesson).toBeNull();
+    expect(ed.notice?.text).toMatch(/no free model name/);
+    expect(JSON.parse(api.models.get('lesson-et-shared-20')!).events[0].probability).toBe(0.5);
+  });
+
+  it('an edit made while a lesson is starting is not thrown away: the start is given up', async () => {
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    const realSave = api.saveModel;
+    api.saveModel = async (n, t) => {
+      await new Promise((r) => setTimeout(r, 20));
+      return realSave(n, t);
+    };
+    const starting = ed.startLesson(SHARED_LESSON.id);
+    ed.setInitiating({ frequency: 7 });
+    expect(await starting).toBe(false);
+    expect(ed.lesson).toBeNull();
+    expect(ed.doc.initiating_event.frequency).toBe(7);
+  });
+
+  it('an analysis that comes back after another tree was put on the screen is not shown and does not open the hand calculation', async () => {
+    let release: (r: EtRunResponse) => void = () => undefined;
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    await ed.startLesson(INDEP_LESSON.id);
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    const realRun = api.runEventTree;
+    api.runEventTree = (text, a, id) => {
+      const slow = new Promise<EtRunResponse>((res) => (release = res));
+      void realRun(text, a, id).then((r) => setTimeout(() => release(r), 15));
+      return slow;
+    };
+    const running = ed.run();
+    await new Promise((r) => setTimeout(r, 5));
+    await ed.startLesson(SHARED_LESSON.id); // another lesson while the first analysis is under way
+    await running;
+    expect(ed.result).toBeNull();
+    expect(ed.hasTried).toBe(false);
+    ed.showCalculation();
+    expect(ed.calcShown).toBe(false);
+  });
+
+  it('the prediction stays with the analysis it was typed for: a failed rerun or a guess typed later changes nothing beside the earlier result', async () => {
+    const { ed, api } = await make(lessonApi());
+    await solved(ed);
+    ed.setPrediction('0.05');
+    await ed.run();
+    expect(ed.reveal!.predicted).toBe(0.05);
+    ed.setPrediction('0.9');
+    const realRun = api.runEventTree;
+    api.runEventTree = async () => {
+      throw new ApiError(500, 'E_X', 'network');
+    };
+    await ed.run(); // fails: the earlier result and its prediction stand
+    expect(ed.runError).toMatch(/network/);
+    expect(ed.reveal!.predicted).toBe(0.05);
+    api.runEventTree = realRun;
+    await ed.run();
+    expect(ed.reveal!.predicted).toBe(0.9); // a real rerun is a new attempt with its own prediction
+  });
+
+  it('a prediction typed after the result does not complete the lesson', async () => {
+    const { ed } = await make(lessonApi());
+    await solved(ed);
+    await ed.run(); // no prediction typed
+    expect(ed.lessonProgress!.complete).toBe(false);
+    ed.setPrediction('0.077'); // the number just read off the table
+    expect(ed.lessonProgress!.steps.find((s) => s.id === 'predict')!.done).toBe(true);
+    expect(ed.lessonProgress!.complete).toBe(false);
+    expect(ed.reveal).toBeNull();
+    await ed.run();
+    expect(ed.lessonProgress!.complete).toBe(true);
+  });
+
+  it('an analysis made with another fault-tree model does not complete the lesson, even with the lesson\'s numbers', async () => {
+    const { ed, api } = await make(lessonApi());
+    await solved(ed);
+    ed.setPrediction('0.1');
+    // the student points the tree at a model of their own that happens to have the same events and gates, with one different probability that the headings do not use
+    const mine = JSON.parse(JSON.stringify(SHARED_LESSON.model.document));
+    mine.model = { ...mine.model, name: 'mine' };
+    mine.events.push({ id: 'unused', probability: 0.5 });
+    mine.gates[2].inputs = ['X', 'Y'];
+    api.models.set('mine', JSON.stringify(mine));
+    const lessonRun = api.runEventTree;
+    api.runEventTree = async (text, approximation, id) => {
+      const doc = JSON.parse(text) as E.EtDoc;
+      if (doc.fault_tree_model.name !== 'mine') return lessonRun(text, approximation, id);
+      const r = computeEventTree(mine as unknown as NativeModel, { initiating_event: { frequency: doc.initiating_event.frequency }, headings: doc.headings, end_states: doc.end_states, sequences: doc.sequences });
+      return { kind: 'ran', run_id: 'r2', record: { ...recordFor(text, false), sequences: r.sequences.map((q) => ({ key: q.key, path: q.path, end_state: q.end_state, probability: q.probability, frequency: q.frequency, share: q.probability })) } };
+    };
+    await ed.chooseModel('mine');
+    await ed.settle();
+    await ed.run();
+    const p = ed.lessonProgress!;
+    expect(p.outcome).toBe('shared'); // same numbers
+    expect(p.modelMismatch).toBe(true);
+    expect(p.complete).toBe(false);
+    await ed.chooseModel('lesson-et-shared');
+    await ed.settle();
+    await ed.run();
+    expect(ed.lessonProgress!.modelMismatch).toBe(false);
+    expect(ed.lessonProgress!.complete).toBe(true);
+  });
 });

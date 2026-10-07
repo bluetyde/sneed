@@ -38,8 +38,8 @@ File: `lessons/event-trees/01-independent-headings.json`
    - Hint: Each heading doubles the number of paths, because every earlier path can continue in two ways.
 4. Add end states until you have three: one for "everything worked", one for "one heading failed" and one for "both failed". Name each one so that it says it is an example.
    - Hint: Use "Add an end state". Names such as "Safe (example)" are fine. The tool never fills in a name that sounds like a real plant condition.
-5. Choose an end state for each of the four sequences.
-   - Hint: The list "Ends in" in each row of the Sequences table. Think about how many headings failed on the path.
+5. Choose an end state for each of the four sequences: the same one for paths with the same number of failed headings, and a different one for each number (none, one, two).
+   - Hint: The list "Ends in" in each row of the Sequences table. Count how many headings failed on the path. The two paths with exactly one failure go to the same end state.
 
 **Expected results** (each equals an independently checked oracle entry, re-derived by exact enumeration in the tests)
 - Two independent headings at 0.1 per year (oracle `et-independent`), frequency of each sequence per year:
