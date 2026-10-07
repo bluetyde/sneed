@@ -144,6 +144,28 @@ describe('a student who follows the steps', () => {
     expect(done(L1, e).outcome).toBe('independent'); // the same events, whatever the heading ids
   });
 
+  it('each check is exact: an extra heading, too few end states, an end state that does not exist, or a mistake showing all stop the credit', () => {
+    const l1 = lesson(L1);
+    const d = solve(L1);
+    expect(done(L1, d).complete).toBe(true);
+    const extraHeading = E.setUnsetEnds(E.addHeading(d, 'INJ', NOW), 'ES1', NOW); // INJ, COOL, INJ: the events asked for plus one more
+    expect(runEtCheck({ kind: 'heading-events', events: ['INJ', 'COOL'] }, extraHeading)).toBe(false);
+    expect(runEtCheck({ kind: 'heading-events', events: ['INJ', 'COOL'] }, d)).toBe(true);
+    const twoEnds = E.removeEndState(d, 'ES3', NOW);
+    expect(runEtCheck({ kind: 'end-states-min', count: 3 }, d)).toBe(true);
+    expect(runEtCheck({ kind: 'end-states-min', count: 3 }, twoEnds)).toBe(false);
+    const ghost = E.setSequenceEnd(d, 'INJ:works,COOL:works'.replace(/INJ/g, 'H1').replace(/COOL/g, 'H2'), 'GHOST', NOW);
+    expect(runEtCheck({ kind: 'ends-assigned' }, ghost)).toBe(false);
+    // a lesson whose own mistake list fires on the finished tree is not complete, however right the numbers are
+    const strict = structuredClone(l1);
+    strict.mistakes.push({ id: 'x', message: 'Always shown for this test.', detect: { kind: 'heading-on-event', event: 'INJ' } });
+    const p = checkEtLesson(strict, d, analysis(l1, d), { prediction: null });
+    expect(p.steps.every((x) => x.done)).toBe(true);
+    expect(p.outcome).toBe('independent');
+    expect(p.mistakes.map((m) => m.id)).toEqual(['x']);
+    expect(p.complete).toBe(false);
+  });
+
   it('the bypass lesson accepts only the condition it asks for', () => {
     const l = lesson(L3);
     expect(done(L3, solve(L3)).steps.find((s) => s.id === 'bypass')!.done).toBe(true);
@@ -350,6 +372,13 @@ describe('the server loader', () => {
     l.model.document.top = 'NOPE';
     writeFileSync(f, JSON.stringify(l));
     refuses(a.dir, a.oracles, /not a valid fault-tree model|not the model/);
+    // a model the oracle describes exactly, but which is not a valid document (no assumptions block)
+    const c = fresh('invaliddoc');
+    const h = path.join(c.dir, files[0]!);
+    const n = JSON.parse(readFileSync(h, 'utf8'));
+    delete n.model.document.assumptions;
+    writeFileSync(h, JSON.stringify(n));
+    refuses(c.dir, c.oracles, /not a valid fault-tree model/);
     const b = fresh('badname');
     const g = path.join(b.dir, files[0]!);
     const m = JSON.parse(readFileSync(g, 'utf8'));
