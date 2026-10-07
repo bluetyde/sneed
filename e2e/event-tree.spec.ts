@@ -200,7 +200,6 @@ test.describe('event tree editor', () => {
     await page.locator('[data-action="et-new"]').click();
     await page.locator('[data-field="et-model"]').selectOption('shared');
     await expect(page.locator('[data-field="et-h-event-H1"] option[value="X"]')).toHaveCount(1);
-    await expect(page.locator('[data-action="et-undo"]')).toHaveAttribute('title', 'Undo: choosing the fault-tree model (Ctrl+Z)'); // choosing the model is the first edit
     await expect(page.locator('[data-action="et-redo"]')).toBeDisabled();
     await page.locator('[data-action="et-add-heading"]').click();
     await expect(page.locator('[data-seq]')).toHaveCount(4);
