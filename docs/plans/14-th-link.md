@@ -74,3 +74,43 @@ Decisions taken while building, for the owner to overrule:
 
 Not built: the folder and routes for saving criteria, any screen, the sequence-level use (how a heading's "works" or "fails" in a tree is set from an answer: the tree still holds the probability), an adapter, anything in NODAL, RAFT or SEED.
 
+
+## Addendum 2026-10-07: part A as a pinned plant-model revision, and the first example
+
+Written after the NODAL session told the owner what its schema and code say (read, not run, by that session; I then read the same lines myself in `pipe-studio`: `schema/model.schema.json` allows `speedRatio` of zero, and `pump_head` in `nodal_studio/solver/engine.py` returns zero head for a speed of zero or less, with no range error). Nothing here is built. Owner's decisions recorded: part B first (done, T0); the NODAL session is busy, so SNEED's side of part A is written here.
+
+### Part A, simplified
+
+The first idea (a list of changes that NODAL applies as commands) is not needed. If an initiating event can be written as an edit to the plant model, then:
+
+- the **mutation is a second NODAL model**: the base model with named edits (component, field, from, to). It has its own hash.
+- SNEED does not apply or run anything. It records **which edits make the second model from the first**, so a reader can see what the initiating event meant, and so a change to the base model is noticed.
+
+A small document, `sneed.th-mutation` (stage T1, not built):
+- `base_model` {name, hash}, `mutated_model` {name, hash}, `edits` (a list of `{component, field, from, to}` as text and numbers, no code), `applies` (only `from-start` in v1), `synthetic` (example label), the usual id and time stamps.
+- Stale rule: stale when the base model's hash now differs from the recorded one, or the mutated model's hash does. A mutation record never says how likely the event is.
+- The criterion's existing fields carry it: `plant.model_hash` is the **mutated** model's hash and `plant.mutation_list_hash` is the hash of this record (null when the run used an unmodified model, which is all of T0). Nothing in the T0 schemas changes.
+- It stays a human-reviewed record: a person writes the edits and says they match. The tool checks only the hashes, and (later, when the models can be read) that each named field really differs by the stated amount.
+
+What this does **not** give: an event in the middle of a run on a plant that was already at steady state. "From start" means the loop begins with the pump stopped, so there is no steady state before the event and no coast-down. A first-example criterion must say so in its description. A mid-run event needs the runtime command route (a pump speed change at a step) or a trip that drives the pump, which the NODAL session has not confirmed is built. That is a later step, not a gap in the design.
+
+### First example (proposal for the owner, labelled example)
+
+Use the golden pumped loop (`pump1`, output `w_loop`):
+- Mutation: `pump1` `speedRatio` 1 to 0, from start.
+- Criterion: `w_loop` above a stated limit (kg/s or m3/s as the output states) throughout a stated window, for a heading such as "forced flow is kept". With one pump this will almost surely say "did not hold"; its use is to prove the record, the stale rule and the display, not to teach redundancy. The two-pump loop the NODAL session offered to build is the real example ("one pump keeps the core cooled"), and a second mutation (`pump1` stopped, `pump2` running) would be the second record.
+- A SNEED event tree for it needs a fault-tree model with a pump event; the existing lessons' models can be reused, or a small one written. The numbers in it are invented and labelled so.
+
+### Not confirmed (asked of the NODAL session in `messages/pipe-studio.md`)
+
+1. Does a run with `pump1.head.speedRatio` 0 start and finish on the golden pumped loop, and what does `w_loop` do (stays at the starting value, falls to a number, or fails)? SNEED's reading of `pump_head` says no range error, nothing more.
+2. What exactly is `w_loop` (unit, sign, where measured), and is the golden model's result file the place its numbers should be read from?
+3. Can a trip or control drive pump speed today, or only a runtime command? (Decides whether a mid-run pump trip is possible soon.)
+
+Until these are answered nothing is assumed: the first example stays a proposal.
+
+### Drawbacks of the order (part A last)
+
+- The first example is thin (one pump). Accepted, as above.
+- A "stopped from start" run may not be a faithful stand-in for a trip, and a student could read it as one. The wording of every judgement and criterion must keep saying "from the start of the run".
+- If the NODAL answer to question 1 is that the run fails, the first example moves to a different mutation (for example a closed valve) or waits for the two-pump loop.
