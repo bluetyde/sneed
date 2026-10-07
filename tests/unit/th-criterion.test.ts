@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { criterionForHeading, criterionHash, judge, TH_NOTE, validateAnswer, validateCriterion, type ThCriterion, type ThCurrent } from '../../src/core/th-criterion.js';
 
 const oracles = JSON.parse(readFileSync(fileURLToPath(new URL('../th-criterion-oracles.json', import.meta.url)), 'utf8')) as {
-  base: { criterion: ThCriterion; answer: Record<string, unknown>; current: ThCurrent };
+  base: { criterion: ThCriterion; answer: Record<string, unknown>; current: RawCurrent };
   cases: { name: string; patch: Record<string, unknown>; expect: { status: string; reasons: string[] } }[];
   headings: { cases: { name: string; tree: string; heading: string; others: string[]; dropBase?: boolean; expect: string; messageHas?: string }[] };
 };
 
+type RawCurrent = Omit<ThCurrent, 'treeHeadings'> & { treeHeadings: string[] };
+const toCurrent = (c: RawCurrent): ThCurrent => ({ ...c, treeHeadings: new Set(c.treeHeadings) });
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 function setPath(root: Record<string, unknown>, dotted: string, value: unknown): void {
   const parts = dotted.split('.');
@@ -20,14 +22,14 @@ function setPath(root: Record<string, unknown>, dotted: string, value: unknown):
 const HASH = (c: ThCriterion): string => criterionHash(c);
 
 function build(patch: Record<string, unknown>) {
-  const base = clone(oracles.base) as unknown as { criterion: ThCriterion; answer: Record<string, unknown>; current: ThCurrent };
+  const base = clone(oracles.base) as unknown as { criterion: ThCriterion; answer: Record<string, unknown>; current: RawCurrent };
   const baseHash = HASH(oracles.base.criterion);
   const root = base as unknown as Record<string, unknown>;
   for (const [k, v] of Object.entries(patch)) setPath(root, k, v);
   const own = HASH(base.criterion);
   if ((base.answer as { criterion_hash: string }).criterion_hash === '$CRITERION_HASH') (base.answer as { criterion_hash: string }).criterion_hash = own;
   if ((base.answer as { criterion_hash: string }).criterion_hash === '$BASE_CRITERION_HASH') (base.answer as { criterion_hash: string }).criterion_hash = baseHash;
-  return base;
+  return { criterion: base.criterion, answer: base.answer, current: toCurrent(base.current) };
 }
 
 describe('the hand oracles for the thermal-hydraulic criterion (plan 14, stage T0)', () => {
@@ -267,6 +269,16 @@ describe('what an answer record must contain', () => {
     }
   });
 
+  it('refuses an engine named without its build: an answer must say which build made it', () => {
+    for (const key of ['name', 'version', 'build']) {
+      const d = ok() as { engine: Record<string, unknown> };
+      delete d.engine[key];
+      expect(validateAnswer(d).valid, key).toBe(false);
+      d.engine[key] = '';
+      expect(validateAnswer(d).valid, `${key} empty`).toBe(false);
+    }
+  });
+
   it('refuses a record that says it was not entered by hand (this stage has no other source), a bad status and a missing hash', () => {
     for (const edit of [(d: Record<string, any>) => (d.answer.entered_by = 'engine'), (d: Record<string, any>) => (d.run.status = 'ok'), (d: Record<string, any>) => delete d.criterion_hash, (d: Record<string, any>) => (d.criterion_hash = 'abc')]) {
       const d = ok() as Record<string, any>;
@@ -277,7 +289,7 @@ describe('what an answer record must contain', () => {
 });
 
 describe('judge on hostile input', () => {
-  const cur = oracles.base.current;
+  const cur = toCurrent(oracles.base.current);
   it('never throws and never claims a result for something that is not a record', () => {
     for (const bad of [null, undefined, 5, 'x', [], {}, { schema: 1 }]) {
       const j = judge(bad, bad, cur);

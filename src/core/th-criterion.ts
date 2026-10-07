@@ -65,7 +65,7 @@ export interface ThAnswer {
   answer: { id: string; entered_by: 'hand'; entered: string; note: string };
   criterion_hash: string;
   plant: { model_hash: string; mutation_list_hash: string | null };
-  engine: { name: string; version: string };
+  engine: { name: string; version: string; build: string };
   run: { status: 'completed' | 'failed' | 'truncated' | 'terminated-by-trip' };
   observed: { quantity: string; unit: string; window: ThWindow; min: number; max: number } | null;
 }
@@ -156,8 +156,10 @@ export type ThReason =
   | 'answer-invalid'
   | 'tree-changed'
   | 'plant-changed'
+  | 'engine-changed'
   | 'mutations-changed'
   | 'criterion-changed'
+  | 'heading-unknown'
   | 'run-failed'
   | 'run-truncated'
   | 'run-terminated-by-trip'
@@ -165,11 +167,15 @@ export type ThReason =
   | 'unit-differs'
   | 'window-differs';
 
-/** The identities of what exists NOW, supplied by the caller. */
+/** What exists NOW, supplied by the caller: identities and the headings of the tree. */
 export interface ThCurrent {
   treeHash: string;
   plantModelHash: string;
   mutationListHash: string | null;
+  /** The engine and build that would run it now; an answer made by another one is stale (a changed solver can change the numbers). */
+  engine: { name: string; version: string; build: string };
+  /** The headings of the event tree as it is now. */
+  treeHeadings: ReadonlySet<string>;
 }
 export interface ThJudgement {
   status: ThStatus;
@@ -195,11 +201,14 @@ function stale(c: ThCriterion, a: ThAnswer, cur: ThCurrent): ThReason[] {
   if (c.plant.model_hash !== cur.plantModelHash || a.plant.model_hash !== c.plant.model_hash) r.push('plant-changed');
   if (c.plant.mutation_list_hash !== cur.mutationListHash || a.plant.mutation_list_hash !== c.plant.mutation_list_hash) r.push('mutations-changed');
   if (a.criterion_hash !== criterionHash(c)) r.push('criterion-changed');
+  if (a.engine.name !== cur.engine.name || a.engine.version !== cur.engine.version || a.engine.build !== cur.engine.build) r.push('engine-changed');
   return r;
 }
 
-function undetermined(c: ThCriterion, a: ThAnswer): ThReason[] {
+function undetermined(c: ThCriterion, a: ThAnswer, cur: ThCurrent): ThReason[] {
   const r: ThReason[] = [];
+  // the criterion names a heading the tree does not have: nothing it says can be applied to the tree
+  if (!cur.treeHeadings.has(c.applies_to.heading)) r.push('heading-unknown');
   if (a.run.status === 'failed') r.push('run-failed');
   else if (a.run.status === 'truncated') r.push('run-truncated');
   else if (a.run.status === 'terminated-by-trip') r.push('run-terminated-by-trip');
@@ -243,7 +252,7 @@ export function judge(criterion: unknown, answer: unknown, cur: ThCurrent): ThJu
   const a = answer as ThAnswer;
   const s = stale(c, a, cur);
   if (s.length) return make('stale', s);
-  const u = undetermined(c, a);
+  const u = undetermined(c, a, cur);
   if (u.length) return make('not-determined', u);
   return make(holds(c, a.observed!) ? 'held' : 'did-not-hold', []);
 }

@@ -58,3 +58,19 @@ Not decided here: units beyond what a criterion names, time-dependent branching,
 ## Oracle sketch (to write before any code, as the TODO requires)
 
 Hand cases to fix first: criterion met; criterion violated; run failed (not determined); plant model changed since (stale); mutation list changed since (stale); heading with no criterion (refused). Each states the expected record and the exact words shown.
+
+## Stage T0 as built (2026-10-07; the owner: "B alone first, start T0")
+
+Part B only (a branch success criterion); part A (the plant-side mutation list) is not started. Built: the two document types, a validator with typed errors, the criterion hash, the stale rule, the refusals and the judgement, all pure and with the answer entered by hand. Specified in [docs/SCHEMA.md](../SCHEMA.md); code in `src/core/th-criterion.ts`; hand oracles in `tests/th-criterion-oracles.json` (the cases listed above, plus boundaries, several reasons at once and the rule that stale outranks not-determined).
+
+Decisions taken while building, for the owner to overrule:
+1. **A criterion pins the event tree by its whole hash.** Any change of meaning in the tree (even the initiating frequency) makes the criterion stale. Safe, and sometimes more cautious than needed; a narrower pin (the heading's event and the fault-tree model) can come later.
+2. **The window observed must equal the window asked.** A longer window would mix in values the criterion does not ask about.
+3. **A truncated run, or one ended by a trip, is "not determined" even if the numbers it reached already satisfy or violate the condition.** Conservative on purpose.
+4. **"Stale" outranks "not determined".** A stale answer is to be run again, so nothing else about it is shown as a result.
+5. **The answer carries `min` and `max` over the window, not a time series.** Enough for the four comparisons and the two `holds` forms. A time series would let the tool check the numbers itself; that waits for a real NODAL result.
+6. **The window includes both end points** (the value at `to` counts), and the answer's `engine` carries name, version and an immutable build: a changed engine or build makes the answer stale (found by the Codex review).
+7. **Nothing is wired in.** No folder, route or screen reads these documents; the mutation list (part A) is `null` and the schema leaves room for its hash.
+
+Not built: the folder and routes for saving criteria, any screen, the sequence-level use (how a heading's "works" or "fails" in a tree is set from an answer: the tree still holds the probability), an adapter, anything in NODAL, RAFT or SEED.
+
