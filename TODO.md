@@ -84,7 +84,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 ## P4: extensions ([plan 07](docs/plans/07-extensions.md))
 
 - [x] Importance measures with hand oracles (built 2026-10-06, plan 12, docs/EDITOR.md).
-- [~] Event trees ([plan 13](docs/plans/13-event-trees.md)): semantics decided 2026-10-06 (owner took all seven recommendations); **S1 built** (document, validator, storage, API). **S2 built** (engine, record, run route; owner's go-ahead 2026-10-06). **S3 built** (the editor: Event tree view, 2026-10-06). S4 (tree drawing, print/export, Compare) and S5 (three lessons) wait for the owner's go-ahead.
+- [~] Event trees ([plan 13](docs/plans/13-event-trees.md)): semantics decided 2026-10-06 (owner took all seven recommendations); **S1 built** (document, validator, storage, API). **S2 built** (engine, record, run route; owner's go-ahead 2026-10-06). **S3 built** (the editor: Event tree view, 2026-10-06). **S4 built** (tree drawing, SVG/PNG export, print sheet, Compare of saved analyses; 2026-10-07). S5 (three lessons) waits for the owner's go-ahead.
 - [ ] Common-cause groups: stated model, data source and zero-parameter reduction check.
 - [ ] Uncertainty: seeds, sampling design, noise reported separately from input uncertainty.
 - [ ] Decide whether non-coherent logic and time dependence belong in a teaching tool.
