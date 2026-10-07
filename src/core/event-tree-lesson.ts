@@ -22,6 +22,8 @@ export type EtCheck =
   | { kind: 'end-states-min'; count: number }
   /** Every sequence has an end state that exists. */
   | { kind: 'ends-assigned' }
+  /** Sequences are grouped by how many headings failed on their path: each group shares one end state, and the groups use different ones. */
+  | { kind: 'ends-by-failures' }
   /** The heading failing on `heading_event` is asked only if the heading failing on `only_if_event` took `branch`. */
   | { kind: 'bypass'; heading_event: string; only_if_event: string; branch: Branch }
   /** The student has typed a prediction (a number) in the lesson panel. */
@@ -102,6 +104,7 @@ function validCheck(c: unknown): boolean {
     case 'end-states-min':
       return int(c.count, 1);
     case 'ends-assigned':
+    case 'ends-by-failures':
     case 'prediction':
       return true;
     case 'bypass':
@@ -154,11 +157,14 @@ export function parseEtLesson(text: string): EtLesson {
   for (const o of l.outcomes as unknown[]) {
     if (!isObj(o) || !str(o.id) || !str(o.label) || !str(o.oracle)) return bad('each outcome needs id, label and oracle');
     if (!Array.isArray(o.frequencies) || o.frequencies.length === 0 || !o.frequencies.every((f) => isObj(f) && str(f.key) && num(f.frequency) && f.frequency >= 0)) bad('outcome frequencies must be a non-empty list of key and frequency');
+    const listed = o.frequencies as { key: string }[];
+    if (new Set(listed.map((f) => f.key)).size !== listed.length) bad('outcome frequencies name a sequence twice');
     if (!isObj(o.tolerance) || !num(o.tolerance.absolute) || o.tolerance.absolute < 0 || o.tolerance.absolute > MAX_ET_TOLERANCE) bad(`outcome tolerance.absolute must be a finite number from 0 to ${MAX_ET_TOLERANCE}`);
   }
   if (l.prediction !== undefined) {
     const p = l.prediction;
-    if (!isObj(p) || !str(p.prompt) || !Array.isArray(p.sequence) || p.sequence.length === 0 || !p.sequence.every((s) => isObj(s) && str(s.event) && branch(s.branch))) bad('prediction needs a prompt and a sequence of event and branch');
+    // the reveal multiplies the probabilities that the named headings FAIL, so a prediction is about a sequence in which they all do
+    if (!isObj(p) || !str(p.prompt) || !Array.isArray(p.sequence) || p.sequence.length < 2 || !p.sequence.every((s) => isObj(s) && str(s.event) && s.branch === 'fails')) bad('prediction needs a prompt and a sequence of at least two events that all fail');
   }
   if (!Array.isArray(l.discussion) || !l.discussion.every((d) => isObj(d) && str(d.question) && str(d.answer))) bad('discussion must be a list of question and answer');
   return l as unknown as EtLesson;
@@ -167,7 +173,7 @@ export function parseEtLesson(text: string): EtLesson {
 /** Whether an outcome's numbers equal the oracle entry's, to the lesson's own tolerance and exactly in which sequences exist. */
 export function outcomeEqualsOracle(o: EtOutcome, ref: EtOracleEntry): boolean {
   const want = new Map(ref.sequences.map((s) => [eventKey(s.path), s.frequency]));
-  if (want.size !== o.frequencies.length) return false;
+  if (want.size !== o.frequencies.length || new Set(o.frequencies.map((f) => f.key)).size !== o.frequencies.length) return false;
   return o.frequencies.every((f) => {
     const w = want.get(f.key);
     return w !== undefined && Math.abs(w - f.frequency) <= 1e-12;
@@ -208,7 +214,7 @@ export function lessonAgainstOracles(lesson: EtLesson, oracles: EtOracleEntry[])
 // ---------------------------------------------------------------- reading the student's document
 
 interface Head { id: string; event: string; ask?: { heading: string; branch: string } }
-interface Parts { frequency: number | null; heads: Head[]; endIds: Set<string>; seqEnds: string[]; malformed: boolean }
+interface Parts { frequency: number | null; heads: Head[]; endIds: Set<string>; seqEnds: string[]; /** For each sequence, how many headings failed on its path. */ seqFails: number[]; malformed: boolean }
 
 /** Reads the student's document without coercing anything: an entry of the wrong shape is skipped and marks the document malformed. */
 function parts(doc: unknown): Parts {
@@ -230,9 +236,16 @@ function parts(doc: unknown): Parts {
   if (Array.isArray(d.end_states)) for (const e of d.end_states) (isObj(e) && str(e.id) ? endIds.add(e.id) : (malformed = true));
   else malformed = true;
   const seqEnds: string[] = [];
-  if (Array.isArray(d.sequences)) for (const s of d.sequences) (isObj(s) && typeof s.end_state === 'string' ? seqEnds.push(s.end_state) : (malformed = true));
-  else malformed = true;
-  return { frequency, heads, endIds, seqEnds, malformed };
+  const seqFails: number[] = [];
+  if (Array.isArray(d.sequences)) {
+    for (const s of d.sequences) {
+      if (isObj(s) && typeof s.end_state === 'string' && Array.isArray(s.path)) {
+        seqEnds.push(s.end_state);
+        seqFails.push(s.path.filter((st) => isObj(st) && st.branch === 'fails').length);
+      } else malformed = true;
+    }
+  } else malformed = true;
+  return { frequency, heads, endIds, seqEnds, seqFails, malformed };
 }
 
 export function runEtCheck(c: EtCheck, doc: EtLessonDoc, ctx: { prediction: number | null } = { prediction: null }): boolean {
@@ -253,6 +266,13 @@ export function runEtCheck(c: EtCheck, doc: EtLessonDoc, ctx: { prediction: numb
       const h = p.heads.find((x) => x.event === c.heading_event);
       const on = h?.ask ? p.heads.find((x) => x.id === h.ask!.heading) : undefined;
       return h !== undefined && on !== undefined && on.event === c.only_if_event && h.ask!.branch === c.branch;
+    }
+    case 'ends-by-failures': {
+      if (p.seqEnds.length === 0 || p.seqEnds.some((e) => e === '' || !p.endIds.has(e))) return false;
+      const byCount = new Map<number, Set<string>>();
+      p.seqFails.forEach((n, i) => byCount.set(n, (byCount.get(n) ?? new Set<string>()).add(p.seqEnds[i]!)));
+      const states = [...byCount.values()];
+      return states.every((g) => g.size === 1) && new Set(states.map((g) => [...g][0])).size === states.length;
     }
     case 'prediction':
       return ctx.prediction !== null;
@@ -284,6 +304,8 @@ export function runEtDetect(d: EtDetect, doc: EtLessonDoc): boolean {
 
 /** What the lesson needs of an event-tree result record. */
 export interface EtRecordLike {
+  /** The hash of the fault-tree model the analysis used: the lesson is complete only for the lesson's own model. */
+  input_hashes?: { model_hash?: string };
   headings: { id: string; event: string }[];
   sequences: { key: string; path: PathStep[]; probability: number; frequency: number }[];
 }
@@ -306,7 +328,7 @@ export function matchEtOutcome(lesson: EtStudentLesson, rec: EtRecordLike): EtOu
   const got = frequenciesByEvent(rec);
   if (!got) return null;
   return (
-    lesson.outcomes.find((o) => o.frequencies.length === got.size && o.frequencies.every((f) => { const g = got.get(f.key); return g !== undefined && Math.abs(g - f.frequency) <= o.tolerance.absolute; })) ?? null
+    lesson.outcomes.find((o) => new Set(o.frequencies.map((f) => f.key)).size === got.size && o.frequencies.length === got.size && o.frequencies.every((f) => { const g = got.get(f.key); return g !== undefined && Math.abs(g - f.frequency) <= o.tolerance.absolute; })) ?? null
   );
 }
 
@@ -314,16 +336,33 @@ export interface EtLessonProgress {
   steps: { id: string; done: boolean }[];
   mistakes: { id: string; message: string }[];
   malformed: boolean;
+  /** There is an analysis on show, and it was made with a fault-tree model other than the lesson's (so it cannot complete the lesson). */
+  modelMismatch: boolean;
   outcome: string | null;
   complete: boolean;
 }
 
-export function checkEtLesson(lesson: EtStudentLesson, doc: EtLessonDoc, record: EtRecordLike | null, ctx: { prediction: number | null } = { prediction: null }): EtLessonProgress {
+/** What the lesson needs to know besides the document and the analysis. */
+export interface EtLessonContext {
+  /** What is typed in the prediction box now (shown as progress on the prediction step). */
+  prediction: number | null;
+  /** The prediction that was typed when the analysis on show was started. A lesson that asks for a prediction is complete only with one. */
+  predictionAtResult?: number | null;
+  /** The hash of the lesson's own fault-tree model. Without it a lesson cannot be complete: an unrelated model that gives the same numbers must not count. */
+  modelHash?: string | null;
+}
+
+export function checkEtLesson(lesson: EtStudentLesson, doc: EtLessonDoc, record: EtRecordLike | null, ctx: EtLessonContext = { prediction: null }): EtLessonProgress {
   const steps = lesson.steps.map((s) => ({ id: s.id, done: runEtCheck(s.check, doc, ctx) }));
   const mistakes = lesson.mistakes.filter((m) => runEtDetect(m.detect, doc)).map((m) => ({ id: m.id, message: m.message }));
   const malformed = parts(doc).malformed;
   const matched = record ? matchEtOutcome(lesson, record) : null;
-  return { steps, mistakes, malformed, outcome: matched?.id ?? null, complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null };
+  const modelOk = !!ctx.modelHash && record?.input_hashes?.model_hash === ctx.modelHash;
+  const predictionOk = !lesson.prediction || (ctx.predictionAtResult !== undefined && ctx.predictionAtResult !== null);
+  return {
+    steps, mistakes, malformed, modelMismatch: record !== null && !modelOk, outcome: matched?.id ?? null,
+    complete: !malformed && steps.every((s) => s.done) && mistakes.length === 0 && matched !== null && modelOk && predictionOk,
+  };
 }
 
 // ---------------------------------------------------------------- the reveal after a prediction

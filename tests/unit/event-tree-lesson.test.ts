@@ -32,7 +32,7 @@ const start = (l: EtLesson): E.EtDoc => {
 };
 const analysis = (l: EtLesson, doc: E.EtDoc): EtRecordLike => {
   const r = computeEventTree(l.model.document as unknown as NativeModel, { initiating_event: { frequency: doc.initiating_event.frequency }, headings: doc.headings, end_states: doc.end_states, sequences: doc.sequences });
-  return { headings: doc.headings.map((h) => ({ id: h.id, event: h.event })), sequences: r.sequences };
+  return { input_hashes: { model_hash: HASH }, headings: doc.headings.map((h) => ({ id: h.id, event: h.event })), sequences: r.sequences };
 };
 
 /** What a student who follows the steps does, by the document operations the editor uses. */
@@ -54,7 +54,8 @@ function solve(id: string): E.EtDoc {
   }
   return d;
 }
-const done = (id: string, d: E.EtDoc, prediction: number | null = 0.05) => checkEtLesson(lesson(id), d, analysis(lesson(id), d), { prediction });
+const ctxOf = (prediction: number | null): { prediction: number | null; predictionAtResult: number | null; modelHash: string } => ({ prediction, predictionAtResult: prediction, modelHash: HASH });
+const done = (id: string, d: E.EtDoc, prediction: number | null = 0.05) => checkEtLesson(lesson(id), d, analysis(lesson(id), d), ctxOf(prediction));
 
 describe('the shipped event-tree lessons', () => {
   it('there are three, in order, each with goals, assumptions that disclaim any plant, steps, an outcome, hand calculation and instructor questions', () => {
@@ -102,7 +103,7 @@ describe('a student who follows the steps', () => {
   it('starts every lesson with nothing credited (except the placeholder-free defaults) and no mistake', () => {
     for (const l of lessons) {
       const d = start(l);
-      const p = checkEtLesson(l, d, null, { prediction: null });
+      const p = checkEtLesson(l, d, null, { prediction: null, modelHash: HASH });
       expect(p.mistakes, l.id).toEqual([]);
       expect(p.complete).toBe(false);
       expect(p.steps.find((s) => s.id === 'frequency')!.done, `${l.id} frequency is a placeholder`).toBe(false);
@@ -112,10 +113,10 @@ describe('a student who follows the steps', () => {
 
   it('is not credited without an analysis, with a stale one, or with one of another tree', () => {
     const d = solve(L2);
-    expect(checkEtLesson(lesson(L2), d, null, { prediction: 0.1 }).complete).toBe(false);
+    expect(checkEtLesson(lesson(L2), d, null, ctxOf(0.1)).complete).toBe(false);
     const other = solve(L1);
-    expect(checkEtLesson(lesson(L2), d, analysis(lesson(L1), other), { prediction: 0.1 }).complete).toBe(false);
-    expect(checkEtLesson(lesson(L3), solve(L3), analysis(lesson(L2), solve(L2)), { prediction: null }).complete).toBe(false); // lesson 2's tree is not lesson 3's
+    expect(checkEtLesson(lesson(L2), d, analysis(lesson(L1), other), ctxOf(0.1)).complete).toBe(false);
+    expect(checkEtLesson(lesson(L3), solve(L3), analysis(lesson(L2), solve(L2)), ctxOf(null)).complete).toBe(false); // lesson 2's tree is not lesson 3's
   });
 
   it('is not credited for the wrong frequency, headings in the wrong order, a missing end state or no prediction', () => {
@@ -160,11 +161,69 @@ describe('a student who follows the steps', () => {
     // a lesson whose own mistake list fires on the finished tree is not complete, however right the numbers are
     const strict = structuredClone(l1);
     strict.mistakes.push({ id: 'x', message: 'Always shown for this test.', detect: { kind: 'heading-on-event', event: 'INJ' } });
-    const p = checkEtLesson(strict, d, analysis(l1, d), { prediction: null });
+    const p = checkEtLesson(strict, d, analysis(l1, d), ctxOf(null));
     expect(p.steps.every((x) => x.done)).toBe(true);
     expect(p.outcome).toBe('independent');
     expect(p.mistakes.map((m) => m.id)).toEqual(['x']);
     expect(p.complete).toBe(false);
+  });
+
+  it('an unrelated fault-tree model that gives the same numbers does not complete the lesson', () => {
+    const l = lesson(L3);
+    const d = solve(L3);
+    const good = analysis(l, d);
+    // the student chose a model of two independent events X = 0.28 and Y = 0.3: its sequence frequencies are exactly the lesson's, its hash is not
+    const other: EtRecordLike = { ...good, input_hashes: { model_hash: 'b'.repeat(64) } };
+    expect(matchEtOutcome(l, other)).not.toBeNull(); // the numbers alone cannot tell
+    const p = checkEtLesson(l, d, other, ctxOf(null));
+    expect(p.steps.every((s) => s.done)).toBe(true);
+    expect(p.outcome).toBe('bypass');
+    expect(p.modelMismatch).toBe(true);
+    expect(p.complete).toBe(false);
+    const ok = checkEtLesson(l, d, good, ctxOf(null));
+    expect(ok.modelMismatch).toBe(false);
+    expect(ok.complete).toBe(true);
+    // no analysis, no claim; an analysis without a recorded hash, or a lesson without a known model hash, completes nothing
+    expect(checkEtLesson(l, d, null, ctxOf(null)).modelMismatch).toBe(false);
+    expect(checkEtLesson(l, d, { ...good, input_hashes: undefined }, ctxOf(null)).complete).toBe(false);
+    expect(checkEtLesson(l, d, good, { prediction: null }).complete).toBe(false);
+    expect(checkEtLesson(l, d, good, { prediction: null, modelHash: null }).complete).toBe(false);
+  });
+
+  it('a lesson that asks for a prediction is complete only with one made BEFORE the analysis on show', () => {
+    const l = lesson(L2);
+    const d = solve(L2);
+    const rec = analysis(l, d);
+    expect(checkEtLesson(l, d, rec, { prediction: 0.05, predictionAtResult: 0.05, modelHash: HASH }).complete).toBe(true);
+    // typed after the result: the step shows done, the lesson is not complete
+    const late = checkEtLesson(l, d, rec, { prediction: 0.077, predictionAtResult: null, modelHash: HASH });
+    expect(late.steps.find((s) => s.id === 'predict')!.done).toBe(true);
+    expect(late.complete).toBe(false);
+    expect(checkEtLesson(l, d, rec, { prediction: 0.05, modelHash: HASH }).complete).toBe(false);
+    // a lesson without a prediction is not held up by it
+    expect(checkEtLesson(lesson(L1), solve(L1), analysis(lesson(L1), solve(L1)), { prediction: null, modelHash: HASH }).complete).toBe(true);
+  });
+
+  it('end states must group the paths by how many headings failed: one state for each count, shared by the paths with that count', () => {
+    const d = solve(L1);
+    expect(runEtCheck({ kind: 'ends-by-failures' }, d)).toBe(true);
+    // everything in one state, though three exist
+    let all = d;
+    for (const s of d.sequences) all = E.setSequenceEnd(all, s.path.map((x) => `${x.heading}:${x.branch}`).join(','), 'ES1', NOW);
+    expect(runEtCheck({ kind: 'ends-by-failures' }, all)).toBe(false);
+    // the two single-failure paths in different states
+    const split = E.setSequenceEnd(d, 'H1:fails,H2:works', 'ES3', NOW);
+    expect(runEtCheck({ kind: 'ends-by-failures' }, split)).toBe(false);
+    // two counts sharing a state
+    const merged = E.setSequenceEnd(d, 'H1:fails,H2:fails', 'ES2', NOW);
+    expect(runEtCheck({ kind: 'ends-by-failures' }, merged)).toBe(false);
+    // an unset or unknown state
+    expect(runEtCheck({ kind: 'ends-by-failures' }, E.setSequenceEnd(d, 'H1:works,H2:works', '', NOW))).toBe(false);
+    expect(runEtCheck({ kind: 'ends-by-failures' }, E.setSequenceEnd(d, 'H1:works,H2:works', 'GHOST', NOW))).toBe(false);
+    // the lesson asks for it, and a student who grouped differently is not complete
+    expect(done(L1, all).steps.find((s) => s.id === 'assign')!.done).toBe(false);
+    expect(done(L1, all).complete).toBe(false);
+    expect(done(L1, d).complete).toBe(true);
   });
 
   it('the bypass lesson accepts only the condition it asks for', () => {
@@ -280,6 +339,18 @@ describe('refusing a lesson that cannot be trusted', () => {
     expect(lessonAgainstOracles(mutated(L2, (l) => (l.outcomes[0]!.frequencies[0]!.key = 'X:works,Z:works')), ORACLES)!.code).toBe('L_ORACLE_MISMATCH');
     expect(outcomeEqualsOracle(lesson(L2).outcomes[0]!, ORACLES.find((o) => o.id === 'et-bypass')!)).toBe(false);
   });
+  it('an outcome that names a sequence twice is refused, however many entries it has', () => {
+    const dup = mutated(L1, (l) => {
+      const f = l.outcomes[0]!.frequencies;
+      l.outcomes[0]!.frequencies = [f[0]!, f[0]!, f[0]!, f[0]!];
+    });
+    expect(outcomeEqualsOracle(dup.outcomes[0]!, ORACLES.find((o) => o.id === 'et-independent')!)).toBe(false);
+    expect(lessonAgainstOracles(dup, ORACLES)!.code).toBe('L_ORACLE_MISMATCH');
+    expect(() => parseEtLesson(JSON.stringify(dup))).toThrow(/twice/);
+    // and an analysis is not matched against such an outcome
+    const rec = analysis(lesson(L1), solve(L1));
+    expect(matchEtOutcome(dup, rec)).toBeNull();
+  });
   it('a model that is not the oracle\'s model is refused', () => {
     const edit = (f: (d: { events: { probability: number }[]; gates: { inputs: string[] }[]; top: string }) => void) => mutated(L2, (l) => f(l.model.document as never));
     expect(lessonAgainstOracles(edit((d) => (d.events[0]!.probability = 0.11)), ORACLES)!.code).toBe('L_BAD_MODEL');
@@ -319,6 +390,8 @@ describe('refusing a lesson that cannot be trusted', () => {
     bad((l) => (l.outcomes[0].frequencies = []), /frequencies/);
     bad((l) => (l.outcomes[0].frequencies[0].frequency = -1), /frequencies/);
     bad((l) => (l.prediction = { prompt: 'x', sequence: [] }), /prediction/);
+    bad((l) => (l.prediction = { prompt: 'x', sequence: [{ event: 'X', branch: 'works' }, { event: 'Y', branch: 'fails' }] }), /prediction/); // the reveal is about failures
+    bad((l) => (l.prediction = { prompt: 'x', sequence: [{ event: 'X', branch: 'fails' }] }), /prediction/);
     bad((l) => delete l.discussion, /discussion/);
     bad((l) => (l.discussion = [{ question: 'q' }]), /discussion/);
   });

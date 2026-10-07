@@ -97,10 +97,10 @@
     },
     {
       "id": "assign",
-      "prompt": "Choose an end state for each of the four sequences.",
-      "hint": "The list \"Ends in\" in each row of the Sequences table. Think about how many headings failed on the path.",
+      "prompt": "Choose an end state for each of the four sequences: the same one for paths with the same number of failed headings, and a different one for each number (none, one, two).",
+      "hint": "The list \"Ends in\" in each row of the Sequences table. Count how many headings failed on the path. The two paths with exactly one failure go to the same end state.",
       "check": {
-        "kind": "ends-assigned"
+        "kind": "ends-by-failures"
       }
     }
   ],

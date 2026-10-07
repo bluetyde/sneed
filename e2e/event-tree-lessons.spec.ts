@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 
@@ -21,8 +23,9 @@ const analyse = async (page: Page): Promise<void> => {
   await page.locator('[data-action="et-run"]').click();
   await expect(page.getByTestId('et-result-status')).toBeVisible();
 };
-const assignAll = async (page: Page, n: number): Promise<void> => {
-  for (let i = 0; i < n; i++) await page.locator(`[data-field="et-s-end-${i}"]`).selectOption({ index: 1 });
+/** Lesson 1: the end state follows how many headings failed on the path (none, one, one, both). */
+const assignByFailures = async (page: Page): Promise<void> => {
+  for (const [i, state] of [1, 2, 2, 3].entries()) await page.locator(`[data-field="et-s-end-${i}"]`).selectOption({ index: state });
 };
 
 test.describe('event-tree lessons', () => {
@@ -57,7 +60,7 @@ test.describe('event-tree lessons', () => {
     await page.locator('[data-action="et-add-end"]').click();
     await expect(step(page, 'end-states')).toHaveAttribute('data-done', 'true');
     await expect(step(page, 'assign')).toHaveAttribute('data-done', 'false');
-    await assignAll(page, 4);
+    await assignByFailures(page);
     await expect(step(page, 'assign')).toHaveAttribute('data-done', 'true');
     await expect(page.getByTestId('et-lesson-run-prompt')).toBeVisible();
     await expect(page.getByTestId('et-lesson-complete')).toHaveCount(0); // not complete until an analysis matches
@@ -86,6 +89,7 @@ test.describe('event-tree lessons', () => {
     await expect(page.getByTestId('et-lesson-complete')).toHaveCount(0);
     // right frequency, but not analysed again: the old analysis is not accepted
     await setFrequency(page, '0.1');
+    await assignByFailures(page); // grouped by the number of failed headings, as the lesson asks
     await expect(page.getByTestId('et-lesson-complete')).toHaveCount(0);
     await analyse(page);
     await expect(page.getByTestId('et-lesson-complete')).toBeVisible();
@@ -217,5 +221,23 @@ test.describe('event-tree lessons', () => {
     await page.keyboard.type('0.1');
     await page.keyboard.press('Enter');
     await expect(step(page, 'predict')).toHaveAttribute('data-done', 'true');
+  });
+
+  test('a saved model with the same name as the lesson model is not replaced: the lesson uses a numbered name and says so', async ({ app, page }) => {
+    await app.open();
+    const lessonFile = path.join(import.meta.dirname, '..', 'lessons', 'event-trees', '02-shared-event.json');
+    const lessonModel = (JSON.parse(readFileSync(lessonFile, 'utf8')) as { model: { document: unknown } }).model.document;
+    const mine = JSON.stringify({ ...(lessonModel as object), top: 'X' }); // a different, valid model under the lesson's name
+    const put = (text: string) => page.request.put('/api/models/lesson-et-shared', { headers: { 'x-sneed-request': '1' }, data: { text } });
+    try {
+      expect((await put(mine)).ok()).toBe(true);
+      await start(page, 'et-02-shared-event');
+      await expect(page.getByTestId('notice')).toContainText('already exists and is not this lesson');
+      await expect(page.locator('[data-field="et-model"]')).toHaveValue('lesson-et-shared-2');
+      const kept = (await (await page.request.get('/api/models/lesson-et-shared')).json()) as { text: string };
+      expect(kept.text).toBe(mine); // untouched
+    } finally {
+      await put(JSON.stringify(lessonModel, null, 2) + String.fromCharCode(10)); // put the shared worker server back as the other tests expect it
+    }
   });
 });

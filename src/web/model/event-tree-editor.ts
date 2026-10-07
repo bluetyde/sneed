@@ -53,7 +53,10 @@ export class EventTreeEditor {
   calcShown = false;
   /** What is typed in the prediction box, and the number it was when Analyse was pressed: the reveal uses the second, so a guess cannot be changed after seeing the answer. */
   predictionText = '';
-  private predictionAtRun: number | null = null;
+  /** The prediction that was typed when the analysis now on show was started, kept WITH that analysis: a rerun that fails, or a guess typed later, cannot change what is shown beside an earlier result. */
+  private resultPrediction: { result: unknown; value: number | null } | null = null;
+  /** The hash and saved name of the lesson's own fault-tree model: the lesson is complete only for an analysis made with exactly that model. */
+  private lessonModelHash: string | null = null;
   notice: Notice | null = null;
 
   static queuePollMs = 700;
@@ -231,22 +234,27 @@ export class EventTreeEditor {
     this.emit();
   }
   /**
-   * Starts a lesson: saves the fault-tree model it ships under its own name (replacing a model of that name), and replaces the tree on screen
-   * with a new one that refers to it. The first heading starts on the model's first event, a placeholder frequency of 1 stands in until the
-   * student sets the lesson's, and nothing of the lesson's answer is filled in.
+   * Starts a lesson: saves the fault-tree model it ships under its own name and replaces the tree on screen with a new one that refers to it.
+   * A model the student saved under that name is NEVER replaced: if the name holds a different model, the lesson's model is saved under a
+   * numbered name instead (and says so). The first heading starts on the model's first event, a placeholder frequency of 1 stands in until the
+   * student sets the lesson's, and nothing of the lesson's answer is filled in. A start that was overtaken (another document, or an edit made
+   * while it was under way) changes nothing.
    */
   async startLesson(id: string): Promise<boolean> {
     const lesson = this.lessons.find((l) => l.id === id);
     if (!lesson) return false;
     const gen = ++this.docGen;
+    const before = this.doc;
     const text = JSON.stringify(lesson.model.document, null, 2) + String.fromCharCode(10);
     try {
-      await this.api.saveModel(lesson.model.name, text);
+      const target = await this.freeModelName(lesson.model.name, text);
+      if (target.write) await this.api.saveModel(target.name, text);
       const v = await this.api.validate(text);
       if (!v.valid || !v.model_hash) throw new Error('the lesson model is not valid');
-      if (gen !== this.docGen) return false;
+      if (gen !== this.docGen || this.doc !== before) return false;
+      if (target.name !== lesson.model.name) this.setNotice('info', `A model called ${lesson.model.name} already exists and is not this lesson's, so the lesson's model was saved as ${target.name}. Your model was not changed.`);
       const first = (lesson.model.document as { events?: { id?: string }[] }).events?.[0]?.id ?? 'none';
-      let doc = E.newEventTree({ name: lesson.model.name, hash: v.model_hash, top: first }, `Lesson: ${lesson.title}`, this.now());
+      let doc = E.newEventTree({ name: target.name, hash: v.model_hash, top: first }, `Lesson: ${lesson.title}`, this.now());
       doc = E.setInitiating(doc, { frequency: 1 }, this.now());
       this.frequencyDraft = null;
       this.doc = doc;
@@ -257,9 +265,10 @@ export class EventTreeEditor {
       this.model = null;
       this.comparison = null;
       this.lesson = lesson;
+      this.lessonModelHash = v.model_hash;
       this.calcShown = false;
       this.predictionText = '';
-      this.predictionAtRun = null;
+      this.resultPrediction = null;
       this.scheduleValidation(0);
       this.emit();
       await this.refreshModels();
@@ -273,9 +282,10 @@ export class EventTreeEditor {
   leaveLesson(): void {
     if (!this.lesson) return;
     this.lesson = null;
+    this.lessonModelHash = null;
     this.calcShown = false;
     this.predictionText = '';
-    this.predictionAtRun = null;
+    this.resultPrediction = null;
     this.emit();
   }
   setPrediction(text: string): void {
@@ -299,13 +309,39 @@ export class EventTreeEditor {
     }
   }
   get lessonProgress(): EtLessonProgress | null {
-    return this.lesson ? checkEtLesson(this.lesson, this.doc, this.currentRecord, { prediction: this.prediction }) : null;
+    return this.lesson ? checkEtLesson(this.lesson, this.doc, this.currentRecord, { prediction: this.prediction, predictionAtResult: this.predictionAtResult, modelHash: this.lessonModelHash }) : null;
+  }
+  /** The prediction that was typed when the analysis on show was started; null when there was none, or when the analysis on show is not that one. */
+  get predictionAtResult(): number | null {
+    return this.resultPrediction !== null && this.resultPrediction.result === this.result ? this.resultPrediction.value : null;
   }
   /** The prediction beside the result, with the numbers from the student's own analysis; null until there is a current result made after a prediction. */
   get reveal(): PredictionReveal | null {
     const rec = this.currentRecord;
-    if (!this.lesson?.prediction || !rec || this.predictionAtRun === null) return null;
-    return predictionReveal(this.lesson, rec, rec.initiating_event.frequency, this.predictionAtRun);
+    const guess = this.predictionAtResult;
+    if (!this.lesson?.prediction || !rec || guess === null) return null;
+    return predictionReveal(this.lesson, rec, rec.initiating_event.frequency, guess);
+  }
+  /** A model name for the lesson's model: its own name when that is free or already holds exactly this model, else the first free numbered one. */
+  private async freeModelName(base: string, text: string): Promise<{ name: string; write: boolean }> {
+    const same = (a: string): boolean => {
+      try {
+        return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(text));
+      } catch {
+        return false;
+      }
+    };
+    for (let i = 1; i <= 20; i++) {
+      const name = i === 1 ? base : `${base}-${i}`;
+      try {
+        const existing = await this.api.loadModel(name);
+        if (same(existing)) return { name, write: false };
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return { name, write: true };
+        throw e;
+      }
+    }
+    throw new Error(`there is no free model name for the lesson (${base}, ${base}-2, ... are all taken by other models)`);
   }
   async refreshTrees(): Promise<void> {
     try {
@@ -532,7 +568,8 @@ export class EventTreeEditor {
     const requestId = `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const text = this.text;
     const approximation = this.approximation;
-    this.predictionAtRun = this.prediction;
+    const predictionNow = this.prediction;
+    const gen = this.docGen;
     this.running = true;
     this.queueAhead = 0;
     this.requestId = requestId;
@@ -543,11 +580,12 @@ export class EventTreeEditor {
     try {
       const r = await this.api.runEventTree(text, approximation, requestId);
       if (r.kind === 'dequeued') this.setNotice('info', 'The analysis was cancelled while it waited its turn. Nothing was run.');
-      else {
+      else if (gen === this.docGen) {
         this.result = r;
         this.resultApproximation = approximation;
+        this.resultPrediction = { result: r, value: predictionNow };
         void this.refreshRuns();
-      }
+      } else void this.refreshRuns(); // another document was put on the screen meanwhile (a lesson, New, Open): this answer is for the old one
     } catch (e) {
       this.runError = e instanceof ApiError ? `${e.message} (${e.code})` : (e as Error).message;
     } finally {
