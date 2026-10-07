@@ -239,3 +239,7 @@ ol.lessons h2 { margin: 0 0 4px; }
 @media (max-width: 900px) { .et-body { flex-direction: column; } .et-side { border-left: 0; border-top: 1px solid var(--line); } }
 .et-drawing { overflow-x: auto; background: #fff; border: 1px solid var(--line2); border-radius: 4px; padding: 4px; }
 .et-figure { display: block; width: 100%; min-width: 640px; height: auto; }
+.et-lessons { border: 1px solid var(--line2); border-radius: 4px; padding: 6px 8px; margin-bottom: 12px; background: var(--panel2); }
+.et-lessons > summary { cursor: pointer; font-weight: 600; }
+.et-lessons h3 { margin: 0 0 4px; }
+.et-lessons ol.lessons > li { background: var(--panel); }

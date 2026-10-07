@@ -1,6 +1,7 @@
 // The event-tree editor's state and commands, with no DOM (like Editor for fault trees): the document, what the server says about it, the
 // saved fault-tree model it refers to, a run in progress and the result on show. The UI only draws this and calls its methods.
 import { diffEventTreeResults, type EtResultDiff } from '../../core/event-tree-compare.js';
+import { checkEtLesson, predictionReveal, type EtStudentLesson, type EtLessonProgress, type PredictionReveal } from '../../core/event-tree-lesson.js';
 import { ApiError, type EtApi, type EtRunInfo, type EtRunResponse, type EtValidateResponse, type ModelInfo, type RunStatus, type ValidateResponse } from '../api.js';
 import type { EtIssue } from '../../core/event-tree.js';
 import type { EventTreeResult } from '../../core/event-tree-result.js';
@@ -44,6 +45,15 @@ export class EventTreeEditor {
   comparison: { a: string; b: string; diff: EtResultDiff } | null = null;
   compareError: string | null = null;
   private compareSeq = 0;
+  /** The lessons the server offers, and the one being worked, if any. */
+  lessons: EtStudentLesson[] = [];
+  lessonsError: string | null = null;
+  lesson: EtStudentLesson | null = null;
+  /** The hand calculation is shown only after the student has analysed the tree (docs/plans/04-lessons.md). */
+  calcShown = false;
+  /** What is typed in the prediction box, and the number it was when Analyse was pressed: the reveal uses the second, so a guess cannot be changed after seeing the answer. */
+  predictionText = '';
+  private predictionAtRun: number | null = null;
   notice: Notice | null = null;
 
   static queuePollMs = 700;
@@ -209,6 +219,94 @@ export class EventTreeEditor {
     this.compareError = null;
     this.emit();
   }
+  // ---- lessons
+  async loadLessons(): Promise<void> {
+    try {
+      this.lessons = await this.api.eventTreeLessons();
+      this.lessonsError = null;
+    } catch (e) {
+      this.lessons = [];
+      this.lessonsError = `Lessons are unavailable: ${(e as Error).message}`;
+    }
+    this.emit();
+  }
+  /**
+   * Starts a lesson: saves the fault-tree model it ships under its own name (replacing a model of that name), and replaces the tree on screen
+   * with a new one that refers to it. The first heading starts on the model's first event, a placeholder frequency of 1 stands in until the
+   * student sets the lesson's, and nothing of the lesson's answer is filled in.
+   */
+  async startLesson(id: string): Promise<boolean> {
+    const lesson = this.lessons.find((l) => l.id === id);
+    if (!lesson) return false;
+    const gen = ++this.docGen;
+    const text = JSON.stringify(lesson.model.document, null, 2) + String.fromCharCode(10);
+    try {
+      await this.api.saveModel(lesson.model.name, text);
+      const v = await this.api.validate(text);
+      if (!v.valid || !v.model_hash) throw new Error('the lesson model is not valid');
+      if (gen !== this.docGen) return false;
+      const first = (lesson.model.document as { events?: { id?: string }[] }).events?.[0]?.id ?? 'none';
+      let doc = E.newEventTree({ name: lesson.model.name, hash: v.model_hash, top: first }, `Lesson: ${lesson.title}`, this.now());
+      doc = E.setInitiating(doc, { frequency: 1 }, this.now());
+      this.frequencyDraft = null;
+      this.doc = doc;
+      this.fileName = null;
+      this.savedText = this.text;
+      this.result = null;
+      this.runError = null;
+      this.model = null;
+      this.comparison = null;
+      this.lesson = lesson;
+      this.calcShown = false;
+      this.predictionText = '';
+      this.predictionAtRun = null;
+      this.scheduleValidation(0);
+      this.emit();
+      await this.refreshModels();
+      await this.loadModelInfo();
+      return true;
+    } catch (e) {
+      this.setNotice('error', `Could not start the lesson: ${(e as Error).message}`);
+      return false;
+    }
+  }
+  leaveLesson(): void {
+    if (!this.lesson) return;
+    this.lesson = null;
+    this.calcShown = false;
+    this.predictionText = '';
+    this.predictionAtRun = null;
+    this.emit();
+  }
+  setPrediction(text: string): void {
+    this.predictionText = text;
+    this.emit();
+  }
+  /** The prediction as a number: null when nothing has been typed or what is typed is not a number. */
+  get prediction(): number | null {
+    const t = this.predictionText.trim();
+    const n = Number(t);
+    return t === '' || !Number.isFinite(n) || n < 0 ? null : n;
+  }
+  /** The student has analysed in this lesson at least once (so the hand calculation may be shown). */
+  get hasTried(): boolean {
+    return this.result?.kind === 'ran';
+  }
+  showCalculation(): void {
+    if (this.lesson && this.hasTried) {
+      this.calcShown = true;
+      this.emit();
+    }
+  }
+  get lessonProgress(): EtLessonProgress | null {
+    return this.lesson ? checkEtLesson(this.lesson, this.doc, this.currentRecord, { prediction: this.prediction }) : null;
+  }
+  /** The prediction beside the result, with the numbers from the student's own analysis; null until there is a current result made after a prediction. */
+  get reveal(): PredictionReveal | null {
+    const rec = this.currentRecord;
+    if (!this.lesson?.prediction || !rec || this.predictionAtRun === null) return null;
+    return predictionReveal(this.lesson, rec, rec.initiating_event.frequency, this.predictionAtRun);
+  }
   async refreshTrees(): Promise<void> {
     try {
       this.trees = await this.api.listEventTrees();
@@ -361,6 +459,7 @@ export class EventTreeEditor {
     }
     if (gen !== this.docGen) return;
     this.frequencyDraft = null;
+    this.leaveLesson();
     this.doc = E.newEventTree(ref, undefined, this.now());
     this.fileName = null;
     this.savedText = this.text;
@@ -379,6 +478,7 @@ export class EventTreeEditor {
       const doc = JSON.parse(raw) as E.EtDoc;
       if (typeof doc !== 'object' || doc === null || !Array.isArray(doc.headings) || !Array.isArray(doc.sequences) || !doc.fault_tree_model || !doc.initiating_event) throw new Error('this file is not an event tree');
       this.frequencyDraft = null;
+      this.leaveLesson();
       this.doc = doc;
       this.fileName = name;
       this.savedText = this.text;
@@ -432,6 +532,7 @@ export class EventTreeEditor {
     const requestId = `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const text = this.text;
     const approximation = this.approximation;
+    this.predictionAtRun = this.prediction;
     this.running = true;
     this.queueAhead = 0;
     this.requestId = requestId;

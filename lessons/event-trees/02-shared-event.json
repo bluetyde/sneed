@@ -1,0 +1,205 @@
+{
+  "schema": {
+    "id": "sneed.event-tree-lesson",
+    "version": 1
+  },
+  "id": "et-02-shared-event",
+  "title": "When two safety functions share a cause",
+  "goals": [
+    "See that two headings which depend on the same basic event do not fail independently.",
+    "Predict the frequency of \"both fail\" first, then compare it with the exact value and with the product of the two failure probabilities."
+  ],
+  "assumptions": "All numbers are made up for teaching. The initiating event happens 0.5 times per year. A shared support system S fails with probability 0.1. Injection fails if S fails or the injection pump fails (0.2). Cooling fails if S fails or the cooling pump fails (0.3). The tool treats S as ONE event used by both headings. The end states you name are examples, not conditions of any real plant. A frequency here is a result of this model under these assumptions, not a plant figure.",
+  "model": {
+    "name": "lesson-et-shared",
+    "document": {
+      "schema": {
+        "id": "sneed.fault-tree",
+        "version": 1
+      },
+      "model": {
+        "id": "lesson-et-shared",
+        "name": "lesson-et-shared",
+        "created": "2026-10-07T00:00:00Z",
+        "updated": "2026-10-07T00:00:00Z"
+      },
+      "assumptions": {
+        "probability_model": "constant",
+        "independence": "declared-independent",
+        "coherence": "coherent",
+        "time": "none"
+      },
+      "top": "TOP",
+      "events": [
+        {
+          "id": "S",
+          "name": "Shared support fails",
+          "probability": 0.1
+        },
+        {
+          "id": "a",
+          "name": "Injection pump fails",
+          "probability": 0.2
+        },
+        {
+          "id": "b",
+          "name": "Cooling pump fails",
+          "probability": 0.3
+        }
+      ],
+      "gates": [
+        {
+          "id": "X",
+          "name": "Injection fails",
+          "type": "or",
+          "inputs": [
+            "S",
+            "a"
+          ]
+        },
+        {
+          "id": "Y",
+          "name": "Cooling fails",
+          "type": "or",
+          "inputs": [
+            "S",
+            "b"
+          ]
+        },
+        {
+          "id": "TOP",
+          "name": "Both fail",
+          "type": "and",
+          "inputs": [
+            "X",
+            "Y"
+          ]
+        }
+      ]
+    }
+  },
+  "prediction": {
+    "prompt": "Before you analyse: how often per year do you expect BOTH headings to fail? Type your guess. There is no wrong guess; you will see it next to the result.",
+    "sequence": [
+      {
+        "event": "X",
+        "branch": "fails"
+      },
+      {
+        "event": "Y",
+        "branch": "fails"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "frequency",
+      "prompt": "Set the frequency of the initiating event to 0.5 per year.",
+      "hint": "Use the Frequency field under \"Initiating event\".",
+      "check": {
+        "kind": "frequency",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "headings",
+      "prompt": "Make heading 1 fail when X (\"Injection fails\") occurs and name it Injection. Make heading 2 fail when Y (\"Cooling fails\") occurs and name it Cooling.",
+      "hint": "X and Y are gates of the model. Both of them contain the basic event S, so both headings can be caused by the same failure.",
+      "check": {
+        "kind": "heading-events",
+        "events": [
+          "X",
+          "Y"
+        ]
+      }
+    },
+    {
+      "id": "predict",
+      "prompt": "Type your prediction in the box \"Your prediction\" in the lesson panel.",
+      "hint": "You can reason with the numbers in the assumptions: how likely is each heading to fail on its own, and what would you get by multiplying?",
+      "check": {
+        "kind": "prediction"
+      }
+    },
+    {
+      "id": "assign",
+      "prompt": "Give every sequence an end state. One end state for all of them is enough for this lesson.",
+      "hint": "Use \"Give them all\" above the Sequences table, or the list in each row.",
+      "check": {
+        "kind": "ends-assigned"
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "shared",
+      "label": "Injection and Cooling share the support system S",
+      "oracle": "et-shared",
+      "frequencies": [
+        {
+          "key": "X:works,Y:works",
+          "frequency": 0.252
+        },
+        {
+          "key": "X:works,Y:fails",
+          "frequency": 0.108
+        },
+        {
+          "key": "X:fails,Y:works",
+          "frequency": 0.063
+        },
+        {
+          "key": "X:fails,Y:fails",
+          "frequency": 0.077
+        }
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
+    }
+  ],
+  "mistakes": [
+    {
+      "id": "same-event",
+      "message": "Two headings fail on the same event. Injection is the gate X and Cooling is the gate Y.",
+      "detect": {
+        "kind": "same-event-twice"
+      }
+    },
+    {
+      "id": "top-as-heading",
+      "message": "TOP is the event that both fail at once. A heading is ONE safety function: use X for Injection and Y for Cooling, and let the tree work out what happens when both fail.",
+      "detect": {
+        "kind": "heading-on-event",
+        "event": "TOP"
+      }
+    },
+    {
+      "id": "zero-frequency",
+      "message": "A frequency of 0 makes every sequence frequency 0. The initiating event happens 0.5 times per year here.",
+      "detect": {
+        "kind": "frequency-zero"
+      }
+    }
+  ],
+  "hand_calculation": [
+    "Injection fails with probability P(X) = 1 - (1 - 0.1)(1 - 0.2) = 0.28. Cooling fails with probability P(Y) = 1 - (1 - 0.1)(1 - 0.3) = 0.37.",
+    "The product of the two, 0.28 x 0.37 = 0.1036, would be right only if the headings were independent. They are not: when S fails, both fail together.",
+    "Exactly: both fail if S fails, or if S works and both pumps fail. 0.1 + 0.9 x 0.2 x 0.3 = 0.154. Times 0.5 per year that is 0.077 per year; the product would give 0.0518 per year, about a third too low.",
+    "The other sequences: both work 0.9 x 0.8 x 0.7 = 0.504 (0.252 per year); Injection fails and Cooling works 0.9 x 0.2 x 0.7 = 0.126 (0.063 per year); Injection works and Cooling fails 0.9 x 0.8 x 0.3 = 0.216 (0.108 per year). The four probabilities add up to 1."
+  ],
+  "discussion": [
+    {
+      "question": "Which of the two numbers would you have trusted without the shared support system in the picture: the product, or the exact value? Why is the product too low?",
+      "answer": "The product treats the failures as unrelated. S makes them travel together, so \"both fail\" is more likely than the product says."
+    },
+    {
+      "question": "In the model, how does the tool know the two headings share S?",
+      "answer": "Both headings refer to gates of ONE fault-tree model, and S is one basic event inside both gates. If the author had drawn two separate events called S1 and S2, the tool would have treated them as unrelated."
+    },
+    {
+      "question": "Which assumption of this lesson would you most want to check for a real system?",
+      "answer": "Independence of the basic events other than S, and whether S really is the only shared cause. Neither can be checked by the tool."
+    }
+  ]
+}

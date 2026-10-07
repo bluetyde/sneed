@@ -1,0 +1,205 @@
+{
+  "schema": {
+    "id": "sneed.event-tree-lesson",
+    "version": 1
+  },
+  "id": "et-03-bypass",
+  "title": "A heading that is not always asked",
+  "goals": [
+    "Make a heading that is asked only after an earlier heading has worked, and see that its paths are left out where it is not asked.",
+    "See that the sequence frequencies still add up to the frequency of the initiating event."
+  ],
+  "assumptions": "All numbers are made up for teaching. The initiating event happens 0.5 times per year. Same shared support system as the previous lesson: S fails with probability 0.1, the injection pump with 0.2, the cooling pump with 0.3. Here Cooling is asked only if Injection worked. The end states you name are examples, not conditions of any real plant. A frequency here is a result of this model under these assumptions, not a plant figure.",
+  "model": {
+    "name": "lesson-et-shared",
+    "document": {
+      "schema": {
+        "id": "sneed.fault-tree",
+        "version": 1
+      },
+      "model": {
+        "id": "lesson-et-shared",
+        "name": "lesson-et-shared",
+        "created": "2026-10-07T00:00:00Z",
+        "updated": "2026-10-07T00:00:00Z"
+      },
+      "assumptions": {
+        "probability_model": "constant",
+        "independence": "declared-independent",
+        "coherence": "coherent",
+        "time": "none"
+      },
+      "top": "TOP",
+      "events": [
+        {
+          "id": "S",
+          "name": "Shared support fails",
+          "probability": 0.1
+        },
+        {
+          "id": "a",
+          "name": "Injection pump fails",
+          "probability": 0.2
+        },
+        {
+          "id": "b",
+          "name": "Cooling pump fails",
+          "probability": 0.3
+        }
+      ],
+      "gates": [
+        {
+          "id": "X",
+          "name": "Injection fails",
+          "type": "or",
+          "inputs": [
+            "S",
+            "a"
+          ]
+        },
+        {
+          "id": "Y",
+          "name": "Cooling fails",
+          "type": "or",
+          "inputs": [
+            "S",
+            "b"
+          ]
+        },
+        {
+          "id": "TOP",
+          "name": "Both fail",
+          "type": "and",
+          "inputs": [
+            "X",
+            "Y"
+          ]
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "id": "frequency",
+      "prompt": "Set the frequency of the initiating event to 0.5 per year.",
+      "hint": "Use the Frequency field under \"Initiating event\".",
+      "check": {
+        "kind": "frequency",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "headings",
+      "prompt": "Make heading 1 fail when X occurs (Injection) and heading 2 fail when Y occurs (Cooling).",
+      "hint": "Use the list \"Fails when this occurs\" in each row of the Headings table.",
+      "check": {
+        "kind": "heading-events",
+        "events": [
+          "X",
+          "Y"
+        ]
+      }
+    },
+    {
+      "id": "bypass",
+      "prompt": "In the column \"Asked\" of the Cooling row, choose \"Only if Injection works\".",
+      "hint": "The list offers the earlier headings and the branch each must have taken.",
+      "check": {
+        "kind": "bypass",
+        "heading_event": "Y",
+        "only_if_event": "X",
+        "branch": "works"
+      }
+    },
+    {
+      "id": "paths",
+      "prompt": "Look at the Sequences table. Where Injection fails, Cooling is not asked, so that path has no Cooling branch. Check that there are three sequences.",
+      "hint": "Injection works leads to two paths (Cooling works or fails); Injection fails leads to one.",
+      "check": {
+        "kind": "sequence-count",
+        "count": 3
+      }
+    },
+    {
+      "id": "assign",
+      "prompt": "Give every sequence an end state.",
+      "hint": "Use \"Give them all\" above the Sequences table, or the list in each row.",
+      "check": {
+        "kind": "ends-assigned"
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "bypass",
+      "label": "Cooling asked only if Injection worked",
+      "oracle": "et-bypass",
+      "frequencies": [
+        {
+          "key": "X:works,Y:works",
+          "frequency": 0.252
+        },
+        {
+          "key": "X:works,Y:fails",
+          "frequency": 0.108
+        },
+        {
+          "key": "X:fails",
+          "frequency": 0.14
+        }
+      ],
+      "tolerance": {
+        "absolute": 1e-12
+      }
+    }
+  ],
+  "mistakes": [
+    {
+      "id": "same-event",
+      "message": "Two headings fail on the same event. Injection is the gate X and Cooling is the gate Y.",
+      "detect": {
+        "kind": "same-event-twice"
+      }
+    },
+    {
+      "id": "top-as-heading",
+      "message": "TOP is the event that both fail at once. A heading is ONE safety function: use X for Injection and Y for Cooling.",
+      "detect": {
+        "kind": "heading-on-event",
+        "event": "TOP"
+      }
+    },
+    {
+      "id": "wrong-branch",
+      "message": "Cooling is asked only when Injection WORKED. You chose the other branch, which would ask for Cooling only after Injection failed.",
+      "detect": {
+        "kind": "bypass-other-branch",
+        "heading_event": "Y",
+        "only_if_event": "X",
+        "expected": "works"
+      }
+    },
+    {
+      "id": "zero-frequency",
+      "message": "A frequency of 0 makes every sequence frequency 0. The initiating event happens 0.5 times per year here.",
+      "detect": {
+        "kind": "frequency-zero"
+      }
+    }
+  ],
+  "hand_calculation": [
+    "Where Injection works and Cooling is asked: both work 0.9 x 0.8 x 0.7 = 0.504, and Cooling fails 0.9 x 0.8 x 0.3 = 0.216. Times 0.5 per year: 0.252 and 0.108.",
+    "Where Injection fails, Cooling is not asked, so that sequence has no Cooling branch: its probability is just the probability that Injection fails, 1 - 0.8 x 0.9 = 0.28, and 0.28 x 0.5 = 0.14 per year.",
+    "The three add up to 0.504 + 0.216 + 0.28 = 1 and to 0.5 per year. A path that is left out must not leave a gap: the tool refuses a sequence list that does not cover every case exactly once."
+  ],
+  "discussion": [
+    {
+      "question": "In a real system, when would a safety function not be asked at all after another one failed?",
+      "answer": "For example when the later function depends on the earlier one so that asking it would be meaningless or when the procedure goes straight to another response. The tool only records that the heading is not asked; whether that is right for a real system is an engineering judgement."
+    },
+    {
+      "question": "Why is the \"Injection fails\" sequence 0.28 and not 0.28 x (something about Cooling)?",
+      "answer": "Cooling is not asked on that path, so it contributes no branch. The sequence covers every case in which Injection fails, whatever Cooling would have done."
+    }
+  ]
+}

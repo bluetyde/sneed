@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { documentHash, modelHash } from '../../src/core/canonical.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../../src/core/event-tree.js';
 import { pathKey } from '../../src/core/event-tree-paths.js';
@@ -7,6 +9,9 @@ import { EVENT_TREE_RESULT_SCHEMA, type EventTreeResult } from '../../src/core/e
 import { ApiError, type EtApi, type EtRunResponse, type ModelInfo, type ValidateResponse } from '../../src/web/api.js';
 import * as E from '../../src/web/model/event-tree-doc.js';
 import { EventTreeEditor } from '../../src/web/model/event-tree-editor.js';
+import { computeEventTree } from '../../src/engines/bdd/event-tree.js';
+import { parseEtLesson, type EtLesson } from '../../src/core/event-tree-lesson.js';
+import type { NativeModel } from '../../src/core/model.js';
 
 const NOW = '2026-10-06T00:00:00Z';
 const modelText = (p: number): string =>
@@ -41,6 +46,11 @@ function fakeApi(over: Partial<EtApi> = {}): EtApi & { models: Map<string, strin
     },
     cancel: async () => ({ cancelled: true }),
     runStatus: async () => ({ running: null, queued: [] }),
+    eventTreeLessons: async () => [],
+    saveModel: async (name, text) => {
+      models.set(name, text);
+      return info(name, text);
+    },
     listEventTreeRuns: async () => [],
     loadEventTreeRun: async (id) => {
       throw new ApiError(404, 'E_NOT_FOUND', `no saved run called ${id}`);
@@ -701,5 +711,163 @@ describe('EventTreeEditor', () => {
     expect(ed.figureSvg()).toContain('FREQUENCY NOT SET');
     ed.setFrequencyText('0.3');
     expect(ed.figureSvg()).toContain('0.3 per year');
+  });
+
+  // ---- lessons
+  const lessonFile = (f: string): EtLesson => parseEtLesson(readFileSync(join(__dirname, '../../lessons/event-trees', f), 'utf8'));
+  const SHARED_LESSON = lessonFile('02-shared-event.json');
+  const INDEP_LESSON = lessonFile('01-independent-headings.json');
+  /** An API whose analysis is the real engine on the real lesson model, so a lesson can be completed end to end. */
+  const lessonApi = (extra: Partial<EtApi> = {}): Partial<EtApi> => ({
+    eventTreeLessons: async () => [INDEP_LESSON, SHARED_LESSON].map(({ discussion: _d, ...l }) => l),
+    runEventTree: async (text): Promise<EtRunResponse> => {
+      const doc = JSON.parse(text) as E.EtDoc;
+      const lesson = doc.fault_tree_model.name === SHARED_LESSON.model.name ? SHARED_LESSON : INDEP_LESSON;
+      const r = computeEventTree(lesson.model.document as unknown as NativeModel, { initiating_event: { frequency: doc.initiating_event.frequency }, headings: doc.headings, end_states: doc.end_states, sequences: doc.sequences });
+      const base = recordFor(text, false);
+      return { kind: 'ran', run_id: 'r1', record: { ...base, sequences: r.sequences.map((q) => ({ key: q.key, path: q.path, end_state: q.end_state, probability: q.probability, frequency: q.frequency, share: q.probability })) } };
+    },
+    ...extra,
+  });
+
+  it('loads the lessons, and says so when they cannot be loaded', async () => {
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    expect(ed.lessons.map((l) => l.id)).toEqual([INDEP_LESSON.id, SHARED_LESSON.id]);
+    expect(ed.lessonsError).toBeNull();
+    api.eventTreeLessons = async () => {
+      throw new ApiError(503, 'E_LESSONS_UNAVAILABLE', 'refused');
+    };
+    await ed.loadLessons();
+    expect(ed.lessons).toEqual([]);
+    expect(ed.lessonsError).toMatch(/Lessons are unavailable: refused/);
+  });
+
+  it('starting a lesson saves its model under its own name, replaces the tree, and fills in none of the answer', async () => {
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    expect(await ed.startLesson(SHARED_LESSON.id)).toBe(true);
+    expect(api.models.has('lesson-et-shared')).toBe(true);
+    expect(JSON.parse(api.models.get('lesson-et-shared')!)).toEqual(SHARED_LESSON.model.document);
+    expect(ed.lesson?.id).toBe(SHARED_LESSON.id);
+    expect(ed.doc.fault_tree_model.name).toBe('lesson-et-shared');
+    expect(ed.doc.fault_tree_model.model_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(ed.doc.headings.map((h) => h.event)).toEqual(['S']); // the model's first event: not the answer, not the top
+    expect(ed.doc.initiating_event.frequency).toBe(1);
+    expect(ed.fileName).toBeNull();
+    expect(ed.dirty).toBe(false);
+    expect(ed.model?.events.map((e) => e.id)).toEqual(['S', 'a', 'b']);
+    await ed.settle();
+    expect(ed.validation?.errors.map((e) => e.code)).not.toContain('E_STALE_MODEL');
+    expect(ed.lessonProgress!.steps.every((s) => !s.done)).toBe(true);
+    expect(ed.lessonProgress!.mistakes).toEqual([]);
+  });
+
+  it('an unknown lesson, or a model that cannot be saved, starts nothing and changes nothing', async () => {
+    const { ed } = await make(
+      lessonApi({
+        saveModel: async () => {
+          throw new ApiError(500, 'E_X', 'disk full');
+        },
+      }),
+    );
+    await ed.loadLessons();
+    const before = ed.text;
+    expect(await ed.startLesson('nope')).toBe(false);
+    expect(await ed.startLesson(SHARED_LESSON.id)).toBe(false);
+    expect(ed.lesson).toBeNull();
+    expect(ed.text).toBe(before);
+    expect(ed.notice?.text).toMatch(/Could not start the lesson: disk full/);
+  });
+
+  it('a lesson that was slow to start does not replace a later one', async () => {
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    const realSave = api.saveModel;
+    api.saveModel = async (n, t) => {
+      if (n === 'lesson-et-shared') await new Promise((r) => setTimeout(r, 30));
+      return realSave(n, t);
+    };
+    const slow = ed.startLesson(SHARED_LESSON.id);
+    await ed.startLesson(INDEP_LESSON.id);
+    expect(await slow).toBe(false);
+    expect(ed.lesson?.id).toBe(INDEP_LESSON.id);
+    expect(ed.doc.fault_tree_model.name).toBe('lesson-et-independent');
+  });
+
+  it('a student can complete a lesson end to end; the prediction shown is the one typed BEFORE analysing', async () => {
+    const { ed } = await make(lessonApi());
+    await ed.loadLessons();
+    await ed.startLesson(SHARED_LESSON.id);
+    ed.setInitiating({ frequency: 0.5 });
+    ed.patchHeading('H1', { event: 'X' });
+    ed.addHeading();
+    ed.patchHeading('H2', { event: 'Y' });
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    expect(ed.lessonProgress!.complete).toBe(false);
+    expect(ed.prediction).toBeNull();
+    ed.setPrediction('0.05');
+    expect(ed.prediction).toBe(0.05);
+    await ed.run();
+    expect(ed.lessonProgress!.complete).toBe(true);
+    expect(ed.reveal!.predicted).toBe(0.05);
+    expect(ed.reveal!.exact).toBeCloseTo(0.077, 12);
+    ed.setPrediction('0.9'); // typed after seeing the answer: not what is shown
+    expect(ed.reveal!.predicted).toBe(0.05);
+    // a prediction that is not a number counts as none
+    ed.setPrediction('lots');
+    expect(ed.prediction).toBeNull();
+    expect(ed.lessonProgress!.complete).toBe(false);
+  });
+
+  it('analysing before a prediction is typed gives no reveal; and the reveal goes when the tree changes', async () => {
+    const { ed } = await make(lessonApi());
+    await ed.loadLessons();
+    await ed.startLesson(SHARED_LESSON.id);
+    ed.setInitiating({ frequency: 0.5 });
+    ed.patchHeading('H1', { event: 'X' });
+    ed.addHeading();
+    ed.patchHeading('H2', { event: 'Y' });
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    await ed.run();
+    expect(ed.reveal).toBeNull();
+    ed.setPrediction('0.1');
+    await ed.run();
+    expect(ed.reveal).not.toBeNull();
+    ed.setInitiating({ frequency: 0.6 });
+    expect(ed.reveal).toBeNull(); // the result is out of date
+    expect(ed.lessonProgress!.complete).toBe(false);
+  });
+
+  it('the hand calculation is available only after an analysis, and New, Open and leaving end the lesson', async () => {
+    const { ed, api } = await make(lessonApi());
+    await ed.loadLessons();
+    await ed.startLesson(INDEP_LESSON.id);
+    ed.showCalculation();
+    expect(ed.calcShown).toBe(false);
+    ed.setUnsetEnds('ES1');
+    await ed.settle();
+    await ed.run();
+    expect(ed.hasTried).toBe(true);
+    ed.showCalculation();
+    expect(ed.calcShown).toBe(true);
+    ed.leaveLesson();
+    expect(ed.lesson).toBeNull();
+    expect(ed.calcShown).toBe(false);
+    await ed.startLesson(INDEP_LESSON.id);
+    expect(ed.calcShown).toBe(false); // a new start is a fresh lesson
+    await ed.newTree();
+    expect(ed.lesson).toBeNull();
+    await ed.startLesson(INDEP_LESSON.id);
+    api.trees.set('t', E.serialize(E.newEventTree(null, 'T', NOW)));
+    await ed.open('t');
+    expect(ed.lesson).toBeNull();
+    ed.setPrediction('5');
+    ed.leaveLesson();
+    expect(ed.predictionText).toBe('5'); // there is no lesson to leave: nothing to reset
+    await ed.startLesson(SHARED_LESSON.id);
+    expect(ed.predictionText).toBe('');
   });
 });

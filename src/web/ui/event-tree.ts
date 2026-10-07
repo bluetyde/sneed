@@ -8,6 +8,7 @@ import { h, rerender, type Child } from './dom.js';
 import { fmt } from './results.js';
 import { confirmDiscard, openEventTreeDialog, saveAsEventTreeDialog } from './dialogs.js';
 import { EventTreeComparePanel } from './event-tree-compare.js';
+import { EventTreeLessonPanel } from './event-tree-lesson.js';
 import { exportEventTreePng, exportEventTreeSvg } from './event-tree-export.js';
 
 const ASSUMPTION_TEXT: Record<string, string> = {
@@ -26,11 +27,14 @@ export class EventTreeView {
   private readonly side = h('div', { class: 'et-side', role: 'region', 'aria-label': 'Problems and results', tabindex: 0, 'data-testid': 'et-side' });
   private readonly sideMain = h('div', { 'data-testid': 'et-side-main' });
   private readonly compare: EventTreeComparePanel;
+  private readonly lessonPanel: EventTreeLessonPanel;
   private sig = { bar: '', edit: '', side: '' };
 
   constructor(private readonly ed: EventTreeEditor) {
     this.compare = new EventTreeComparePanel(ed);
-    this.side.append(this.sideMain, this.compare.el);
+    this.lessonPanel = new EventTreeLessonPanel(ed);
+    this.lessonPanel.confirmStart = () => confirmDiscard(ed, 'event tree');
+    this.side.append(this.lessonPanel.el, this.sideMain, this.compare.el);
     this.el.append(this.bar, h('div', { class: 'et-body' }, this.edit, this.side));
   }
 
@@ -53,6 +57,7 @@ export class EventTreeView {
       rerender(this.sideMain, () => this.sidePanel());
     }
     this.compare.render();
+    this.lessonPanel.render();
   }
 
   // ---------------------------------------------------------------- toolbar

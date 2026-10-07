@@ -3,6 +3,7 @@ import type { Lesson } from '../core/lesson.js';
 import type { ResultRecord } from '../core/result.js';
 import type { EtIssue } from '../core/event-tree.js';
 import type { EventTreeResult } from '../core/event-tree-result.js';
+import type { EtStudentLesson } from '../core/event-tree-lesson.js';
 
 export interface Issue {
   code: string;
@@ -146,6 +147,8 @@ export interface EtApi {
   saveEventTree(name: string, text: string): Promise<ModelInfo>;
   /** The saved fault-tree models the headings can refer to. */
   listModels(): Promise<ModelInfo[]>;
+  eventTreeLessons(): Promise<EtStudentLesson[]>;
+  saveModel(name: string, text: string): Promise<ModelInfo>;
   loadModel(name: string): Promise<string>;
   validate(text: string): Promise<ValidateResponse>;
 }
@@ -186,6 +189,7 @@ export function httpApi(base = ''): Api & EtApi {
     saveModel: (name, text) => call('PUT', `/api/models/${encodeURIComponent(name)}`, { text }),
     validateEventTree: (text) => call('POST', '/api/event-tree/validate', { text }),
     runEventTree: (text, approximation, requestId) => call('POST', '/api/event-tree/run', { text, approximation, ...(requestId ? { request_id: requestId } : {}) }),
+    eventTreeLessons: async () => (await call<{ lessons: EtStudentLesson[] }>('GET', '/api/event-tree-lessons')).lessons,
     listEventTreeRuns: async () => (await call<{ runs: EtRunInfo[] }>('GET', '/api/event-tree-runs')).runs,
     loadEventTreeRun: (id) => call('GET', `/api/event-tree-runs/${encodeURIComponent(id)}`),
     listEventTrees: async () => (await call<{ trees: ModelInfo[] }>('GET', '/api/event-trees')).trees,
