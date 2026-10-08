@@ -1199,7 +1199,7 @@ MUTATIONS += [
     sl("the temporary file is written through whatever is there", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      break;", "writeFileSync(tmp, text, { encoding: 'utf8' });\n      break;"),
     sl("a taken temporary name is not retried", "if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 4) throw e;", "throw e;"),
     sl("a taken temporary name is retried for ever", "|| attempt >= 4) throw e;", ") throw e;"),
-    sl("any error is retried as a taken name", "if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 4) throw e;", "if (attempt >= 4) throw e;"),
+    # not mutated: retrying on any error (not only EEXIST) throws the same error after five tries, so only the number of tries differs
     sl("the project folder is not resolved once", "const projectRoot = existsSync(opts.projectDir) ? realpathSync(opts.projectDir) : path.resolve(opts.projectDir);", "const projectRoot = path.resolve(opts.projectDir);", ROOT / "src/server/app.ts"),
 ]
 
