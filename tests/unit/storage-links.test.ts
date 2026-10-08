@@ -69,6 +69,22 @@ describe('the storage functions', () => {
     expect(code(() => writeModel(dir, 'fresh', '{}'))).toBe('no error');
   });
 
+  it('refuse a symbolic link to a file (only where the right to make one exists: Windows without developer mode refuses)', (ctx) => {
+    const dir = path.join(tmp, 'with-file-link');
+    mkdirSync(dir);
+    const outsideFile = path.join(tmp, 'outside-file.json');
+    writeFileSync(outsideFile, '{"secret":true}');
+    try {
+      symlinkSync(outsideFile, path.join(dir, 'leak.json'), 'file');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EPERM') return ctx.skip();
+      throw e;
+    }
+    expect(code(() => readModel(dir, 'leak'))).toBe('E_LINK');
+    expect(code(() => writeModel(dir, 'leak', '{}'))).toBe('E_LINK');
+    expect(listModels(dir)).toEqual([]);
+  });
+
   it('say so in words', () => {
     const outside = path.join(tmp, 'outside3');
     mkdirSync(outside);
