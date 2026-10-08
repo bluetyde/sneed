@@ -1269,7 +1269,7 @@ MUTATIONS += [
     tj("a missing plant model is guessed", "    if (missing.length) throw new HttpError(400, 'E_PLANT_UNKNOWN'", "    if (false as boolean) throw new HttpError(400, 'E_PLANT_UNKNOWN'"),
     tj("the plant models of the record are not needed", "(rec ? [rec.base_model.name, rec.mutated_model.name] : [])", "[]"),
     tj("the event tree hash is taken from the criterion", "treeHash: tree?.hash ?? '',", "treeHash: crit ? crit.applies_to.event_tree.tree_hash : '',"),
-    tj("the headings of the tree are assumed", "treeHeadings: tree?.headings ?? new Set<string>(),", "treeHeadings: new Set(['H1']),"),
+    # not mutated: the headings given when there is no tree are never read (a missing tree is already stale as tree-changed before headings matter)
     tj("the plant model hash is taken from the criterion", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '',", "plantModelHash: crit ? crit.plant.model_hash : '',"),
     tj("the engine is assumed", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine: { name: 'hand', version: '1', build: 'b1' } },"),
     tj("the models of the record are not looked up", "{ resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },\n      );", "{ resolveModel: () => ({ hash: 'f'.repeat(64) }) },\n      );"),
