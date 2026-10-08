@@ -1196,9 +1196,7 @@ MUTATIONS += [
     sl("a file that is not a plain file is accepted", "  if (!st.isFile()) throw new StorageError('E_LINK', 'the saved file", "  if (false as boolean) throw new StorageError('E_LINK', 'the saved file"),
     sl("a missing folder is an error", "    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // not made yet: nothing to follow", "    if (false as boolean) return; // not made yet: nothing to follow"),
     sl("a new file is an error", "    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // a new file", "    if (false as boolean) return; // a new file"),
-    sl("the temporary file is written through whatever is there", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });
-      break;", "writeFileSync(tmp, text, { encoding: 'utf8' });
-      break;"),
+    sl("the temporary file is written through whatever is there", "writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });\n      break;", "writeFileSync(tmp, text, { encoding: 'utf8' });\n      break;"),
     sl("a taken temporary name is not retried", "if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 4) throw e;", "throw e;"),
     sl("a taken temporary name is retried for ever", "|| attempt >= 4) throw e;", ") throw e;"),
     sl("any error is retried as a taken name", "if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 4) throw e;", "if (attempt >= 4) throw e;"),
