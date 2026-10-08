@@ -148,17 +148,36 @@ describe('answer records over the API', () => {
     expect((await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) })).json.criterion).toBeNull();
   });
 
-  it('searches only the newest 200 criteria and says so when there are more', async () => {
+  it('with two saved criteria of the same meaning, names the newest', async () => {
     const dir = path.join(projectDir, 'th-criteria');
+    const c = criterion(55);
+    const twin = JSON.parse(JSON.stringify(c)) as ThCriterion;
+    twin.criterion.name = 'Twin with another title';
+    writeFileSync(path.join(dir, 'twin-old.json'), JSON.stringify(c));
+    writeFileSync(path.join(dir, 'twin-new.json'), JSON.stringify(twin));
+    utimesSync(path.join(dir, 'twin-old.json'), new Date(Date.now() - 7200_000), new Date(Date.now() - 7200_000));
+    utimesSync(path.join(dir, 'twin-new.json'), new Date(Date.now() + 7200_000), new Date(Date.now() + 7200_000));
+    expect((await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) })).json.criterion).toEqual({ name: 'twin-new' });
+  });
+
+  it('searches only the newest 200 criteria: exactly 200 are all searched, one more is not, and it says so', async () => {
+    const dir = path.join(projectDir, 'th-criteria');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir);
     const oldest = criterion(777);
     writeFileSync(path.join(dir, 'oldest.json'), JSON.stringify(oldest));
     const past = new Date(Date.now() - 3600_000);
     utimesSync(path.join(dir, 'oldest.json'), past, past);
-    for (let i = 0; i < 200; i++) writeFileSync(path.join(dir, `filler-${i}.json`), '{"work":"in progress"}');
-    const r = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(oldest)) });
-    expect(r.json.criterion).toBeNull(); // the oldest is beyond the newest 200
-    expect(r.json.criteria_search_complete).toBe(false);
-    expect(r.json.criteria_searched).toBe(200);
+    for (let i = 0; i < 199; i++) writeFileSync(path.join(dir, `filler-${i}.json`), '{"work":"in progress"}');
+    const exactly = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(oldest)) });
+    expect(exactly.json.criterion).toEqual({ name: 'oldest' }); // the 200th is still searched
+    expect(exactly.json.criteria_search_complete).toBe(true);
+    expect(exactly.json.criteria_searched).toBe(200);
+    writeFileSync(path.join(dir, 'filler-extra.json'), '{"work":"in progress"}');
+    const over = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(oldest)) });
+    expect(over.json.criterion).toBeNull(); // now the oldest is beyond the newest 200
+    expect(over.json.criteria_search_complete).toBe(false);
+    expect(over.json.criteria_searched).toBe(200);
   });
 
   it('refuses an answer folder that is a link', async () => {
