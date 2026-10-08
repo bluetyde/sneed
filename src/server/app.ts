@@ -20,7 +20,7 @@ import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
 import { judgeWithMutation, mutationHash, validateMutationText, validateMutation, type ThMutation } from '../core/th-mutation.js';
-import { criterionHash, validateAnswerText, validateCriterion, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
+import { criterionHash, describeStatus, validateAnswerText, validateCriterion, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
 import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
 import { MAX_MODEL_BYTES, StorageError, isValidModelName, listModels, readModel, writeImport, writeModel } from './storage.js';
 
@@ -529,13 +529,18 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const missing = needed.filter((n) => !plants.has(n));
       if (missing.length) throw new HttpError(400, 'E_PLANT_UNKNOWN', `plant_models must give the current hash of: ${missing.map((n) => JSON.stringify(n)).join(', ')}`);
       const tree = crit ? loadEventTree(crit.applies_to.event_tree.name) : null;
-      const j = judgeWithMutation(
-        criterion.doc,
-        answer.doc,
-        { treeHash: tree?.hash ?? '', treeHeadings: tree?.headings ?? new Set<string>(), plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },
-        mutation ? mutation.doc : null,
-        { resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },
-      );
+      // A record that was named but is not a valid record is not "no record": the judgement is not made, and says why (the core treats a null or
+      // missing record as absent, so a saved `null` or text that is not JSON must not reach it).
+      const j =
+        mutation && !validateMutation(mutation.doc).valid
+          ? { status: 'not-determined' as const, reasons: ['mutation-record-invalid' as const], text: describeStatus('not-determined') }
+          : judgeWithMutation(
+              criterion.doc,
+              answer.doc,
+              { treeHash: tree?.hash ?? '', treeHeadings: tree?.headings ?? new Set<string>(), plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },
+              mutation ? mutation.doc : null,
+              { resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },
+            );
       return send(res, 200, {
         ...j,
         judged_with: {

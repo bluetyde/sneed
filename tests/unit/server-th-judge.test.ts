@@ -275,6 +275,23 @@ describe('mutation records and the judgement over the API', () => {
       expect(r.json.error.message).not.toContain('"loop-pump-off"');
     });
 
+    it('a record that is named but is not a valid record is never ignored: not determined, whatever it holds (a saved null, text that is not JSON, work in progress)', async () => {
+      const plain = criterion(5, { model: ['loop', BASE], list: null }); // a criterion that pins no record: a record that is not valid must not be quietly dropped
+      await put('/api/th-criteria/c-nolist', { text: JSON.stringify(plain) });
+      await put('/api/th-answers/a-nolist', { text: JSON.stringify(answerFor(plain)) });
+      await put('/api/th-mutations/null-rec', { text: 'null' });
+      await put('/api/th-mutations/wip-rec', { text: '{"work":"in progress"}' });
+      writeFileSync(path.join(projectDir, 'th-mutations', 'bad-json.json'), '{nope'); // cannot be saved through the API, but can be on disk
+      for (const m of ['null-rec', 'wip-rec', 'bad-json']) {
+        const r = await judge({ criterion: 'c-nolist', answer: 'a-nolist', mutation: m, plant_models: { loop: BASE } });
+        expect(r.status, m).toBe(200);
+        expect(r.json, m).toMatchObject({ status: 'not-determined', reasons: ['mutation-record-invalid'] });
+        expect(r.json.judged_with.mutation, m).toBe(m);
+      }
+      // and without naming one, the same criterion is judged
+      expect((await judge({ criterion: 'c-nolist', answer: 'a-nolist', mutation: undefined, plant_models: { loop: BASE } })).json.status).toBe('held');
+    });
+
     it('a mutation record that is itself stale (its models differ) makes a criterion that pins it stale', async () => {
       const r = await judge({ plant_models: { ...PLANTS, 'loop-pump-off': MUTATED, loop: H('b') } });
       expect(r.json.status).toBe('stale');
