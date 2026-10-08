@@ -19,7 +19,7 @@ import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../r
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
-import { criterionHash, validateCriterionText, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
+import { criterionHash, validateAnswerText, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
 import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
 import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
@@ -153,6 +153,9 @@ function validateWithHashes(text: string): Record<string, unknown> {
   return { ...v, model_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) };
 }
 
+/** How many saved criteria an answer is matched against (the newest first): the search is bounded, and says when it did not cover them all. */
+const MAX_CRITERIA_SEARCHED = 200;
+
 export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0.1'): Promise<RunningServer> {
   const env = opts.runtimeEnv ?? defaultRuntimeEnv();
   const analyzeFn = opts.analyzeFn ?? realAnalyze;
@@ -177,6 +180,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const eventTreeDir = path.join(projectRoot, 'event-trees');
   /** Success criteria for thermal-hydraulic runs (plan 14) live in their own folder too. */
   const criteriaDir = path.join(projectRoot, 'th-criteria');
+  /** Answer records (what one thermal-hydraulic run showed, entered by hand in stage T0) are kept apart too. */
+  const answersDir = path.join(projectRoot, 'th-answers');
   /** Resolves when it is this job's turn. */
   const acquire = (job: Job): Promise<void> =>
     new Promise<void>((resolve) => {
@@ -354,6 +359,47 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         }
       }
       if (method === 'PUT') return send(res, 200, writeModel(criteriaDir, name, needText(await readJson(req))));
+    }
+
+    // ---- answer records (plan 14, stage T0): what one run showed. Saved as written; validated alone, and matched to the saved criterion they pin by hash.
+    if (p === '/api/th-answers' && method === 'GET') return send(res, 200, { answers: listModels(answersDir) });
+    if (p === '/api/th-answer/validate' && method === 'POST') {
+      const text = needText(await readJson(req));
+      const v = validateAnswerText(text);
+      let criterion: { name: string } | null = null;
+      let searched = 0;
+      let complete = true;
+      if (v.valid) {
+        const wanted = (JSON.parse(text) as ThAnswer).criterion_hash;
+        const saved = listModels(criteriaDir);
+        complete = saved.length <= MAX_CRITERIA_SEARCHED;
+        for (const c of saved.slice(0, MAX_CRITERIA_SEARCHED)) {
+          searched++;
+          try {
+            const ctext = readModel(criteriaDir, c.name);
+            if (validateCriterionText(ctext).valid && criterionHash(JSON.parse(ctext) as ThCriterion) === wanted) {
+              criterion = { name: c.name };
+              break;
+            }
+          } catch {
+            /* a criterion that cannot be read or hashed is not a match */
+          }
+        }
+      }
+      return send(res, 200, { ...v, criterion, criteria_searched: searched, criteria_search_complete: complete, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+    }
+    const am = /^\/api\/th-answers\/([^/]+)$/.exec(p);
+    if (am) {
+      const name = safeDecode(am[1]!);
+      if (method === 'GET') {
+        try {
+          return send(res, 200, { name, text: readModel(answersDir, name) });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === 'E_NOT_FOUND') throw new StorageError('E_NOT_FOUND', `no saved answer called ${name}`);
+          throw e;
+        }
+      }
+      if (method === 'PUT') return send(res, 200, writeModel(answersDir, name, needText(await readJson(req))));
     }
 
     if (p === '/api/event-tree-lessons' && method === 'GET') {
