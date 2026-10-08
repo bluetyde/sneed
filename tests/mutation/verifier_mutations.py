@@ -692,7 +692,7 @@ MUTATIONS += [
     tm("a missing end state field is a generic schema error", "  if (/^\\/sequences\\/\\d+$/.test(path) && missing === 'end_state') return issue(", "  if (false as boolean) return issue("),
     tm("extra fields in schema change the hash", "schema: { id: sch.id, version: sch.version },", "schema: doc.schema,"),
     tm("extra fields in assumptions change the hash", "assumptions: { frequency_unit: as.frequency_unit, probability_basis: as.probability_basis, independence: as.independence, ie_independent_of_events: as.ie_independent_of_events, success_branches: as.success_branches },", "assumptions: doc.assumptions,"),
-    tm("event trees share the model folder", "  const eventTreeDir = path.join(opts.projectDir, 'event-trees');", "  const eventTreeDir = opts.projectDir;", SA),
+    tm("event trees share the model folder", "  const eventTreeDir = path.join(projectRoot, 'event-trees');", "  const eventTreeDir = projectRoot;", SA),
     tm("a tree name is not checked as a name", "      const name = safeDecode(em[1]!);\n      if (method === 'GET') {", "      const name = safeDecode(em[1]!).replace(/[.][.]/g, '');\n      if (method === 'GET') {", SA),
     tm("a missing tree is reported as a model", "throw new StorageError('E_NOT_FOUND', `no saved event tree called ${name}`);", "throw e;", SA),
     tm("a saved model is trusted without validation", "      if (!validateModelText(text).valid) return null;\n      const model = JSON.parse(text) as NativeModel;", "      const model = JSON.parse(text) as NativeModel;", SA),
@@ -1160,7 +1160,7 @@ def tr(name: str, old: str, new: str, f: pathlib.Path = APP) -> tuple:
 
 
 MUTATIONS += [
-    tr("criteria are kept with the event trees", "const criteriaDir = path.join(opts.projectDir, 'th-criteria');", "const criteriaDir = path.join(opts.projectDir, 'event-trees');"),
+    tr("criteria are kept with the event trees", "const criteriaDir = path.join(projectRoot, 'th-criteria');", "const criteriaDir = path.join(projectRoot, 'event-trees');"),
     tr("the list shows the event trees", "{ criteria: listModels(criteriaDir) }", "{ criteria: listModels(eventTreeDir) }"),
     tr("a criterion is read from the event tree folder", "text: readModel(criteriaDir, name) }", "text: readModel(eventTreeDir, name) }"),
     tr("a criterion is saved in the event tree folder", "writeModel(criteriaDir, name, needText", "writeModel(eventTreeDir, name, needText"),
@@ -1184,14 +1184,14 @@ def sl(name: str, old: str, new: str, f: pathlib.Path = STO) -> tuple:
     return (f"storage links: {name}", f, old, new, STL_SUITE)
 
 
+# Not mutated: lstat versus stat in the list and in the file check differ only for a symbolic link to a FILE, which needs the right to make
+# file symlinks (this Windows machine refuses: EPERM). tests/unit/storage-links.test.ts has that case and runs it where the right exists.
 MUTATIONS += [
     sl("a linked folder is used for a name", "  plainFolder(dir);\n  plainFile(file);\n  return file;", "  plainFile(file);\n  return file;"),
     sl("a linked file is used for a name", "  plainFolder(dir);\n  plainFile(file);\n  return file;", "  plainFolder(dir);\n  return file;"),
     sl("a linked folder is listed", "  plainFolder(dir);\n  const out: ModelInfo[] = [];", "  const out: ModelInfo[] = [];"),
     sl("a folder with a file name is listed", "    if (!st.isFile()) continue;", "    if (false as boolean) continue;"),
-    sl("a link is followed when listing", "const st = lstatSync(path.join(dir, f)); // a link is not listed", "const st = statSync(path.join(dir, f)); // a link is not listed"),
     sl("a link is followed when checking a folder", "    st = lstatSync(dir);", "    st = statSync(dir);"),
-    sl("a link is followed when checking a file", "    st = lstatSync(file);", "    st = statSync(file);"),
     sl("a folder is accepted as a storage folder whatever it is", "  if (!st.isDirectory()) throw", "  if (false as boolean) throw"),
     sl("a file that is not a plain file is accepted", "  if (!st.isFile()) throw new StorageError('E_LINK', 'the saved file", "  if (false as boolean) throw new StorageError('E_LINK', 'the saved file"),
     sl("a missing folder is an error", "    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // not made yet: nothing to follow", "    if (false as boolean) return; // not made yet: nothing to follow"),
