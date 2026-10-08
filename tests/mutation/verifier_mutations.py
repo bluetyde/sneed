@@ -1204,6 +1204,34 @@ MUTATIONS += [
 ]
 
 
+THA_SUITE = ("tests/unit/server-th-answers.test.ts", 120)
+
+
+def ta(name: str, old: str, new: str, f: pathlib.Path = APP) -> tuple:
+    return (f"th answers: {name}", f, old, new, THA_SUITE)
+
+
+MUTATIONS += [
+    ta("answers are kept with the criteria", "const answersDir = path.join(projectRoot, 'th-answers');", "const answersDir = path.join(projectRoot, 'th-criteria');"),
+    ta("the list shows the criteria", "{ answers: listModels(answersDir) }", "{ answers: listModels(criteriaDir) }"),
+    ta("an answer is read from the criteria folder", "text: readModel(answersDir, name) }", "text: readModel(criteriaDir, name) }"),
+    ta("an answer is saved in the criteria folder", "writeModel(answersDir, name, needText", "writeModel(criteriaDir, name, needText"),
+    ta("a missing answer is called a model", "no saved answer called", "no saved model called"),
+    ta("an invalid answer is matched to a criterion", "      if (v.valid) {\n        const wanted", "      if (true as boolean) {\n        const wanted"),
+    ta("any criterion matches", "criterionHash(JSON.parse(ctext) as ThCriterion) === wanted", "true"),
+    ta("a criterion that is not valid can match", "if (validateCriterionText(ctext).valid && criterionHash", "if (criterionHash"),
+    ta("the criterion is matched on the wrong hash", "const wanted = (JSON.parse(text) as ThAnswer).criterion_hash;", "const wanted = (JSON.parse(text) as ThAnswer).plant.model_hash;"),
+    ta("the search covers every criterion", "for (const c of saved.slice(0, MAX_CRITERIA_SEARCHED)) {", "for (const c of saved) {"),
+    ta("the search does not say it was cut short", "complete = saved.length <= MAX_CRITERIA_SEARCHED;", "complete = true;"),
+    ta("the search says it was cut short at the limit", "complete = saved.length <= MAX_CRITERIA_SEARCHED;", "complete = saved.length < MAX_CRITERIA_SEARCHED;"),
+    ta("the search is not counted", "          searched++;\n", ""),
+    ta("the first match is not the end of the search", "              criterion = { name: c.name };\n              break;", "              criterion = { name: c.name };"),
+    ta("the answer check is skipped", "const v = validateAnswerText(text);", "const v = { valid: true, errors: [] as never[] };"),
+    ta("the answer check reads the criterion rules", "const v = validateAnswerText(text);", "const v = validateCriterionText(text);"),
+    ta("the document hash is left out", "criteria_search_complete: complete, document_hash: documentHash(Buffer.from(text, 'utf8')) });\n    }\n    const am", "criteria_search_complete: complete, document_hash: null });\n    }\n    const am"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1300,6 +1328,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th routes:")]
     if only == "storlinks":  # just the storage link-refusal mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("storage links:")]
+    if only == "thanswers":  # just the answer-record folder and route mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("th answers:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
