@@ -138,5 +138,5 @@ Criteria only: `th-criteria/` beside the models and event trees, with list, read
 Decisions taken while building, for the owner to overrule:
 1. **A criterion is checked against the saved event tree by the tree's own structure, not its fault-tree model.** A tree that is not structurally valid is "no such tree". The tree pins its model's hash, so a model change reaches the criterion once the tree is updated.
 2. **Same storage rules as models and event trees** (names, 2 MiB, text saved as written, work in progress allowed). No delete route, as for event trees.
-3. **A known weakness, shared with models and event trees and not fixed here:** the storage layer checks file names but not symbolic links or junctions (Codex review, security-boundary). It needs a planted link in the project folder, so it is a local-hardening item for all three folders together.
+3. **Storage links** (Codex review, security-boundary): the storage layer checked names but not symbolic links or junctions. Fixed 2026-10-08 for all three folders together (see TODO.md), with the limits stated there.
 
