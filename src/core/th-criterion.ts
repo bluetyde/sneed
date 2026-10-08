@@ -183,6 +183,7 @@ export type ThReason =
   | 'criterion-changed'
   | 'heading-unknown'
   | 'mutation-link-invalid'
+  | 'mutation-record-invalid'
   | 'run-failed'
   | 'run-truncated'
   | 'run-terminated-by-trip'
