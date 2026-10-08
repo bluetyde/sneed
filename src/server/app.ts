@@ -19,9 +19,10 @@ import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../r
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
+import { judgeWithMutation, mutationHash, validateMutationText, validateMutation, type ThMutation } from '../core/th-mutation.js';
 import { criterionHash, validateAnswerText, validateCriterion, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
 import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
-import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
+import { MAX_MODEL_BYTES, StorageError, isValidModelName, listModels, readModel, writeImport, writeModel } from './storage.js';
 
 export const SERVER_NAME = 'sneed';
 const MAX_BODY = MAX_MODEL_BYTES + 64 * 1024;
@@ -153,6 +154,31 @@ function validateWithHashes(text: string): Record<string, unknown> {
   return { ...v, model_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) };
 }
 
+/** The plant models' current hashes, as the caller gives them: at most 50 names, each a 64-digit hash. */
+function plantModelHashes(v: unknown): Map<string, string> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new HttpError(400, 'E_FIELD', 'the field "plant_models" must be an object of model name to hash');
+  const entries = Object.entries(v as Record<string, unknown>);
+  if (entries.length > 50) throw new HttpError(400, 'E_FIELD', 'plant_models names at most 50 models');
+  const out = new Map<string, string>();
+  for (const [name, hash] of entries) {
+    if (name.length === 0 || name.length > 200) throw new HttpError(400, 'E_FIELD', 'a plant model name must be 1 to 200 characters');
+    if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) throw new HttpError(400, 'E_FIELD', `the hash of the plant model ${JSON.stringify(name)} must be 64 hexadecimal digits`);
+    out.set(name, hash);
+  }
+  return out;
+}
+
+/** The engine that would run the plant model now: a name, a version and an immutable build, each plain text. */
+function engineIdentity(v: unknown): { name: string; version: string; build: string } {
+  const o = typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  const field = (k: string): string => {
+    const x = o?.[k];
+    if (typeof x !== 'string' || x.length === 0 || x.length > 200) throw new HttpError(400, 'E_FIELD', `the field "engine.${k}" must be 1 to 200 characters of text`);
+    return x;
+  };
+  return { name: field('name'), version: field('version'), build: field('build') };
+}
+
 /** How many saved criteria an answer is matched against (the newest first): the search is bounded, and says when it did not cover them all. */
 const MAX_CRITERIA_SEARCHED = 200;
 /** ... and how many bytes of them are read in one search. */
@@ -184,6 +210,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const criteriaDir = path.join(projectRoot, 'th-criteria');
   /** Answer records (what one thermal-hydraulic run showed, entered by hand in stage T0) are kept apart too. */
   const answersDir = path.join(projectRoot, 'th-answers');
+  /** Records of plant-model edits (plan 14, stage T1) are kept apart too. */
+  const mutationsDir = path.join(projectRoot, 'th-mutations');
   /** Resolves when it is this job's turn. */
   const acquire = (job: Job): Promise<void> =>
     new Promise<void>((resolve) => {
@@ -429,6 +457,96 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
         }
       }
       if (method === 'PUT') return send(res, 200, writeModel(answersDir, name, needText(await readJson(req))));
+    }
+
+    // ---- mutation records (plan 14, stage T1): a second plant model is the first one with named edits, pinned by hash. SNEED reads no plant model:
+    // the caller says what the plant models' hashes are now (`plant_models`), and the check is of the record and those hashes.
+    if (p === '/api/th-mutations' && method === 'GET') return send(res, 200, { mutations: listModels(mutationsDir) });
+    if (p === '/api/th-mutation/validate' && method === 'POST') {
+      const body = await readJson(req);
+      const text = needText(body);
+      const plants = body.plant_models === undefined ? null : plantModelHashes(body.plant_models);
+      const v = validateMutationText(text, plants ? { resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) } : {});
+      let mutation_hash: string | null = null;
+      if (v.valid) {
+        try {
+          mutation_hash = mutationHash(JSON.parse(text) as ThMutation);
+        } catch {
+          mutation_hash = null;
+        }
+      }
+      return send(res, 200, { ...v, modelsChecked: plants !== null, mutation_hash, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+    }
+    const mm = /^\/api\/th-mutations\/([^/]+)$/.exec(p);
+    if (mm) {
+      const name = safeDecode(mm[1]!);
+      if (method === 'GET') {
+        try {
+          return send(res, 200, { name, text: readModel(mutationsDir, name) });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === 'E_NOT_FOUND') throw new StorageError('E_NOT_FOUND', `no saved mutation record called ${name}`);
+          throw e;
+        }
+      }
+      if (method === 'PUT') return send(res, 200, writeModel(mutationsDir, name, needText(await readJson(req))));
+    }
+
+    // ---- the judgement (plan 14): what one saved answer says about one saved criterion, now. What can have changed is named by the caller or read
+    // from the saved files: the event tree from its folder, the plant models' hashes and the engine from the request. Nothing is run or sent anywhere.
+    if (p === '/api/th-judge' && method === 'POST') {
+      const body = await readJson(req);
+      const saved = (dir: string, field: string, kind: string, optional = false): { name: string; doc: unknown } | null => {
+        const v = body[field];
+        if (v === undefined || v === null) {
+          if (optional) return null;
+          throw new HttpError(400, 'E_FIELD', `the field "${field}" must name a saved ${kind}`);
+        }
+        if (typeof v !== 'string' || !isValidModelName(v)) throw new HttpError(400, 'E_FIELD', `the field "${field}" must be the name of a saved ${kind}`);
+        let text: string;
+        try {
+          text = readModel(dir, v);
+        } catch (e) {
+          if (e instanceof StorageError && e.code === 'E_NOT_FOUND') throw new StorageError('E_NOT_FOUND', `no saved ${kind} called ${v}`);
+          throw e;
+        }
+        let doc: unknown;
+        try {
+          doc = JSON.parse(text);
+        } catch {
+          doc = undefined; // not JSON: the judgement says the document is not valid
+        }
+        return { name: v, doc };
+      };
+      const criterion = saved(criteriaDir, 'criterion', 'success criterion')!;
+      const answer = saved(answersDir, 'answer', 'answer')!;
+      const mutation = saved(mutationsDir, 'mutation', 'mutation record', true);
+      const plants = plantModelHashes(body.plant_models);
+      const engine = engineIdentity(body.engine);
+      const crit = validateCriterion(criterion.doc).valid ? (criterion.doc as ThCriterion) : null;
+      const rec = mutation && validateMutation(mutation.doc).valid ? (mutation.doc as ThMutation) : null;
+      // the plant models the judgement depends on must be given: an unknown hash is not a changed one
+      const needed = crit ? [...new Set([crit.plant.model_name, ...(rec ? [rec.base_model.name, rec.mutated_model.name] : [])])] : [];
+      const missing = needed.filter((n) => !plants.has(n));
+      if (missing.length) throw new HttpError(400, 'E_PLANT_UNKNOWN', `plant_models must give the current hash of: ${missing.map((n) => JSON.stringify(n)).join(', ')}`);
+      const tree = crit ? loadEventTree(crit.applies_to.event_tree.name) : null;
+      const j = judgeWithMutation(
+        criterion.doc,
+        answer.doc,
+        { treeHash: tree?.hash ?? '', treeHeadings: tree?.headings ?? new Set<string>(), plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },
+        mutation ? mutation.doc : null,
+        { resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },
+      );
+      return send(res, 200, {
+        ...j,
+        judged_with: {
+          criterion: criterion.name,
+          answer: answer.name,
+          mutation: mutation ? mutation.name : null,
+          event_tree: crit ? { name: crit.applies_to.event_tree.name, hash: tree?.hash ?? null } : null,
+          plant_models: Object.fromEntries(needed.map((n) => [n, plants.get(n)!])),
+          engine,
+        },
+      });
     }
 
     if (p === '/api/event-tree-lessons' && method === 'GET') {
