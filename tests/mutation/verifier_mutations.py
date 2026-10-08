@@ -1238,6 +1238,49 @@ MUTATIONS += [
 ]
 
 
+THJ_SUITE = ("tests/unit/server-th-judge.test.ts", 150)
+
+
+def tj(name: str, old: str, new: str, f: pathlib.Path = APP) -> tuple:
+    return (f"th judge: {name}", f, old, new, THJ_SUITE)
+
+
+MUTATIONS += [
+    tj("records are kept with the criteria", "const mutationsDir = path.join(projectRoot, 'th-mutations');", "const mutationsDir = path.join(projectRoot, 'th-criteria');"),
+    tj("the list shows the criteria", "{ mutations: listModels(mutationsDir) }", "{ mutations: listModels(criteriaDir) }"),
+    tj("a record is read from the criteria folder", "text: readModel(mutationsDir, name) }", "text: readModel(criteriaDir, name) }"),
+    tj("a record is saved in the criteria folder", "writeModel(mutationsDir, name, needText", "writeModel(criteriaDir, name, needText"),
+    tj("a missing record is called a model", "no saved mutation record called", "no saved model called"),
+    tj("the plant hashes are never taken for a record check", "const plants = body.plant_models === undefined ? null : plantModelHashes(body.plant_models);", "const plants = null;"),
+    tj("the record check always says the models were checked", "modelsChecked: plants !== null,", "modelsChecked: true,"),
+    tj("the record hash is left out", "mutation_hash = mutationHash(JSON.parse(text) as ThMutation);", "mutation_hash = null;"),
+    tj("plant hashes may be a list", "if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new HttpError(400, 'E_FIELD', 'the field \"plant_models\"", "if (typeof v !== 'object' || v === null) throw new HttpError(400, 'E_FIELD', 'the field \"plant_models\""),
+    tj("plant hashes may be many", "if (entries.length > 50)", "if (entries.length > 5000)"),
+    tj("a plant name may be empty", "if (name.length === 0 || name.length > 200)", "if (name.length > 200)"),
+    tj("a plant name may be long", "if (name.length === 0 || name.length > 200)", "if (name.length === 0)"),
+    tj("a plant hash may be anything", "typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)", "typeof hash !== 'string'"),
+    tj("an engine build may be left out", "build: field('build') };", "build: 'unknown' };"),
+    tj("an engine name may be left out", "return { name: field('name'),", "return { name: 'unknown',"),
+    tj("an engine version may be left out", "version: field('version'),", "version: 'unknown',"),
+    tj("an engine field may be empty", "x.length === 0 || x.length > 200", "x.length > 200"),
+    tj("an engine field may be long", "x.length === 0 || x.length > 200", "x.length === 0"),
+    tj("a criterion name may be anything", "if (typeof v !== 'string' || !isValidModelName(v)) throw new HttpError(400, 'E_FIELD', `the field", "if (typeof v !== 'string') throw new HttpError(400, 'E_FIELD', `the field"),
+    tj("an optional name is required", "          if (optional) return null;", "          if (false as boolean) return null;"),
+    tj("a missing plant model is guessed", "    if (missing.length) throw new HttpError(400, 'E_PLANT_UNKNOWN'", "    if (false as boolean) throw new HttpError(400, 'E_PLANT_UNKNOWN'"),
+    tj("the plant models of the record are not needed", "(rec ? [rec.base_model.name, rec.mutated_model.name] : [])", "[]"),
+    tj("the event tree hash is taken from the criterion", "treeHash: tree?.hash ?? '',", "treeHash: crit ? crit.applies_to.event_tree.tree_hash : '',"),
+    tj("the headings of the tree are assumed", "treeHeadings: tree?.headings ?? new Set<string>(),", "treeHeadings: new Set(['H1']),"),
+    tj("the plant model hash is taken from the criterion", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '',", "plantModelHash: crit ? crit.plant.model_hash : '',"),
+    tj("the engine is assumed", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine: { name: 'hand', version: '1', build: 'b1' } },"),
+    tj("the models of the record are not looked up", "{ resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },\n      );", "{ resolveModel: () => ({ hash: 'f'.repeat(64) }) },\n      );"),
+    tj("the record is not passed to the judgement", "        mutation ? mutation.doc : null,\n", "        null,\n"),
+    tj("the judged-with record names no tree", "event_tree: crit ? { name: crit.applies_to.event_tree.name, hash: tree?.hash ?? null } : null,", "event_tree: null,"),
+    tj("the judged-with record names no plant models", "plant_models: Object.fromEntries(needed.map((n) => [n, plants.get(n)!])),", "plant_models: {},"),
+    tj("the judged-with record names no engine", "          plant_models: Object.fromEntries(needed.map((n) => [n, plants.get(n)!])),\n          engine,", "          plant_models: Object.fromEntries(needed.map((n) => [n, plants.get(n)!])),"),
+    tj("a mutation record text check ignores the models", "  return validateMutation(doc, ctx);\n}\n\n/**\n * Hash of what the record MEANS", "  return validateMutation(doc);\n}\n\n/**\n * Hash of what the record MEANS", ROOT / "src/core/th-mutation.ts"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1336,6 +1379,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("storage links:")]
     if only == "thanswers":  # just the answer-record folder and route mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("th answers:")]
+    if only == "thjudge":  # just the mutation-record route and judgement route mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("th judge:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":
