@@ -129,6 +129,7 @@ Answers (`sneed.th-answer`) are saved as text, exactly as written, in a `th-answ
 - `status` is `held`, `did-not-hold`, `stale` or `not-determined`; `text` always says it is a fact about one run, not a probability; `judged_with` echoes the saved names, the tree and its hash, the plant model hashes used and the engine, so the answer says what it was judged with.
 - **What the caller states is taken as stated**: SNEED cannot see the plant models or the engine. `plant_models` must give the current hash of every plant model the judgement depends on (the model the criterion runs, and both models of the record when one is given), else 400 `E_PLANT_UNKNOWN`: an unknown hash is never read as unchanged. The engine needs a name, version and build.
 - A tree that is gone or no longer a valid tree reads as changed (stale, `tree-changed`). A saved document that is not valid gives `not-determined` with `criterion-invalid`, `answer-invalid`.
+- A record that is named but is not a valid record (a saved `null`, text that is not JSON, work in progress) is never dropped: the judgement is `not-determined` with `mutation-record-invalid`.
 - A criterion that pins a record but is judged without it, or with another, is stale; one that pins a record but runs the base plant is `not-determined` (`mutation-link-invalid`).
 - Tests `tests/unit/server-th-judge.test.ts`; mutants `python tests/mutation/verifier_mutations.py thjudge`.
 - Not built: any screen; the check that a record's edits really produce its mutated model.
