@@ -1272,7 +1272,7 @@ MUTATIONS += [
     # not mutated: the headings given when there is no tree are never read (a missing tree is already stale as tree-changed before headings matter)
     tj("the plant model hash is taken from the criterion", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '',", "plantModelHash: crit ? crit.plant.model_hash : '',"),
     tj("the engine is assumed", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine },", "plantModelHash: crit ? plants.get(crit.plant.model_name)! : '', engine: { name: 'hand', version: '1', build: 'b1' } },"),
-    tj("the models of the record are not looked up", "{ resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },\n      );", "{ resolveModel: () => ({ hash: 'f'.repeat(64) }) },\n      );"),
+    tj("the models of the record are not looked up", "{ resolveModel: (n) => (plants.has(n) ? { hash: plants.get(n)! } : null) },\n            );", "{ resolveModel: () => ({ hash: 'f'.repeat(64) }) },\n            );"),
     tj("a record that is not valid is dropped", "        mutation && !validateMutation(mutation.doc).valid\n", "        false\n"),
     tj("a record that is not valid is called valid", "? { status: 'not-determined' as const, reasons: ['mutation-record-invalid' as const]", "? { status: 'held' as const, reasons: [] as never[]"),
     tj("the record is not passed to the judgement", "        mutation ? mutation.doc : null,\n", "        null,\n"),
