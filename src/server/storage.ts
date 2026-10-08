@@ -31,6 +31,8 @@ export function isValidModelName(name: string): boolean {
  * would let a name inside the folder lead outside it. The caller names the folder by its real path (the project folder is the user's own
  * choice and may itself be reached through a link: resolve it once, then pass that). A swap between this check and the use is a
  * documented limit (Node has no no-follow open on Windows); the point is to refuse a link that is already there.
+ * Threat model: links planted INSIDE the project folder (for example by unpacking an archive into it). Someone who can replace the project folder
+ * itself, or swap a file while a request runs, can already read and write what the user can, and is out of scope here (Codex review, 2026-10-08).
  */
 function plainFolder(dir: string): void {
   let st;
@@ -153,9 +155,19 @@ export function writeModel(dir: string, name: string, text: string): ModelInfo {
     throw new StorageError('E_NOT_JSON', 'the text is not valid JSON, so it was not saved');
   }
   mkdirSync(dir, { recursive: true });
-  const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+  // The temporary file is created exclusively: a file or link already at that name (a guess or a collision) is never written through; a
+  // new name is tried instead, and only a file this call created is ever removed.
+  let tmp = '';
+  for (let attempt = 0; ; attempt++) {
+    tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    try {
+      writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 4) throw e;
+    }
+  }
   try {
-    writeFileSync(tmp, text, { encoding: 'utf8' });
     renameSync(tmp, file);
   } catch (e) {
     try {
