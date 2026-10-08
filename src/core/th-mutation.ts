@@ -98,6 +98,17 @@ export function validateMutation(doc: unknown, ctx: MutationContext = {}): Mutat
   return { valid: errors.length === 0, errors };
 }
 
+/** Validate record text exactly as saved. Invalid JSON is E_SCHEMA. */
+export function validateMutationText(text: string, ctx: MutationContext = {}): MutationValidation {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    return { valid: false, errors: [err('E_SCHEMA', '/', `not valid JSON: ${(e as Error).message}`)] };
+  }
+  return validateMutation(doc, ctx);
+}
+
 /**
  * Hash of what the record MEANS: the two models, the edits (in any order) and when they apply. Name, description, the example label and the
  * time stamps are not part of it. Callers validate first.
