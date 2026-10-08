@@ -1176,6 +1176,30 @@ MUTATIONS += [
 ]
 
 
+STO = ROOT / "src/server/storage.ts"
+STL_SUITE = ("tests/unit/storage-links.test.ts tests/unit/server.test.ts", 150)
+
+
+def sl(name: str, old: str, new: str, f: pathlib.Path = STO) -> tuple:
+    return (f"storage links: {name}", f, old, new, STL_SUITE)
+
+
+MUTATIONS += [
+    sl("a linked folder is used for a name", "  plainFolder(dir);\n  plainFile(file);\n  return file;", "  plainFile(file);\n  return file;"),
+    sl("a linked file is used for a name", "  plainFolder(dir);\n  plainFile(file);\n  return file;", "  plainFolder(dir);\n  return file;"),
+    sl("a linked folder is listed", "  plainFolder(dir);\n  const out: ModelInfo[] = [];", "  const out: ModelInfo[] = [];"),
+    sl("a folder with a file name is listed", "    if (!st.isFile()) continue;", "    if (false as boolean) continue;"),
+    sl("a link is followed when listing", "const st = lstatSync(path.join(dir, f)); // a link is not listed", "const st = statSync(path.join(dir, f)); // a link is not listed"),
+    sl("a link is followed when checking a folder", "    st = lstatSync(dir);", "    st = statSync(dir);"),
+    sl("a link is followed when checking a file", "    st = lstatSync(file);", "    st = statSync(file);"),
+    sl("a folder is accepted as a storage folder whatever it is", "  if (!st.isDirectory()) throw", "  if (false as boolean) throw"),
+    sl("a file that is not a plain file is accepted", "  if (!st.isFile()) throw new StorageError('E_LINK', 'the saved file", "  if (false as boolean) throw new StorageError('E_LINK', 'the saved file"),
+    sl("a missing folder is an error", "    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // not made yet: nothing to follow", "    if (false as boolean) return; // not made yet: nothing to follow"),
+    sl("a new file is an error", "    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // a new file", "    if (false as boolean) return; // a new file"),
+    sl("the project folder is not resolved once", "const projectRoot = existsSync(opts.projectDir) ? realpathSync(opts.projectDir) : path.resolve(opts.projectDir);", "const projectRoot = path.resolve(opts.projectDir);", ROOT / "src/server/app.ts"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1270,6 +1294,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th mutation:")]
     if only == "throutes":  # just the success-criterion folder and route mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("th routes:")]
+    if only == "storlinks":  # just the storage link-refusal mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("storage links:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "check":

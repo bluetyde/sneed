@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync, existsSync, unlinkSync, linkSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, lstatSync, writeFileSync, existsSync, unlinkSync, linkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
@@ -9,7 +9,7 @@ export const MAX_MODEL_BYTES = 2 * 1024 * 1024;
 
 export class StorageError extends Error {
   constructor(
-    readonly code: 'E_NAME' | 'E_NOT_FOUND' | 'E_TOO_LARGE' | 'E_NOT_JSON' | 'E_EXISTS',
+    readonly code: 'E_NAME' | 'E_NOT_FOUND' | 'E_TOO_LARGE' | 'E_NOT_JSON' | 'E_EXISTS' | 'E_LINK',
     message: string,
   ) {
     super(message);
@@ -26,23 +26,54 @@ export function isValidModelName(name: string): boolean {
   return typeof name === 'string' && MODEL_NAME.test(name) && !name.endsWith('.') && !name.includes('..');
 }
 
+/**
+ * The storage folder and every file in it must be what they say: a real folder and real files, never a symbolic link or a junction, which
+ * would let a name inside the folder lead outside it. The caller names the folder by its real path (the project folder is the user's own
+ * choice and may itself be reached through a link: resolve it once, then pass that). A swap between this check and the use is a
+ * documented limit (Node has no no-follow open on Windows); the point is to refuse a link that is already there.
+ */
+function plainFolder(dir: string): void {
+  let st;
+  try {
+    st = lstatSync(dir);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // not made yet: nothing to follow
+    throw e;
+  }
+  // lstat does not follow a link, so a link (symbolic or junction) is neither a directory nor a file here
+  if (!st.isDirectory()) throw new StorageError('E_LINK', 'the storage folder is a link or not a folder, so it is not used');
+}
+function plainFile(file: string): void {
+  let st;
+  try {
+    st = lstatSync(file);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return; // a new file
+    throw e;
+  }
+  if (!st.isFile()) throw new StorageError('E_LINK', 'the saved file is a link or not a plain file, so it is not used');
+}
+
 function fileFor(dir: string, name: string): string {
   if (!isValidModelName(name)) throw new StorageError('E_NAME', 'a model name is letters, digits, dot, dash or underscore, starting with a letter or digit');
   const file = path.resolve(dir, `${name}.json`);
   // the resolved path must stay directly inside the project folder
   if (path.dirname(file) !== path.resolve(dir)) throw new StorageError('E_NAME', 'a model name cannot contain a path');
+  plainFolder(dir);
+  plainFile(file);
   return file;
 }
 
 /** The saved models in the project folder, newest first. A missing folder is an empty list, not an error. */
 export function listModels(dir: string): ModelInfo[] {
   if (!existsSync(dir)) return [];
+  plainFolder(dir);
   const out: ModelInfo[] = [];
   for (const f of readdirSync(dir)) {
     if (!f.endsWith('.json')) continue;
     const name = f.slice(0, -5);
     if (!isValidModelName(name)) continue;
-    const st = statSync(path.join(dir, f));
+    const st = lstatSync(path.join(dir, f)); // a link is not listed
     if (!st.isFile()) continue;
     out.push({ name, bytes: st.size, modified: st.mtime.toISOString() });
   }
