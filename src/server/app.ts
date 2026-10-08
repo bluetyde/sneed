@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadLessons, LessonsUnavailable } from './lessons.js';
@@ -170,10 +170,13 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   const queue: Job[] = [];
   let nextRun = 1;
   const MAX_QUEUE = 8;
+  // The project folder is the user's own choice and may be reached through a link: it is resolved once here. Everything below it (the models, the
+  // event-trees and th-criteria folders and every file in them) must be real folders and files, which storage.ts checks on each use.
+  const projectRoot = existsSync(opts.projectDir) ? realpathSync(opts.projectDir) : path.resolve(opts.projectDir);
   /** Event trees live in their own folder, so a tree and a fault-tree model can never take each other's name. */
-  const eventTreeDir = path.join(opts.projectDir, 'event-trees');
+  const eventTreeDir = path.join(projectRoot, 'event-trees');
   /** Success criteria for thermal-hydraulic runs (plan 14) live in their own folder too. */
-  const criteriaDir = path.join(opts.projectDir, 'th-criteria');
+  const criteriaDir = path.join(projectRoot, 'th-criteria');
   /** Resolves when it is this job's turn. */
   const acquire = (job: Job): Promise<void> =>
     new Promise<void>((resolve) => {
@@ -235,7 +238,7 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
   /** A saved fault-tree model by name, as an event tree sees it: its text and what the validator needs to know. Null for anything that is not a valid saved model. */
   const loadFaultTree = (name: string): { text: string; ref: ModelRef } | null => {
     try {
-      const text = readModel(opts.projectDir, name);
+      const text = readModel(projectRoot, name);
       if (!validateModelText(text).valid) return null;
       const model = JSON.parse(text) as NativeModel;
       return { text, ref: { hash: modelHash(model), events: new Set(model.events.map((e) => e.id)), gates: new Set(model.gates.map((g) => g.id)) } };
@@ -379,17 +382,17 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       if (!result.ok) return send(res, 200, { kind: 'refused', errors: result.errors });
       const doc = result.doc as { top: string; events: unknown[]; gates: unknown[] };
       const report = JSON.stringify({ importer: result.importer, source_sha256: result.sourceSha256, notes: result.notes }, null, 2) + '\n';
-      writeImport(opts.projectDir, name, { modelText: result.text, originalText: text, report });
+      writeImport(projectRoot, name, { modelText: result.text, originalText: text, report });
       return send(res, 200, { kind: 'imported', name, notes: result.notes, summary: { top: doc.top, events: doc.events.length, gates: doc.gates.length }, source_sha256: result.sourceSha256 });
     }
 
-    if (p === '/api/models' && method === 'GET') return send(res, 200, { models: listModels(opts.projectDir) });
+    if (p === '/api/models' && method === 'GET') return send(res, 200, { models: listModels(projectRoot) });
     const m = /^\/api\/models\/([^/]+)$/.exec(p);
     if (m) {
       const name = decodeURIComponent(m[1]!);
-      if (method === 'GET') return send(res, 200, { name, text: readModel(opts.projectDir, name) });
+      if (method === 'GET') return send(res, 200, { name, text: readModel(projectRoot, name) });
       if (method === 'PUT') {
-        const info = writeModel(opts.projectDir, name, needText(await readJson(req)));
+        const info = writeModel(projectRoot, name, needText(await readJson(req)));
         return send(res, 200, info);
       }
     }
