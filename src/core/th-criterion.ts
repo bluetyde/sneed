@@ -159,6 +159,17 @@ export function validateAnswer(doc: unknown): ThValidation {
   return { valid: e2.length === 0, errors: e2 };
 }
 
+/** Validate answer text exactly as saved. Invalid JSON is E_SCHEMA. */
+export function validateAnswerText(text: string): ThValidation {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    return { valid: false, errors: [err('E_SCHEMA', '/', `not valid JSON: ${(e as Error).message}`)] };
+  }
+  return validateAnswer(doc);
+}
+
 // ---------------------------------------------------------------- the judgement
 
 export type ThStatus = 'held' | 'did-not-hold' | 'stale' | 'not-determined';
