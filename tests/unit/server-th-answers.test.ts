@@ -145,9 +145,10 @@ describe('answer records over the API', () => {
     expect(criterionHash(broken as unknown as ThCriterion)).toBe(criterionHash(c));
     await put('/api/th-criteria/broken', { text: JSON.stringify(broken) });
     await put('/api/th-criteria/not-a-criterion', { text: '{"work":"in progress"}' });
+    writeFileSync(path.join(projectDir, 'th-criteria', 'not-json.json'), '{nope'); // cannot be saved through the API, but can be on disk
     const r = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) });
     expect(r.json.criterion).toBeNull();
-    expect(r.json.criteria_not_valid).toBeGreaterThanOrEqual(2); // counted, not hidden
+    expect(r.json.criteria_not_valid).toBeGreaterThanOrEqual(3); // counted, not hidden: not valid, not a criterion, not JSON
     expect(r.json.criteria_unreadable).toBe(0);
     expect(r.json.criteria_search_complete).toBe(true); // a document that is not valid is not a gap in the search
   });
