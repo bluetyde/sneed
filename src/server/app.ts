@@ -19,7 +19,7 @@ import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../r
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
 import { eventTreeHash, validateEventTreeText, type ModelRef } from '../core/event-tree.js';
-import { criterionHash, validateAnswerText, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
+import { criterionHash, validateAnswerText, validateCriterion, validateCriterionText, type ThAnswer, type ThCriterion, type TreeRef } from '../core/th-criterion.js';
 import { analyzeEventTreeBuiltin } from '../engines/bdd/event-tree-analyze.js';
 import { MAX_MODEL_BYTES, StorageError, listModels, readModel, writeImport, writeModel } from './storage.js';
 
@@ -155,6 +155,8 @@ function validateWithHashes(text: string): Record<string, unknown> {
 
 /** How many saved criteria an answer is matched against (the newest first): the search is bounded, and says when it did not cover them all. */
 const MAX_CRITERIA_SEARCHED = 200;
+/** ... and how many bytes of them are read in one search. */
+const MAX_CRITERIA_BYTES_SEARCHED = 32 * 1024 * 1024;
 
 export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0.1'): Promise<RunningServer> {
   const env = opts.runtimeEnv ?? defaultRuntimeEnv();
@@ -265,6 +267,52 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     }
   };
 
+  // The saved criterion an answer pins: the newest valid one whose meaning hashes to `wanted`. Bounded (the newest MAX_CRITERIA_SEARCHED files and
+  // MAX_CRITERIA_BYTES_SEARCHED bytes read) and honest about it: a criterion that is not valid is counted and skipped, but one that cannot be read
+  // (too large, a read error) or a search that stopped at a bound makes the search incomplete, so "none found" is never claimed on less than all.
+  const findCriterionByHash = (wanted: string): { criterion: { name: string } | null; searched: number; complete: boolean; unreadable: number; notValid: number } => {
+    const saved = listModels(criteriaDir);
+    let complete = saved.length <= MAX_CRITERIA_SEARCHED;
+    let searched = 0;
+    let unreadable = 0;
+    let notValid = 0;
+    let bytes = 0;
+    for (const c of saved.slice(0, MAX_CRITERIA_SEARCHED)) {
+      if (bytes >= MAX_CRITERIA_BYTES_SEARCHED) {
+        complete = false;
+        break;
+      }
+      searched++;
+      let ctext: string;
+      try {
+        ctext = readModel(criteriaDir, c.name);
+      } catch {
+        unreadable++;
+        complete = false;
+        continue;
+      }
+      bytes += Buffer.byteLength(ctext, 'utf8');
+      let doc: unknown;
+      try {
+        doc = JSON.parse(ctext);
+      } catch {
+        notValid++;
+        continue;
+      }
+      if (!validateCriterion(doc).valid) {
+        notValid++;
+        continue;
+      }
+      try {
+        if (criterionHash(doc as ThCriterion) === wanted) return { criterion: { name: c.name }, searched, complete, unreadable, notValid };
+      } catch {
+        unreadable++; // a valid criterion the hash cannot hold
+        complete = false;
+      }
+    }
+    return { criterion: null, searched, complete, unreadable, notValid };
+  };
+
   async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
     const method = req.method ?? 'GET';
     const p = url.pathname;
@@ -366,27 +414,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
     if (p === '/api/th-answer/validate' && method === 'POST') {
       const text = needText(await readJson(req));
       const v = validateAnswerText(text);
-      let criterion: { name: string } | null = null;
-      let searched = 0;
-      let complete = true;
-      if (v.valid) {
-        const wanted = (JSON.parse(text) as ThAnswer).criterion_hash;
-        const saved = listModels(criteriaDir);
-        complete = saved.length <= MAX_CRITERIA_SEARCHED;
-        for (const c of saved.slice(0, MAX_CRITERIA_SEARCHED)) {
-          searched++;
-          try {
-            const ctext = readModel(criteriaDir, c.name);
-            if (validateCriterionText(ctext).valid && criterionHash(JSON.parse(ctext) as ThCriterion) === wanted) {
-              criterion = { name: c.name };
-              break;
-            }
-          } catch {
-            /* a criterion that cannot be read or hashed is not a match */
-          }
-        }
-      }
-      return send(res, 200, { ...v, criterion, criteria_searched: searched, criteria_search_complete: complete, document_hash: documentHash(Buffer.from(text, 'utf8')) });
+      const found = v.valid ? findCriterionByHash((JSON.parse(text) as ThAnswer).criterion_hash) : { criterion: null, searched: 0, complete: true, unreadable: 0, notValid: 0 };
+      return send(res, 200, { ...v, criterion: found.criterion, criteria_searched: found.searched, criteria_not_valid: found.notValid, criteria_unreadable: found.unreadable, criteria_search_complete: found.complete, document_hash: documentHash(Buffer.from(text, 'utf8')) });
     }
     const am = /^\/api\/th-answers\/([^/]+)$/.exec(p);
     if (am) {

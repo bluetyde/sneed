@@ -145,7 +145,11 @@ describe('answer records over the API', () => {
     expect(criterionHash(broken as unknown as ThCriterion)).toBe(criterionHash(c));
     await put('/api/th-criteria/broken', { text: JSON.stringify(broken) });
     await put('/api/th-criteria/not-a-criterion', { text: '{"work":"in progress"}' });
-    expect((await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) })).json.criterion).toBeNull();
+    const r = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) });
+    expect(r.json.criterion).toBeNull();
+    expect(r.json.criteria_not_valid).toBeGreaterThanOrEqual(2); // counted, not hidden
+    expect(r.json.criteria_unreadable).toBe(0);
+    expect(r.json.criteria_search_complete).toBe(true); // a document that is not valid is not a gap in the search
   });
 
   it('with two saved criteria of the same meaning, names the newest', async () => {
@@ -178,6 +182,41 @@ describe('answer records over the API', () => {
     expect(over.json.criterion).toBeNull(); // now the oldest is beyond the newest 200
     expect(over.json.criteria_search_complete).toBe(false);
     expect(over.json.criteria_searched).toBe(200);
+  });
+
+  it('a criterion that cannot be read makes the search incomplete: no match is claimed as absent, and an older match is named but not called the newest', async () => {
+    const dir = path.join(projectDir, 'th-criteria');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir);
+    const c = criterion(91);
+    writeFileSync(path.join(dir, 'older.json'), JSON.stringify(c));
+    utimesSync(path.join(dir, 'older.json'), new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
+    // newer, and too large to read (over the 2 MiB a saved file may have)
+    writeFileSync(path.join(dir, 'newer-huge.json'), '{"pad":"' + 'x'.repeat(2 * 1024 * 1024 + 10) + '"}');
+    const r = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) });
+    expect(r.json.criterion).toEqual({ name: 'older' });
+    expect(r.json.criteria_unreadable).toBe(1);
+    expect(r.json.criteria_search_complete).toBe(false);
+    // and with nothing else to find
+    rmSync(path.join(dir, 'older.json'));
+    const none = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(c)) });
+    expect(none.json).toMatchObject({ criterion: null, criteria_unreadable: 1, criteria_search_complete: false });
+  });
+
+  it('stops after reading 32 MiB of criteria and says the search was cut short', async () => {
+    const dir = path.join(projectDir, 'th-criteria');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir);
+    const target = criterion(92);
+    writeFileSync(path.join(dir, 'target.json'), JSON.stringify(target));
+    utimesSync(path.join(dir, 'target.json'), new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
+    const pad = '{"pad":"' + 'x'.repeat(1900 * 1024) + '"}';
+    for (let i = 0; i < 18; i++) writeFileSync(path.join(dir, `pad-${i}.json`), pad); // about 33 MiB, all newer than the target
+    const r = await post('/api/th-answer/validate', { text: JSON.stringify(answerFor(target)) });
+    expect(r.json.criterion).toBeNull();
+    expect(r.json.criteria_search_complete).toBe(false);
+    expect(r.json.criteria_searched).toBeLessThan(19);
+    expect(r.json.criteria_searched).toBeGreaterThanOrEqual(16);
   });
 
   it('refuses an answer folder that is a link', async () => {

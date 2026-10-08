@@ -112,3 +112,11 @@ Criteria (`sneed.th-criterion`) are saved as text, exactly as written, in a `th-
 - `POST /api/th-criterion/validate {text}` returns `{valid, errors, treeChecked: true, criterion_hash, document_hash}`. The criterion is checked against the saved event tree it names: `E_NO_TREE` (none, one that is not a valid tree, or a name that is not a name), `E_STALE_TREE` (the tree's meaning hash differs), `E_UNKNOWN_HEADING`. `criterion_hash` is the hash of what the criterion means, and is `null` unless it is valid. The event tree's own fault-tree model is not looked at here.
 - Not built: routes for answers and mutation records, any screen, a judgement route.
 - Tests `tests/unit/server-th-criteria.test.ts`; mutants `python tests/mutation/verifier_mutations.py throutes`.
+
+## Answer-record folder and routes (plan 14, 2026-10-08)
+Answers (`sneed.th-answer`) are saved as text, exactly as written, in a `th-answers/` folder beside `th-criteria/`; same name rules, size limit, write header and link refusal as the other folders.
+
+- `GET /api/th-answers`; `GET /api/th-answers/:name` (404 "no saved answer called ..."); `PUT /api/th-answers/:name`.
+- `POST /api/th-answer/validate {text}` returns `{valid, errors, criterion, criteria_searched, criteria_search_complete, document_hash}`. The record is checked alone (`E_SCHEMA`, `E_NO_OBSERVED`, `E_OBSERVED_ORDER`, `E_WINDOW_ORDER`). When it is valid the saved criteria are searched, newest first and at most 200, for one that is itself valid and whose `criterionHash` equals the answer's `criterion_hash`: `criterion` is `{name}` of the newest match or `null`. `null` with `criteria_search_complete: true` means no saved criterion has that meaning (it was edited, or never saved); with `false` there were more than 200 and the search stopped.
+- Not built: mutation-record routes, a judgement route, any screen. A criterion that is found is not judged here.
+- Tests `tests/unit/server-th-answers.test.ts`; mutants `python tests/mutation/verifier_mutations.py thanswers`.
