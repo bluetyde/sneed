@@ -92,6 +92,12 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [ ] **Basic-event data library:** a labelled set of probabilities with citations (for example from NUREG/CR-6928 or its updates) so lessons stop using invented numbers. Read the report and its terms first; synthetic numbers stay clearly labelled until then ([TOOLING 3a](docs/TOOLING.md)).
 - [ ] **Cross-check engine:** run XFTA (or a second solver) on the oracle set as differential testing. Check its license and Windows route first.
 
+## Later (owner: "I don't care, note it for later", 2026-10-08)
+
+- [ ] **Clean the links that leave the repo** in the docs (README.md is already clean): `PLAN.md` line 13, `docs/README.md` line 14, `docs/plans/06-suite-integration.md` line 3 and `TODO.md` line 4 point at workspace plans (`plans/suite/...`, `plans/experiment-studio/...`); `docs/WORKFLOWS.md` (lines 14, 58, 60) points at the project log and `../../messages/INSTRUCTIONS.md`; `docs/AGENT-TASKS.md` line 5 at a skill file in the home folder; `docs/plans/09-virtual-reactor-link.md` (lines 7, 39) at another agent's folder and log; `docs/plans/14-th-link.md` (lines 104, 130) at the NODAL log. Also `docs/ARCHITECTURE.md` line 3 still says "no code exists". Suggested: remove the pointer or replace it with one line stating what this repo restates; docs only.
+- [ ] **Small wording issue in the lesson panel:** a lesson that has just started (empty model) shows "Part of the model is not in a form the lesson can read, so no step is credited yet". True (an empty model has no top event) but it reads like a fault; say "Start by adding ..." or hide it until the model has something in it.
+- [ ] **The README pictures** (`docs/images/`) are made by `npm run screenshots` from the real app; remake them after a visible UI change.
+
 ## Release ([plan 08](docs/plans/08-release.md))
 
 - [x] **SCRAM runtime recipe** for SEED's installer, 2026-10-05: `runtime/scram.recipe.json` + hash-pinned conda lock (48 packages) + native smoke cases, validated by schema and loader (shells, undefined placeholders, paths outside the prefix and unverified checkouts are refused). Contract mapping, evidence and limits in [docs/RUNTIME.md](docs/RUNTIME.md). Evidence: real from-scratch install (ready in about 51 s with a warm conda cache, 7 of 7 smoke checks), the whole engine suite 52 of 52 against it, real second install plus rollback, real cancel mid-compile with no process left, real hard-kill recovery, 110 mutation checks caught.
