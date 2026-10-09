@@ -4,6 +4,14 @@ SNEED (Safety in Nuclear Engineering Educational Design, formerly PRA & Reliabil
 
 **Status: experimental and educational. Results are not validated for safety, licensing or operation, and are not plant risk figures.** All probabilities and frequencies in the examples and lessons are invented and labelled as such.
 
+![The fault-tree editor: a small tree with a shared event, analysed. The result panel shows the exact probability, the minimal cut sets and how the result was produced.](docs/images/fault-tree.png)
+
+![The event-tree editor: two headings on one fault-tree model, with the sequence frequencies per year and the end states.](docs/images/event-tree.png)
+
+![The drawing of the same event tree, one line per sequence, with its end state and frequency.](docs/images/event-tree-drawing.png)
+
+*The numbers in these pictures are invented examples. They are made by `npm run screenshots`.*
+
 ## What it does
 
 - **Fault-tree editor** (browser): draw events and AND, OR and voting gates, set probabilities, validate, analyse, compare two saved analyses, undo and redo, print or save the drawing as SVG or PNG.

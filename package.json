@@ -17,6 +17,7 @@
     "gen:seed-oracles": "tsx scripts/gen-seed-oracles.ts",
     "gen:engine-id": "tsx scripts/gen-engine-id.ts",
     "e2e": "vite build && playwright test -c e2e/playwright.config.ts",
+    "screenshots": "vite build && playwright test -c scripts/screenshots.config.ts",
     "build": "tsc --noEmit && vite build",
     "dev:server": "tsx src/server/main.ts --dev",
     "start": "vite build && tsx src/server/main.ts"
