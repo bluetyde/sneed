@@ -10,7 +10,7 @@ Detailed documents:
 - [docs/plans/](docs/plans/): one plan per area: [01 model and semantics](docs/plans/01-model-and-semantics.md), [02 engine and adapter](docs/plans/02-engine-and-adapter.md),
   [03 editor](docs/plans/03-editor.md), [04 lessons](docs/plans/04-lessons.md), [05 verification](docs/plans/05-verification.md),
   [06 suite integration](docs/plans/06-suite-integration.md), [07 extensions](docs/plans/07-extensions.md), [08 release](docs/plans/08-release.md), [09 virtual-reactor link (idea)](docs/plans/09-virtual-reactor-link.md), [10 built-in second engine](docs/plans/10-builtin-solver.md), [11 SEED adapter mapping](docs/plans/11-seed-adapter.md)
-- Suite context (workspace): `plans/suite/nuclear-suite-integration.md`, `plans/experiment-studio/agentic-harness.md`, and the SEED repo's plans (`experiment-studio/`).
+- Suite context: SNEED is one app of a small suite of nuclear teaching and analysis tools that share a harness called SEED (a separate repository). What this app must implement of the shared contracts is restated in [docs/plans/06-suite-integration.md](docs/plans/06-suite-integration.md) and [docs/plans/11-seed-adapter.md](docs/plans/11-seed-adapter.md).
 
 ## Goal
 
