@@ -95,6 +95,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 ## Later (owner: "I don't care, note it for later", 2026-10-08)
 
 - [x] 2026-10-10 **Cleaned the links that leave the repo.** Docs no longer point at workspace plans, the shared log or another agent's folder, and the stale "no code exists" line in the architecture note is gone. (Doc-only; the README was already clean.)
+- [ ] **History still contains the account name and workspace folder** (40 commits' trees; messages and authors are clean). A rewrite was rehearsed and verified on 2026-10-10 but NOT applied: it changes every hash and needs a force-push of every branch, so it is the owner's call and best done once, just before publishing ([docs/PUBLICATION.md](docs/PUBLICATION.md), "History rewrite, rehearsed").
 - [ ] **Small wording issue in the lesson panel:** a lesson that has just started (empty model) shows "Part of the model is not in a form the lesson can read, so no step is credited yet". True (an empty model has no top event) but it reads like a fault; say "Start by adding ..." or hide it until the model has something in it.
 - [ ] **The README pictures** (`docs/images/`) are made by `npm run screenshots` from the real app; remake them after a visible UI change.
 
