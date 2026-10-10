@@ -1,6 +1,6 @@
 # Plan 06: Suite integration
 
-How PRA & Reliability Studio works with SEED and the other apps. Milestone P3. Suite-level rules are in the workspace `plans/suite/nuclear-suite-integration.md`; the harness is in `plans/experiment-studio/agentic-harness.md`; SEED's own plans live in the `experiment-studio` repo.
+How PRA & Reliability Studio works with SEED and the other apps. Milestone P3. Suite-level rules and the harness are described in the SEED repository (a separate repository); this file restates only what this app must implement.
 
 ## Role in the suite
 

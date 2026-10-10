@@ -101,7 +101,7 @@ Use the golden pumped loop (`pump1`, output `w_loop`):
 - Criterion: `w_loop` above a stated limit (kg/s or m3/s as the output states) throughout a stated window, for a heading such as "forced flow is kept". With one pump this will almost surely say "did not hold"; its use is to prove the record, the stale rule and the display, not to teach redundancy. The two-pump loop the NODAL session offered to build is the real example ("one pump keeps the core cooled"), and a second mutation (`pump1` stopped, `pump2` running) would be the second record.
 - A SNEED event tree for it needs a fault-tree model with a pump event; the existing lessons' models can be reused, or a small one written. The numbers in it are invented and labelled so.
 
-### Not confirmed (asked of the NODAL session in `messages/pipe-studio.md`)
+### Not confirmed (asked of the NODAL session in its log)
 
 1. Does a run with `pump1.head.speedRatio` 0 start and finish on the golden pumped loop, and what does `w_loop` do (stays at the starting value, falls to a number, or fails)? SNEED's reading of `pump_head` says no range error, nothing more.
 2. What exactly is `w_loop` (unit, sign, where measured), and is the golden model's result file the place its numbers should be read from?
@@ -127,7 +127,7 @@ Decisions taken while building, for the owner to overrule:
 5. **Only "from the start of the run".** A mid-run event is a later form.
 6. **Judging a criterion that rests on a record goes through `judgeWithMutation`, not `judge()`** (found by the Codex review: a criterion pinning the record but running the base plant would have been read as held).
 
-The NODAL session reported (2026-10-07, `messages/pipe-studio.md`) that on its clean engine the pumped-loop golden with `head.speedRatio` 0 runs to completion and loop flow goes from 30 kg/s to 6.7 kg/s at 8 s, against 79.2 kg/s with the pump on. That is their report, not mine; I did not run it. It makes the first example workable (the pump mutation) and the numbers above show why it will say "did not hold" for a high limit.
+The NODAL session reported (2026-10-07, in its log) that on its clean engine the pumped-loop golden with `head.speedRatio` 0 runs to completion and loop flow goes from 30 kg/s to 6.7 kg/s at 8 s, against 79.2 kg/s with the pump on. That is their report, not mine; I did not run it. It makes the first example workable (the pump mutation) and the numbers above show why it will say "did not hold" for a high limit.
 
 Not built: folder, routes and screen for criteria, answers and mutation records; how an answer sets a branch; the check that the edits really produce the second model (needs a reader of NODAL models).
 

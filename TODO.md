@@ -1,7 +1,7 @@
 # PRA & Reliability Studio: TODO
 
 Running list. Check items off, add new ones at the bottom of their section, and note the date when something finishes. Close a task with **evidence** (a command and its result, or a recorded decision); a plan edit alone means "documented", not "verified". Contract status: proposed, accepted, documented, implemented, verified.
-Design lives in [PLAN.md](PLAN.md). Details per area in [docs/plans/](docs/plans/); structure in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); delegation in [docs/AGENT-TASKS.md](docs/AGENT-TASKS.md). Suite context: `../plans/suite/nuclear-suite-integration.md`, `../plans/experiment-studio/agentic-harness.md`, and SEED's plans.
+Design lives in [PLAN.md](PLAN.md). Details per area in [docs/plans/](docs/plans/); structure in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); delegation in [docs/AGENT-TASKS.md](docs/AGENT-TASKS.md). Suite context: [docs/plans/06-suite-integration.md](docs/plans/06-suite-integration.md); the SEED harness has its own repository.
 
 Flags: **[agy]** = delegation candidate for Antigravity (large, mechanical, contract fixed, strong oracle; run antigravity-task step 0 again before dispatching). Unflagged items are Claude's. **[codex]** = a Codex review checkpoint; every milestone ends with one. **[seed]** = also needed by SEED's harness work.
 
@@ -94,7 +94,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 
 ## Later (owner: "I don't care, note it for later", 2026-10-08)
 
-- [ ] **Clean the links that leave the repo** in the docs (README.md is already clean): `PLAN.md` line 13, `docs/README.md` line 14, `docs/plans/06-suite-integration.md` line 3 and `TODO.md` line 4 point at workspace plans (`plans/suite/...`, `plans/experiment-studio/...`); `docs/WORKFLOWS.md` (lines 14, 58, 60) points at the project log and `../../messages/INSTRUCTIONS.md`; `docs/AGENT-TASKS.md` line 5 at a skill file in the home folder; `docs/plans/09-virtual-reactor-link.md` (lines 7, 39) at another agent's folder and log; `docs/plans/14-th-link.md` (lines 104, 130) at the NODAL log. Also `docs/ARCHITECTURE.md` line 3 still says "no code exists". Suggested: remove the pointer or replace it with one line stating what this repo restates; docs only.
+- [x] 2026-10-10 **Cleaned the links that leave the repo.** Docs no longer point at workspace plans, the shared log or another agent's folder, and the stale "no code exists" line in the architecture note is gone. (Doc-only; the README was already clean.)
 - [ ] **Small wording issue in the lesson panel:** a lesson that has just started (empty model) shows "Part of the model is not in a form the lesson can read, so no step is credited yet". True (an empty model has no top event) but it reads like a fault; say "Start by adding ..." or hide it until the model has something in it.
 - [ ] **The README pictures** (`docs/images/`) are made by `npm run screenshots` from the real app; remake them after a visible UI change.
 
@@ -133,7 +133,7 @@ Rules below are **documented** in plans 01/02 where specified; wire schemas and 
 - [x] 2026-10-05 Stack: match NODAL/SEED, TypeScript web app and Node server (user).
 - [x] 2026-10-05 Native voting gate in V1 (user); rules in plan 01 (2 <= k < N, no duplicate inputs).
 - [x] 2026-10-05 Engine route: WSL2 via argument list (user).
-- [x] 2026-10-05 SCRAM licensing and install: the PRA app never bundles SCRAM; SEED's dedicated installer fetches and builds the pinned source (user). The app publishes a SCRAM runtime recipe; SEED executes it ([SEED plan 11](../experiment-studio/docs/plans/11-runtime-and-shared-acceptance.md) model: staged, hash-checked, isolated versioned location, native smoke check, atomic activation). Distribution license of the app itself and the repo name remain open.
+- [x] 2026-10-05 SCRAM licensing and install: the PRA app never bundles SCRAM; SEED's dedicated installer fetches and builds the pinned source (user). The app publishes a SCRAM runtime recipe; SEED executes it (SEED's plan 11 model, in the SEED repository: staged, hash-checked, isolated versioned location, native smoke check, atomic activation). Distribution license of the app itself and the repo name remain open.
 - [x] 2026-10-05 Repo: private `bluetyde/sneed` (user said go ahead; name chosen as the obvious one and found free).
 - [x] 2026-10-06 Publication repo `bluetyde/sneed-pra` (one commit, no history) was created, verified clean and then deleted by the owner the same day: the owner decided the history exposure is not worth a second repository. `bluetyde/sneed` stays the only repository, private, with its full history (docs/PUBLICATION.md).
 - [x] 2026-10-05 Use the installed runtime by default instead of the development build (user); implemented: `analyze()` resolves the installed runtime and fails with a typed `E_SETUP_REQUIRED` if none is installed. Run `npm run runtime -- install` once before using or testing the engine.

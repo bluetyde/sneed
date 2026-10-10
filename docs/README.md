@@ -11,4 +11,4 @@ Start with [../PLAN.md](../PLAN.md). Then:
 - [spike/README.md](spike/README.md): P0 engine evidence and the defects found
 - [plans/](plans/): 01 model and semantics, 02 engine and adapter, 03 editor, 04 lessons, 05 verification, 06 suite integration, 07 extensions, 08 release
 
-Shared suite contracts live in the workspace draft `plans/suite/nuclear-suite-integration.md`; do not duplicate them here, restate only what this app must implement. Add normative schemas under `schema/` only after the P0 spike.
+Shared contracts with the SEED harness live in the SEED repository; do not duplicate them here, restate only what this app must implement (see [plans/06-suite-integration.md](plans/06-suite-integration.md)). Add normative schemas under `schema/` only after the P0 spike.

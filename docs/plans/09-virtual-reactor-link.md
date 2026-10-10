@@ -4,7 +4,7 @@ Raised by the user on 2026-10-05: could SNEED fault trees be used by Mica / Jev 
 
 ## What was read
 
-Only enough of the virtual-reactor plans to place the question: Mica is the AI that proposes operating targets, behind the Jev server; a predictive reference governor sits above the low-level controller and below Mica's request; automatic protection never waits for AI or governor computation ([suite plan 10](../../../agents/codex/suite-virtual-reactor/docs/plans/10-predictive-governor.md), which another agent owns). Read it again before acting on this note.
+Only enough of the virtual-reactor plans to place the question: Mica is the AI that proposes operating targets, behind the Jev server; a predictive reference governor sits above the low-level controller and below Mica's request; automatic protection never waits for AI or governor computation (the predictive-governor plan of the virtual-reactor project, which is owned elsewhere). Read it again before acting on this note.
 
 ## Verdict
 
@@ -36,4 +36,4 @@ Through the SEED adapter already planned in P3 (seven verbs, typed errors, oracl
 
 ## Before any work
 
-Read `messages/virtual-reactor.md` and post a claim there. This repository does not edit virtual-reactor.
+Read the virtual-reactor project's log and post a claim there. This repository does not edit virtual-reactor.

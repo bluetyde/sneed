@@ -1,6 +1,6 @@
 # Architecture
 
-How PRA & Reliability Studio's parts fit together. Everything is **proposed**; no code exists. Goal and principles: [../PLAN.md](../PLAN.md). Per-area plans: [plans/](plans/).
+How PRA & Reliability Studio's parts fit together. It was written before the code and has been kept current only in part: [EDITOR.md](EDITOR.md), [ENGINES.md](ENGINES.md), [HEADLESS.md](HEADLESS.md) and [SCHEMA.md](SCHEMA.md) describe what is built. Goal and principles: [../PLAN.md](../PLAN.md). Per-area plans: [plans/](plans/).
 
 ## The big picture
 

@@ -11,7 +11,7 @@ Step-by-step procedures. Everything is **planned**; no code exists. Follow a sec
 
 ## 1. Run the engine spike (P0)
 
-1. Claim `CLAIM: pra-spike` in `messages/pra-studio.md`.
+1. Claim the work (`CLAIM: pra-spike`) in the project log before starting.
 2. Save the tiny fixtures, independent derivations, expected cut sets and fixed tolerances from plan 05 before any numerical run.
 3. Fetch and build/install the chosen SCRAM release; record source, version, license, environment, steps and failures.
 4. Run the tiny models from [plan 05](plans/05-verification.md) directly; save inputs, exact commands and raw reports.
@@ -55,9 +55,9 @@ Follow [plan 08](plans/08-release.md).
 
 ## 7. Multi-agent rules for this project
 
-Follows [`messages/INSTRUCTIONS.md`](../../messages/INSTRUCTIONS.md). Specific to this project:
+The project is developed by several agents and people working in separate clones, who coordinate through a shared log. Specific to this project:
 
-- **Log:** `messages/pra-studio.md`. Read it at the start of every session and append at the end.
+- **Log:** the project log. Read it at the start of every session and append at the end.
 - **Claims** by area, matching the plans: `CLAIM: pra-spike`, `CLAIM: pra-model`, `CLAIM: pra-engine`, `CLAIM: pra-editor`, `CLAIM: pra-lessons`, `CLAIM: pra-oracles`, `CLAIM: pra-suite`, `CLAIM: pra-release`.
 - **Schema changes affect SEED and the lessons.** Post the change first; do not change it under an open claim.
 - **Separate clones per agent** once this is a git repo; no worktrees.

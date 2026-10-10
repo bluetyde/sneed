@@ -2,7 +2,7 @@
 
 Delegation workflow: **Claude plans and verifies; Antigravity (agy, `antigravity-task` skill) implements delegated tasks in the isolated `agent-sandbox`; Codex (`codex-review` skill) reviews non-trivial diffs read-only.** Nothing merges until Claude has re-run the checks and the user agrees.
 
-Decide whether to delegate with **step 0 of the antigravity-task skill** (`~/.claude/skills/antigravity-task/SKILL.md`); run it again before dispatching. The clear wins are large, mechanical tasks with a fixed contract and a strong oracle. Judgment, safety and numerics-precision tasks stay with Claude. See Virtual Reactor's [board](../../virtual-reactor/docs/AGENT-TASKS.md) for the evidence behind this.
+Decide whether to delegate before dispatching, and decide again for each task. The clear wins are large, mechanical tasks with a fixed contract and a strong oracle. Judgment, safety and numerics-precision tasks stay with the supervising agent.
 
 Status: `ready` | `blocked` | `pending` | `done`. Triage written 2026-10-03; recheck before any dispatch.
 
