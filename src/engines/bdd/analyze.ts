@@ -9,7 +9,8 @@ import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
 import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
-import { unanalysedGroups, validateModelText } from '../../core/validate.js';
+import { expandGroups } from '../../core/ccf.js';
+import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
 import { BDD_SOURCE_SHA256 } from './build-id.js';
@@ -66,16 +67,17 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
 
   const validation = validateModelText(documentText);
   if (!validation.valid) return { kind: 'refused', errors: validation.errors, warnings: validation.warnings };
-  const groups = unanalysedGroups(JSON.parse(documentText));
-  if (groups) return { kind: 'refused', errors: [groups], warnings: validation.warnings };
-  const model = JSON.parse(documentText) as NativeModel;
+  // common-cause groups (plan 15) are expanded into ordinary events and gates; the record names the original model's hash and says which groups were used
+  const original = JSON.parse(documentText) as NativeModel;
+  const model = expandGroups(original);
+  const groups = original.common_cause_groups ?? [];
   const events = reachableEvents(model);
   const settings: Settings = { method: 'exact', limitOrder: Math.max(1, events.length), ...opts.settings };
   if (!(METHODS as string[]).includes(settings.method)) throw new RangeError(`unknown method ${String(settings.method)}`);
   if (!Number.isInteger(settings.limitOrder) || settings.limitOrder < 1) throw new RangeError('limitOrder must be an integer >= 1');
 
-  const hashes = { model_hash: modelHash(model), document_hash: documentHash(Buffer.from(documentText, 'utf8')), exported_input_hash: '' };
-  hashes.exported_input_hash = hashes.model_hash; // this engine reads the semantic model itself: there is no export
+  const hashes = { model_hash: modelHash(original), document_hash: documentHash(Buffer.from(documentText, 'utf8')), exported_input_hash: '' };
+  hashes.exported_input_hash = groups.length ? modelHash(model) : hashes.model_hash; // this engine reads the semantic model itself: there is no export (with groups, the expanded model is what it reads)
   const runId = opts.runId ?? `${new Date().toISOString().replace(/[:.]/g, '-')}-${hashes.model_hash.slice(0, 8)}-${randomBytes(3).toString('hex')}`;
   if (!/^[A-Za-z0-9_-]{8,}$/.test(runId)) throw new RangeError('runId must be at least 8 characters of [A-Za-z0-9_-]');
   const runDir = path.resolve(opts.runsDir, runId);
@@ -93,7 +95,11 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   const base = { model, settings, engine, expectedVersion: BDD_ENGINE_VERSION, expectedName: BDD_ENGINE_NAME, hashes, exportedEvents: events, check };
   const idle = { exit: 0, timedOut: false, cancelled: false, stderr: '' };
   const finish = (record: ResultRecord, extra: Record<string, unknown> = {}): AnalyzeOutcome => {
-    const final: ResultRecord = { ...record, exporter_version: 'none (the built-in engine reads the native model)' };
+    const final: ResultRecord = {
+      ...record,
+      exporter_version: 'none (the built-in engine reads the native model)',
+      ...(groups.length ? { common_cause: { method: 'beta-factor', groups: groups.map((g) => ({ id: g.id, members: [...g.members], beta: g.beta })), note: 'A result under common-cause groups is a different kind of result from one with independent events.' } } : {}),
+    };
     writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, ...extra }, null, 2) + '\n');
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(final, null, 2) + '\n');
     return { kind: 'ran', runDir, record: final };

@@ -44,6 +44,11 @@ export interface ResultRecord {
   /** Labels on a successful result that a reader must not miss. Empty means nothing to add. */
   caveats: string[];
   minimal_cut_sets: { events: string[]; probability: number }[];
+  /**
+   * Present only when the model has common-cause groups (plan 15): the method and the groups used. The cut sets then name the group event
+   * `<group>.CCF` and the independent part `<member>.independent`. Such a result is a different kind of result from one with independent events.
+   */
+  common_cause?: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; note: string };
 }
 
 export interface Outcome {
