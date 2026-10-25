@@ -6,22 +6,14 @@ import { analyzeBuiltin } from '../../src/engines/bdd/analyze.js';
 import { expandGroups, groupEventId, independentPartId } from '../../src/core/ccf.js';
 import { modelHash } from '../../src/core/canonical.js';
 import type { NativeModel } from '../../src/core/model.js';
-import { enumerateGroups, randomGroupDoc, type GroupDef, type GroupDoc } from '../oracle/groups.js';
+import { enumerateGroups, frozenCaseDoc, randomGroupDoc, type FrozenCase, type GroupDoc } from '../oracle/groups.js';
 import { AND, OR, VOTE, mkDoc } from '../oracle/models.js';
 import { enumerate } from '../oracle/enumerate.js';
 
 // Plan 15, stage C2: the built-in engine analyses a model with common-cause groups by expanding them. The oracles are the six frozen
 // cases (tests/oracles-common-cause.json) and an exact evaluation of the group definition on random trees (tests/oracle/groups.ts).
 
-interface Frozen {
-  id: string;
-  group: GroupDef & { q: number };
-  logic: { kind: 'and' | 'or' | 'atleast'; k?: number };
-  expected_probability: number;
-  expected_cut_sets: string[][] | null;
-  independent_value: number;
-  tolerance: { absolute: number };
-}
+type Frozen = FrozenCase;
 const frozen = JSON.parse(readFileSync(path.join(import.meta.dirname, '../oracles-common-cause.json'), 'utf8')) as Frozen[];
 const sortSets = (sets: string[][]): string[][] => sets.map((s) => [...s].sort()).sort((a, b) => a.length - b.length || a.join(',').localeCompare(b.join(',')));
 
@@ -44,13 +36,7 @@ afterEach(() => {
 let counter = 0;
 const runId = (): string => `ccf-run-${String(++counter).padStart(6, '0')}`;
 
-/** The frozen case as a native model: the members are events of one probability, the top is the stated gate over them. */
-function modelOf(e: Frozen): GroupDoc {
-  const events = Object.fromEntries(e.group.members.map((m) => [m, e.group.q]));
-  const gate = e.logic.kind === 'and' ? AND('TOP', e.group.members) : e.logic.kind === 'or' ? OR('TOP', e.group.members) : VOTE('TOP', e.group.members, e.logic.k!);
-  const doc = mkDoc('TOP', events, [gate]);
-  return { ...doc, assumptions: { ...(doc.assumptions as Record<string, unknown>), independence: 'beta-factor-groups' }, common_cause_groups: [{ id: e.group.id, method: 'beta-factor', members: e.group.members, beta: e.group.beta }] } as GroupDoc;
-}
+const modelOf = frozenCaseDoc;
 
 describe('expandGroups', () => {
   const pair = { id: 'G', members: ['A', 'B'], beta: 0.1 };

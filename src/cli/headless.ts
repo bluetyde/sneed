@@ -44,7 +44,7 @@ export const HEADLESS_VERSION = '0.1.0';
 /** The largest event-tree or model file the event-tree verbs read. */
 const MAX_INPUT_BYTES = 4 * 1024 * 1024;
 export const ET_MEANING = 'A frequency per year for each sequence and each end state of an event tree, under the stated assumptions (one initiating event of constant frequency, independent basic events of constant probability per demand, binary headings). Not a probability of failure and not a plant risk figure; end states are named by the author.';
-export const MEANING = 'A probability that the top event occurs under the stated assumptions (constant probabilities, independent basic events). Not a frequency and not a plant risk figure.';
+export const MEANING = 'A probability that the top event occurs under the stated assumptions (constant probabilities, independent basic events, except the events of a declared common-cause group, which follow the beta-factor model and are named in the result). Not a frequency and not a plant risk figure.';
 const METHODS: Method[] = ['exact', 'rare-event', 'mcub'];
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ACTIVE = 'active-run.json';
@@ -310,7 +310,7 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
         scram: runtimeState(),
         modelFormat: { format: 'sneed.fault-tree', version: '1' },
         methods: METHODS,
-        capabilities: ['exact', 'rare-event', 'mcub', 'k-of-n', 'minimal-cut-sets'],
+        capabilities: ['exact', 'rare-event', 'mcub', 'k-of-n', 'minimal-cut-sets', 'common-cause-beta-factor'],
         parameters: [{ id: 'event.probability', type: 'number', unit: '1', min: 0, max: 1 }],
         quantities: [
           { name: 'top_event_probability', unit: '1', normalization: 'none' },
