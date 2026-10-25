@@ -79,9 +79,9 @@ MUTATIONS = [
     ("stale layout warning off", V, "!kinds.has(n.id)) warnings.push", "false as boolean) warnings.push"),
     ("only first error reported", V, "const e2 = unique(errors);", "const e2 = unique(errors).slice(0, 1);"),
     ("schema: id pattern allows dots", S, "[A-Za-z0-9_-]{0,62}[A-Za-z0-9_]", "[A-Za-z0-9_.-]{0,62}[A-Za-z0-9_]"),
-    ("schema: probability maximum loosened", S, '"maximum": 1', '"maximum": 100'),
+    ("schema: probability maximum loosened", S, '"probability": { "type": "number", "minimum": 0, "maximum": 1 }', '"probability": { "type": "number", "minimum": 0, "maximum": 100 }'),
     ("schema: threshold allowed on and/or", S, '"then": { "properties": { "threshold": false } }', '"then": {}'),
-    ("schema: independence assumption loosened", S, '"independence": { "const": "declared-independent" }', '"independence": {}'),
+    ("schema: independence assumption loosened", S, '"independence": { "enum": ["declared-independent", "beta-factor-groups"] }', '"independence": {}'),
     ("hash: inputs not sorted", C, "inputs: [...g.inputs].sort()", "inputs: [...g.inputs]"),
     ("hash: keys not sorted", C, "Object.keys(o).sort()", "Object.keys(o)"),
     ("hash: duplicate ids accepted", C, "if (Object.hasOwn(events, e.id)) throw", "if (false as boolean) throw"),
@@ -1331,6 +1331,41 @@ def recover() -> None:
     BACKUP.rmdir()
 
 
+
+# Common-cause groups (plan 15, stage C1). Run alone with: python tests/mutation/verifier_mutations.py ccf
+# Two mutants were removed as equivalent: "an event listed twice in one group" (the any-group check catches the repeat too; only the message differs), and the guard in
+# analyze.ts (the exporter refuses a model with groups with the same code, one step later and before any WSL call).
+ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
+
+
+def cc(name: str, f: pathlib.Path, old: str, new: str) -> tuple:
+    return (f"common cause: {name}", f, old, new)
+
+
+MUTATIONS += [
+    cc("groups without the groups assumption are accepted", V, "if (groups.length > 0 && independence !== 'beta-factor-groups') {", "if (false as boolean) {"),
+    cc("the groups assumption without groups is accepted", V, "} else if (groups.length === 0 && independence === 'beta-factor-groups') {", "} else if (false as boolean) {"),
+    cc("an unknown member is accepted", V, "if (kinds.get(m) !== 'event') {", "if (false as boolean) {"),
+    cc("a gate is accepted as a member", V, "if (kinds.get(m) !== 'event') {", "if (!kinds.has(m)) {"),
+    cc("an event in two groups is accepted", V, "if (inThis.has(m) || other !== undefined) {", "if (false as boolean) {"),
+    cc("a group of one is accepted", V, "if (members.length < CCF_MIN)", "if (members.length < 1)"),
+    cc("a group of nine is accepted", V, "if (members.length > CCF_MAX)", "if (members.length > CCF_MAX + 1)"),
+    cc("beta out of range is a generic schema error", V, "if (/^\\/common_cause_groups\\/\\d+\\/beta$/.test(path)) {", "if (false as boolean) {"),
+    cc("members with different probabilities are accepted", V, "if (first !== undefined && known.some((m) => probability.get(m) !== first)) {", "if (false as boolean) {"),
+    cc("a group id may equal an event or gate id", V, "if (groupIds.has(gid) || kinds.has(gid)) {", "if (groupIds.has(gid)) {"),
+    cc("a group id may break the id pattern", V, "/^\\/(events|gates|common_cause_groups)\\/\\d+\\/id$/", "/^\\/(events|gates)\\/\\d+\\/id$/"),
+    cc("the schema accepts any method", S, '"method": { "const": "beta-factor" }', '"method": {}'),
+    cc("the schema accepts beta above one", S, '"beta": { "type": "number", "minimum": 0, "maximum": 1 }', '"beta": { "type": "number", "minimum": 0, "maximum": 100 }'),
+    cc("the hash leaves the groups out", C, "if (Object.keys(groups).length) out.common_cause_groups = groups;", "void groups;"),
+    cc("the hash depends on the order of the members", C, "members: [...g.members].sort(), beta: g.beta }", "members: [...g.members], beta: g.beta }"),
+    cc("the hash leaves beta out", C, "groups[g.id] = { method: g.method, members: [...g.members].sort(), beta: g.beta };", "groups[g.id] = { method: g.method, members: [...g.members].sort() };"),
+    cc("the built-in engine ignores the groups", BA, "if (groups) return { kind: 'refused'", "if (false as boolean) return { kind: 'refused'"),
+    cc("the event-tree engine ignores the groups", ETA, "if (unanalysedGroups(JSON.parse(modelText))) return refuse(", "if (false as boolean) return refuse("),
+    cc("the importance route ignores the groups", SA, "      if (groups) return send(res, 200, { kind: 'refused', errors: [groups] } satisfies ImportanceResponse);\n", ""),
+    cc("the exporter drops the groups without a word", X, "if (model.common_cause_groups?.length) throw new ExportError(", "if (false as boolean) throw new ExportError("),
+    cc("an empty group list counts as groups", V, "|| doc.common_cause_groups.length === 0) return null;", "|| false as boolean) return null;"),
+]
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     only = sys.argv[1] if len(sys.argv) > 1 else "all"  # all | unit | engine | check
@@ -1385,6 +1420,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th judge:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
+    if only == "ccf":  # just the common-cause group mutations (plan 15)
+        chosen = [m for m in MUTATIONS if m[0].startswith("common cause:")]
     if only == "check":
         bad = [m[0] for m in MUTATIONS if m[1].read_bytes().decode("utf-8").count(m[2]) != 1]
         print(f"{len(MUTATIONS) - len(bad)} of {len(MUTATIONS)} patterns occur exactly once", ("; fix: " + ", ".join(bad)) if bad else "")

@@ -57,7 +57,7 @@ export class Properties {
       field('model-name', 'Model name', name),
       field('top', 'Top event', top, h('span', { class: 'hint' }, 'The event the whole tree is about. Results are the probability that it occurs.')),
       h('h2', {}, 'Assumptions behind every result'),
-      h('dl', { class: 'kv' }, h('dt', {}, 'Probabilities'), h('dd', {}, `${a.probability_model ?? '?'} (fixed numbers, no time)`), h('dt', {}, 'Independence'), h('dd', {}, `${a.independence ?? '?'}: distinct basic events do not influence each other`), h('dt', {}, 'Logic'), h('dd', {}, `${a.coherence ?? '?'}: more failures never repair the system`), h('dt', {}, 'Time'), h('dd', {}, a.time ?? '?')),
+      h('dl', { class: 'kv' }, h('dt', {}, 'Probabilities'), h('dd', {}, `${a.probability_model ?? '?'} (fixed numbers, no time)`), h('dt', {}, 'Independence'), h('dd', {}, a.independence === 'beta-factor-groups' ? 'beta-factor-groups: the events of one common-cause group can fail together, and all other basic events do not influence each other' : `${a.independence ?? '?'}: distinct basic events do not influence each other`), h('dt', {}, 'Logic'), h('dd', {}, `${a.coherence ?? '?'}: more failures never repair the system`), h('dt', {}, 'Time'), h('dd', {}, a.time ?? '?')),
       h('p', { class: 'hint' }, 'Select a node in the drawing or in the outline to edit it.'),
     ];
   }

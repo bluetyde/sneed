@@ -1,0 +1,57 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "m1",
+    "name": "Fixture",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "beta-factor-groups",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "V",
+  "events": [
+    {
+      "id": "A",
+      "probability": 0.1
+    },
+    {
+      "id": "B",
+      "probability": 0.1
+    },
+    {
+      "id": "C",
+      "probability": 0.1
+    }
+  ],
+  "gates": [
+    {
+      "id": "V",
+      "type": "atleast",
+      "inputs": [
+        "A",
+        "B",
+        "C"
+      ],
+      "threshold": 2
+    }
+  ],
+  "common_cause_groups": [
+    {
+      "id": "G",
+      "method": "beta-factor",
+      "members": [
+        "A",
+        "B",
+        "C"
+      ],
+      "beta": 0.05
+    }
+  ]
+}

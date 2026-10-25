@@ -1,0 +1,92 @@
+{
+  "schema": {
+    "id": "sneed.fault-tree",
+    "version": 1
+  },
+  "model": {
+    "id": "m1",
+    "name": "Fixture",
+    "created": "2026-10-05T00:00:00Z",
+    "updated": "2026-10-05T00:00:00Z"
+  },
+  "assumptions": {
+    "probability_model": "constant",
+    "independence": "beta-factor-groups",
+    "coherence": "coherent",
+    "time": "none"
+  },
+  "top": "TOP",
+  "events": [
+    {
+      "id": "E1",
+      "probability": 0.05
+    },
+    {
+      "id": "E2",
+      "probability": 0.05
+    },
+    {
+      "id": "E3",
+      "probability": 0.05
+    },
+    {
+      "id": "E4",
+      "probability": 0.05
+    },
+    {
+      "id": "E5",
+      "probability": 0.05
+    },
+    {
+      "id": "E6",
+      "probability": 0.05
+    },
+    {
+      "id": "E7",
+      "probability": 0.05
+    },
+    {
+      "id": "E8",
+      "probability": 0.05
+    },
+    {
+      "id": "E9",
+      "probability": 0.05
+    }
+  ],
+  "gates": [
+    {
+      "id": "TOP",
+      "type": "or",
+      "inputs": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7",
+        "E8",
+        "E9"
+      ]
+    }
+  ],
+  "common_cause_groups": [
+    {
+      "id": "G",
+      "method": "beta-factor",
+      "members": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7",
+        "E8",
+        "E9"
+      ],
+      "beta": 0.1
+    }
+  ]
+}

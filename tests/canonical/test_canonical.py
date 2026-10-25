@@ -21,6 +21,12 @@ for m in vec["model_cases"]:
         bad += 1; print("RELATION FAIL (should be same)", m["id"])
     if rel == "differs" and m["model_hash"] == base:
         bad += 1; print("RELATION FAIL (should differ)", m["id"])
+by_id = {m["id"]: m["model_hash"] for m in vec["model_cases"]}
+for m in vec["model_cases"]:
+    if m.get("same_as") and m["model_hash"] != by_id[m["same_as"]]:
+        bad += 1; print("RELATION FAIL (should equal", m["same_as"], ")", m["id"])
+    if m.get("differs_from") and m["model_hash"] == by_id[m["differs_from"]]:
+        bad += 1; print("RELATION FAIL (should differ from", m["differs_from"], ")", m["id"])
 # same model hash but saved-document hash differs for metadata-only edits
 lay = next(m for m in vec["model_cases"] if m["id"] == "layout-name-unknown-field")
 b = next(m for m in vec["model_cases"] if m["id"] == "base")

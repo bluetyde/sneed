@@ -14,7 +14,7 @@ export const MAX_VOTE_TERMS = 2000;
 
 export class ExportError extends Error {
   constructor(
-    readonly code: 'E_EXPORT_LIMIT',
+    readonly code: 'E_EXPORT_LIMIT' | 'E_CCF_NOT_ANALYSED',
     message: string,
     readonly ids: string[],
   ) {
@@ -69,6 +69,7 @@ type Formula = { ref: string } | { op: 'and' | 'or'; args: Formula[] } | { op: '
  * SCRAM cannot express directly (duplicate inputs on a voting gate) is rewritten to equivalent AND/OR logic.
  */
 export function exportOpenPsa(model: NativeModel, options: ExportOptions = {}): Exported {
+  if (model.common_cause_groups?.length) throw new ExportError('E_CCF_NOT_ANALYSED', 'the model has common-cause groups, and the export of groups is not built yet; a file without them would be a different model', model.common_cause_groups.map((g) => g.id));
   const voting: VotingMode = options.voting ?? 'auto';
   const gateById = new Map(model.gates.map((g) => [g.id, g]));
 

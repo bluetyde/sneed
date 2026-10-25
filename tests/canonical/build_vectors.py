@@ -83,6 +83,38 @@ id_cases = [{"id": i, "valid": v} for i, v in [
     ("A", True), ("P1", True), ("_P", True), ("P_1", True), ("P-1", True), ("a", True), ("x" * 64, True),
     ("1A", False), ("-P", False), ("P-", False), ("P.1", False), ("P 1", False), ("", False), ("x" * 65, False), ("Pump\u00e9", False)]]
 
+# common-cause groups (plan 15): the group is part of what the model means; its name and the order of its members are not
+def group_doc(**edits):
+    d = to_array_doc(BASE)
+    d["assumptions"] = dict(BASE["assumptions"], independence="beta-factor-groups")
+    d["common_cause_groups"] = [{"id": "G", "name": "Pump pair", "method": "beta-factor", "members": ["P1", "P2"], "beta": 0.1}]
+    for k, v in edits.items():
+        d[k] = v
+    return d
+
+
+def group_case(cid, d, **rel):
+    text = json.dumps(d, indent=2)
+    model_cases.append({"id": cid, "relation_to_base": rel.pop("base", "differs"), **rel, "document_json": text, "model_hash": model_hash(d), "document_hash": document_hash(text.encode("utf-8"))})
+
+
+group_case("groups-base", group_doc())
+g = group_doc(); g["common_cause_groups"][0]["members"] = ["P2", "P1"]
+group_case("groups-member-order", g, same_as="groups-base")
+g = group_doc(); g["common_cause_groups"][0].update(name="Renamed", **{"x-note": "kept"})
+group_case("groups-name-and-unknown-field", g, same_as="groups-base")
+g = group_doc(); g["common_cause_groups"][0]["beta"] = 0.2
+group_case("groups-beta-changed", g, differs_from="groups-base")
+g = group_doc(); g["common_cause_groups"][0]["id"] = "H"
+group_case("groups-id-renamed", g, differs_from="groups-base")
+g = group_doc(); g["common_cause_groups"][0]["members"] = ["P1", "S"]
+group_case("groups-members-changed", g, differs_from="groups-base")
+g = to_array_doc(BASE); g["common_cause_groups"] = []
+group_case("groups-empty-list-keeps-hash", g, base="same")
+dup_group = group_doc(); dup_group["common_cause_groups"].append(dict(dup_group["common_cause_groups"][0]))
+group_clash = group_doc(); group_clash["common_cause_groups"][0]["id"] = "P1"
+refusal_cases += [{"id": n, "document_json": json.dumps(d), "error": "E_DUP_ID"} for n, d in (("duplicate-group-id", dup_group), ("group-event-namespace-clash", group_clash))]
+
 out = {"serializer": "RFC 8785 (JCS) subset; IDs per canon.ID_PATTERN", "projection": "plan 01 model identity", "number_cases": [{"value": v, "canonical": c} for v, c in NUMBERS], "model_cases": model_cases, "refusal_cases": refusal_cases, "id_cases": id_cases}
 open("vectors.json", "w", newline="\n").write(json.dumps(out, indent=1) + "\n")
 print(len(NUMBERS), "number cases,", len(model_cases), "model cases")

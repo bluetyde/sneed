@@ -169,6 +169,60 @@
    "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"V\", \"events\": [{\"id\": \"A\", \"probability\": 0.1}, {\"id\": \"B\", \"probability\": 0.1}, {\"id\": \"C\", \"probability\": 0.1}], \"gates\": [{\"id\": \"V\", \"type\": \"atleast\", \"threshold\": 3, \"inputs\": [\"C\", \"A\", \"B\"]}]}",
    "model_hash": "c676f6f96b7a3a5b4544871033d3f928268d4b6ebcf5e9672661b541190744da",
    "document_hash": "2d9fadaf645cfc65f006c048486dd0ad0852a3eebf365d520792bef3fd3dac09"
+  },
+  {
+   "id": "groups-base",
+   "relation_to_base": "differs",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"G\",\n      \"name\": \"Pump pair\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P1\",\n        \"P2\"\n      ],\n      \"beta\": 0.1\n    }\n  ]\n}",
+   "model_hash": "5495ac26ce122df0964a15e085adb55cd01c7e3110986da4dde92327679effa8",
+   "document_hash": "0f9a4ee42ddbe82550fdc6bf21c857456293c574115e9bfab8ef5b27b68b51b7"
+  },
+  {
+   "id": "groups-member-order",
+   "relation_to_base": "differs",
+   "same_as": "groups-base",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"G\",\n      \"name\": \"Pump pair\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P2\",\n        \"P1\"\n      ],\n      \"beta\": 0.1\n    }\n  ]\n}",
+   "model_hash": "5495ac26ce122df0964a15e085adb55cd01c7e3110986da4dde92327679effa8",
+   "document_hash": "a4dec8e62858f419d0bf8693a39f892cfb270340db78e65db74b5eb4e366bcba"
+  },
+  {
+   "id": "groups-name-and-unknown-field",
+   "relation_to_base": "differs",
+   "same_as": "groups-base",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"G\",\n      \"name\": \"Renamed\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P1\",\n        \"P2\"\n      ],\n      \"beta\": 0.1,\n      \"x-note\": \"kept\"\n    }\n  ]\n}",
+   "model_hash": "5495ac26ce122df0964a15e085adb55cd01c7e3110986da4dde92327679effa8",
+   "document_hash": "f0886385714a69e3c9a51b1729c6e0833fe7b98bc2b7b81161c7bd2f33b1f6d4"
+  },
+  {
+   "id": "groups-beta-changed",
+   "relation_to_base": "differs",
+   "differs_from": "groups-base",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"G\",\n      \"name\": \"Pump pair\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P1\",\n        \"P2\"\n      ],\n      \"beta\": 0.2\n    }\n  ]\n}",
+   "model_hash": "3f90707d6ab9316967bcf769cd291b0cbec25fb2e58c409ec1ce5fec31df74cd",
+   "document_hash": "7ee1d5f1938294d065ea61a90565072a0ec3ef9c1ba140432f54b3690f842909"
+  },
+  {
+   "id": "groups-id-renamed",
+   "relation_to_base": "differs",
+   "differs_from": "groups-base",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"H\",\n      \"name\": \"Pump pair\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P1\",\n        \"P2\"\n      ],\n      \"beta\": 0.1\n    }\n  ]\n}",
+   "model_hash": "fd2d802edc59a5c8affb07e369d305912de42518aa97e6c2f396e0ac6b687557",
+   "document_hash": "7f4907f93efc2cd932b52e3d6d952ae2042f07cd30e6d98ca04549514bbaac11"
+  },
+  {
+   "id": "groups-members-changed",
+   "relation_to_base": "differs",
+   "differs_from": "groups-base",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"beta-factor-groups\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": [\n    {\n      \"id\": \"G\",\n      \"name\": \"Pump pair\",\n      \"method\": \"beta-factor\",\n      \"members\": [\n        \"P1\",\n        \"S\"\n      ],\n      \"beta\": 0.1\n    }\n  ]\n}",
+   "model_hash": "c0e915258f3eb36bc335996408c243ba7c542f30e6731995f86281368c3744ed",
+   "document_hash": "ab7b909db74c86998951bea9bf0160967656d0393cd6baf5a409c0c54634f503"
+  },
+  {
+   "id": "groups-empty-list-keeps-hash",
+   "relation_to_base": "same",
+   "document_json": "{\n  \"schema\": {\n    \"id\": \"sneed.fault-tree\",\n    \"version\": 1\n  },\n  \"assumptions\": {\n    \"probability_model\": \"constant\",\n    \"independence\": \"declared-independent\",\n    \"coherence\": \"coherent\",\n    \"time\": \"none\"\n  },\n  \"top\": \"TOP\",\n  \"events\": [\n    {\n      \"id\": \"P1\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 1\"\n    },\n    {\n      \"id\": \"P2\",\n      \"probability\": 0.1,\n      \"name\": \"Pump 2\"\n    },\n    {\n      \"id\": \"S\",\n      \"probability\": 0.05,\n      \"name\": \"Power\"\n    }\n  ],\n  \"gates\": [\n    {\n      \"id\": \"TOP\",\n      \"type\": \"or\",\n      \"inputs\": [\n        \"S\",\n        \"PUMPS\"\n      ]\n    },\n    {\n      \"id\": \"PUMPS\",\n      \"type\": \"and\",\n      \"inputs\": [\n        \"P1\",\n        \"P2\"\n      ]\n    }\n  ],\n  \"layout\": {\n    \"TOP\": [\n      0,\n      0\n    ]\n  },\n  \"common_cause_groups\": []\n}",
+   "model_hash": "14206b985b3db5b62c47d515c0e516684b37793e02d7fbf6e43585d97a36d1e0",
+   "document_hash": "09a8dabb6f45d12b46ab6ec5061757c4aeee651ff5d77fa5515c9c8c874d1f1e"
   }
  ],
  "refusal_cases": [
@@ -185,6 +239,16 @@
   {
    "id": "event-gate-namespace-clash",
    "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"declared-independent\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}, {\"id\": \"S\", \"type\": \"or\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}}",
+   "error": "E_DUP_ID"
+  },
+  {
+   "id": "duplicate-group-id",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"beta-factor-groups\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}, \"common_cause_groups\": [{\"id\": \"G\", \"name\": \"Pump pair\", \"method\": \"beta-factor\", \"members\": [\"P1\", \"P2\"], \"beta\": 0.1}, {\"id\": \"G\", \"name\": \"Pump pair\", \"method\": \"beta-factor\", \"members\": [\"P1\", \"P2\"], \"beta\": 0.1}]}",
+   "error": "E_DUP_ID"
+  },
+  {
+   "id": "group-event-namespace-clash",
+   "document_json": "{\"schema\": {\"id\": \"sneed.fault-tree\", \"version\": 1}, \"assumptions\": {\"probability_model\": \"constant\", \"independence\": \"beta-factor-groups\", \"coherence\": \"coherent\", \"time\": \"none\"}, \"top\": \"TOP\", \"events\": [{\"id\": \"P1\", \"probability\": 0.1, \"name\": \"Pump 1\"}, {\"id\": \"P2\", \"probability\": 0.1, \"name\": \"Pump 2\"}, {\"id\": \"S\", \"probability\": 0.05, \"name\": \"Power\"}], \"gates\": [{\"id\": \"TOP\", \"type\": \"or\", \"inputs\": [\"S\", \"PUMPS\"]}, {\"id\": \"PUMPS\", \"type\": \"and\", \"inputs\": [\"P1\", \"P2\"]}], \"layout\": {\"TOP\": [0, 0]}, \"common_cause_groups\": [{\"id\": \"P1\", \"name\": \"Pump pair\", \"method\": \"beta-factor\", \"members\": [\"P1\", \"P2\"], \"beta\": 0.1}]}",
    "error": "E_DUP_ID"
   }
  ],

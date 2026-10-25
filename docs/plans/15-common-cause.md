@@ -1,6 +1,6 @@
 # Plan 15: Common-cause failure groups (plan 07, step 3): semantics, written before any code
 
-**Status 2026-10-25: DECIDED (the owner approved all five recommendations in section 8). Stage C0 is done: oracles CC1 to CC6 are frozen in `tests/oracles-common-cause.json`. No engine code exists yet.** This plan follows [plan 07](07-extensions.md), which says each extension needs a stated model, its assumptions, its data source and independent reference cases before it ships. The owner chose to start before P3 is verified (question Q4), which plan 07 does not otherwise allow.
+**Status 2026-10-25: DECIDED (the owner approved all five recommendations in section 8). Stage C0 is done: oracles CC1 to CC6 are frozen in `tests/oracles-common-cause.json`. Stage C1 is done (2026-10-25): schema, validator, error codes, fixtures and hash vectors. No engine expands groups yet: every analysis refuses a model with groups (`E_CCF_NOT_ANALYSED`).** This plan follows [plan 07](07-extensions.md), which says each extension needs a stated model, its assumptions, its data source and independent reference cases before it ships. The owner chose to start before P3 is verified (question Q4), which plan 07 does not otherwise allow.
 
 ## 1. What this is, and what it is not
 
@@ -78,8 +78,8 @@ CC7 needs a chosen tree and a hand value. I will not freeze a number for it unti
 
 ## 7. Staged build (each stage ends with a Codex review)
 
-1. **Stage C0.** This plan, approved. The oracles CC1 to CC6 frozen with their derivations.
-2. **Stage C1.** Schema, validator, error codes, one bad fixture per code, hash vectors.
+1. **Stage C0 (done).** This plan, approved. The oracles CC1 to CC6 frozen with their derivations.
+2. **Stage C1 (done 2026-10-25).** Schema, validator, error codes, one bad fixture per code, hash vectors. Added beyond the list: `E_CCF_ASSUMPTION` (the assumptions block and the groups must agree), `E_CCF_NOT_ANALYSED` (a stop at every analysis entry and at the exporter until stage C2), group ids checked like other ids, and the Properties panel no longer says "independent" for a model with groups. The hash has a group part only when the list is not empty. See [docs/SCHEMA.md](../SCHEMA.md).
 3. **Stage C2.** Expansion, the built-in engine, and the enumeration oracle on the group definition. The mutation checks for each.
 4. **Stage C3.** Export to Open-PSA (the expansion is written out) and the headless verbs. Import of groups stays out: the Open-PSA subset grows only with a documented change.
 5. **Stage C4.** Editor, result panel, one lesson.

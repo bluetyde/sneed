@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sneed.invalid/schema/model-1.json",
   "title": "SNEED native fault-tree model, schema version 1",
-  "description": "Structural rules only (docs/SCHEMA.md). Cross-reference checks (duplicate IDs, missing references, cycles, arity, voting range) are in src/core/validate.ts. Unknown fields are allowed and preserved.",
+  "description": "Structural rules only (docs/SCHEMA.md). Cross-reference checks (duplicate IDs, missing references, cycles, arity, voting range, common-cause groups) are in src/core/validate.ts. Unknown fields are allowed and preserved.",
   "type": "object",
   "required": ["schema", "model", "assumptions", "top", "events", "gates"],
   "properties": {
@@ -29,7 +29,7 @@
       "required": ["probability_model", "independence", "coherence", "time"],
       "properties": {
         "probability_model": { "const": "constant" },
-        "independence": { "const": "declared-independent" },
+        "independence": { "enum": ["declared-independent", "beta-factor-groups"] },
         "coherence": { "const": "coherent" },
         "time": { "const": "none" }
       }
@@ -43,6 +43,10 @@
     "gates": {
       "type": "array",
       "items": { "$ref": "#/$defs/gate" }
+    },
+    "common_cause_groups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/group" }
     },
     "layout": { "$ref": "#/$defs/layout" }
   },
@@ -94,6 +98,17 @@
       },
       "if": { "properties": { "type": { "enum": ["and", "or"] } }, "required": ["type"] },
       "then": { "properties": { "threshold": false } }
+    },
+    "group": {
+      "type": "object",
+      "required": ["id", "method", "members", "beta"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/label" },
+        "method": { "const": "beta-factor" },
+        "members": { "type": "array", "items": { "type": "string" } },
+        "beta": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
     },
     "layout": {
       "type": "object",

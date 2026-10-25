@@ -1,4 +1,88 @@
 {
+ "bad/E_CCF_ASSUMPTION__assumption-with-empty-list.json": {
+  "errors": [
+   "E_CCF_ASSUMPTION"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_ASSUMPTION__assumption-without-groups.json": {
+  "errors": [
+   "E_CCF_ASSUMPTION"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_ASSUMPTION__groups-without-assumption.json": {
+  "errors": [
+   "E_CCF_ASSUMPTION"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_BETA_RANGE__above-one.json": {
+  "errors": [
+   "E_CCF_BETA_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_BETA_RANGE__negative.json": {
+  "errors": [
+   "E_CCF_BETA_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_BETA_RANGE__string.json": {
+  "errors": [
+   "E_CCF_BETA_RANGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_OVERLAP__repeated-in-group.json": {
+  "errors": [
+   "E_CCF_OVERLAP"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_OVERLAP__two-groups.json": {
+  "errors": [
+   "E_CCF_OVERLAP"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_TOO_LARGE__nine-members.json": {
+  "errors": [
+   "E_CCF_TOO_LARGE"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_TOO_SMALL__no-members.json": {
+  "errors": [
+   "E_CCF_TOO_SMALL"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_TOO_SMALL__one-member.json": {
+  "errors": [
+   "E_CCF_TOO_SMALL"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_UNEQUAL_Q__two-values.json": {
+  "errors": [
+   "E_CCF_UNEQUAL_Q"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_UNKNOWN_MEMBER__gate-id.json": {
+  "errors": [
+   "E_CCF_UNKNOWN_MEMBER"
+  ],
+  "warnings": []
+ },
+ "bad/E_CCF_UNKNOWN_MEMBER__missing-id.json": {
+  "errors": [
+   "E_CCF_UNKNOWN_MEMBER"
+  ],
+  "warnings": []
+ },
  "bad/E_CYCLE__self.json": {
   "errors": [
    "E_CYCLE"
@@ -17,6 +101,12 @@
   ],
   "warnings": []
  },
+ "bad/E_DUP_ID__group-clashes-with-event.json": {
+  "errors": [
+   "E_DUP_ID"
+  ],
+  "warnings": []
+ },
  "bad/E_DUP_ID__two-events.json": {
   "errors": [
    "E_DUP_ID"
@@ -24,6 +114,12 @@
   "warnings": []
  },
  "bad/E_DUP_ID__two-gates.json": {
+  "errors": [
+   "E_DUP_ID"
+  ],
+  "warnings": []
+ },
+ "bad/E_DUP_ID__two-groups-same-id.json": {
   "errors": [
    "E_DUP_ID"
   ],
@@ -42,6 +138,12 @@
   "warnings": []
  },
  "bad/E_ID_FORMAT__dot.json": {
+  "errors": [
+   "E_ID_FORMAT"
+  ],
+  "warnings": []
+ },
+ "bad/E_ID_FORMAT__group-id-dot.json": {
   "errors": [
    "E_ID_FORMAT"
   ],
@@ -102,6 +204,18 @@
   "warnings": []
  },
  "bad/E_SCHEMA__assumption-not-v1.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__ccf-method-unknown.json": {
+  "errors": [
+   "E_SCHEMA"
+  ],
+  "warnings": []
+ },
+ "bad/E_SCHEMA__ccf-missing-beta.json": {
   "errors": [
    "E_SCHEMA"
   ],
@@ -184,6 +298,36 @@
   "warnings": []
  },
  "good/case-distinct-ids.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-beta-bounds.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-eight-members.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-empty-list.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-pair.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-two-groups.json": {
+  "errors": [],
+  "warnings": []
+ },
+ "good/ccf-unknown-field.json": {
+  "errors": [],
+  "warnings": [
+   "W_UNKNOWN_FIELD"
+  ]
+ },
+ "good/ccf-vote-of-three.json": {
   "errors": [],
   "warnings": []
  },

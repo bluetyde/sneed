@@ -25,6 +25,13 @@ describe('canonical vectors (tests/canonical/vectors.json)', () => {
       if (m.relation_to_base === 'differs') expect(m.model_hash, m.id).not.toBe(base);
     }
   });
+  it('same_as / differs_from relations hold between the cases that name each other', () => {
+    const hashOf = (id: string): string => vec.model_cases.find((m: { id: string }) => m.id === id).model_hash;
+    for (const m of vec.model_cases) {
+      if (m.same_as) expect(m.model_hash, m.id).toBe(hashOf(m.same_as));
+      if (m.differs_from) expect(m.model_hash, m.id).not.toBe(hashOf(m.differs_from));
+    }
+  });
   for (const c of vec.refusal_cases as { id: string; document_json: string; error: string }[]) {
     it(`refuses ${c.id}`, () => {
       expect(() => modelHash(JSON.parse(c.document_json))).toThrow(c.error);
