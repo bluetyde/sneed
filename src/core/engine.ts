@@ -34,9 +34,14 @@ export const DEV_ENGINE: EngineConfig = {
   expectedSha256: 'eaa41f5ae3bfef0f445f302f65079189b13a545e575ec2e1b65c77dfa0b78ed8',
 };
 
-/** C:\a b\c -> /mnt/c/a b/c. Throws for anything that is not an absolute drive path. */
+/**
+ * C:\a b\c -> /mnt/c/a b/c. Throws for anything that is not an absolute drive path.
+ * Off Windows, `path.resolve` would treat a drive path as a relative one, so a drive path is resolved as a Windows path
+ * and an absolute POSIX path (already the Linux name of the folder) is returned as it is.
+ */
 export function toWslPath(winPath: string): string {
-  const abs = path.resolve(winPath);
+  if (process.platform !== 'win32' && !/^[A-Za-z]:[\\/]/.test(winPath) && winPath.startsWith('/')) return path.posix.normalize(winPath);
+  const abs = process.platform === 'win32' ? path.resolve(winPath) : path.win32.resolve(winPath);
   const m = /^([A-Za-z]):[\\/](.*)$/.exec(abs);
   if (!m) throw new Error(`not a Windows drive path: ${winPath}`);
   return `/mnt/${m[1]!.toLowerCase()}/${m[2]!.replace(/\\/g, '/')}`;
