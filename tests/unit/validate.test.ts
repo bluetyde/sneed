@@ -25,6 +25,13 @@ describe('fixtures', () => {
     expect(onDisk).toEqual(Object.keys(expected).sort());
   });
 
+  it('a beta out of range names its group, so a click on the problem can select it', () => {
+    for (const f of ['bad/E_CCF_BETA_RANGE__above-one.json', 'bad/E_CCF_BETA_RANGE__negative.json', 'bad/E_CCF_BETA_RANGE__string.json']) {
+      const issue = validateModelText(load(f)).errors.find((i) => i.code === 'E_CCF_BETA_RANGE')!;
+      expect(issue.ids, f).toEqual(['G']);
+    }
+  });
+
   it('every error code has at least one bad fixture that fires it', () => {
     const fired = new Set(Object.entries(expected).filter(([k]) => k.startsWith('bad/')).flatMap(([, v]) => v.errors));
     for (const c of ERROR_CODES) expect(fired.has(c), c).toBe(true);
