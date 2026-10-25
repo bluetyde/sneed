@@ -11,6 +11,20 @@ export const groupEventId = (groupId: string): string => groupId + CCF_SUFFIX;
 /** The id of the part of member `memberId` that fails alone. */
 export const independentPartId = (memberId: string): string => memberId + INDEPENDENT_SUFFIX;
 
+/**
+ * What the events the expansion adds are called on screen: `A.independent` is "A on its own" and `G.CCF` is "common cause of group G"
+ * (names of the model's events and groups where there are some). Only the events of a model with groups appear.
+ */
+export function derivedEventNames(model: { events: { id: string; name?: string }[]; common_cause_groups?: { id: string; name?: string; members: string[] }[] }): Map<string, string> {
+  const own = new Map(model.events.map((e) => [e.id, e.name?.trim() || e.id]));
+  const out = new Map<string, string>();
+  for (const g of model.common_cause_groups ?? []) {
+    out.set(groupEventId(g.id), `common cause of group ${g.name?.trim() || g.id}`);
+    for (const m of g.members) out.set(independentPartId(m), `${own.get(m) ?? m} on its own`);
+  }
+  return out;
+}
+
 /** The same model with its groups taken away and its events independent: the textbook model the groups are compared with. */
 export function withoutGroups(model: NativeModel): NativeModel {
   const { common_cause_groups: _groups, ...rest } = model;

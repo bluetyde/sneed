@@ -27,8 +27,7 @@ export type ErrorCode =
   | 'E_CCF_TOO_SMALL'
   | 'E_CCF_TOO_LARGE'
   | 'E_CCF_BETA_RANGE'
-  | 'E_CCF_UNEQUAL_Q'
-  | 'E_CCF_NOT_ANALYSED';
+  | 'E_CCF_UNEQUAL_Q';
 export type WarningCode = 'W_UNREACHABLE' | 'W_UNKNOWN_FIELD' | 'W_LAYOUT_STALE';
 export type Code = ErrorCode | WarningCode;
 
@@ -189,16 +188,6 @@ function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'eve
       errors.push(issue('E_CCF_UNEQUAL_Q', `${path}/members`, `the members of group ${q(gid)} must have one probability (the beta-factor model has one total probability per group)`, [gid, ...known]));
     }
   });
-}
-
-/**
- * The built-in fault-tree analysis expands common-cause groups (plan 15, stage C2). Every other analysis (the SCRAM path, the Open-PSA export,
- * event trees, importance measures) must not run on a model that has them: an engine that ignores a group would give the independent answer
- * without a word. Each of those entry points asks this first.
- */
-export function unanalysedGroups(doc: unknown): Issue | null {
-  if (!isObj(doc) || !Array.isArray(doc.common_cause_groups) || doc.common_cause_groups.length === 0) return null;
-  return issue('E_CCF_NOT_ANALYSED', '/common_cause_groups', 'this model has common-cause groups, and this analysis does not handle them yet (only the built-in fault-tree analysis does); no result is made, so the groups are never silently ignored');
 }
 
 function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings: Issue[]): void {

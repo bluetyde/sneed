@@ -8,7 +8,8 @@ import { documentHash, modelHash } from '../../core/canonical.js';
 import { eventTreeHash, validateEventTreeText, type EtIssue } from '../../core/event-tree.js';
 import { EVENT_TREE_RESULT_SCHEMA, eventTreeFailureText, type EtEndStateRow, type EtSequenceRow, type EventTreeResult } from '../../core/event-tree-result.js';
 import type { NativeModel } from '../../core/model.js';
-import { unanalysedGroups, validateModelText } from '../../core/validate.js';
+import { commonCauseRecord, expandGroups } from '../../core/ccf.js';
+import { validateModelText } from '../../core/validate.js';
 import { BDD_SOURCE_SHA256 } from './build-id.js';
 import type { BddLimits } from './bdd.js';
 import type { EventTreeInput } from './event-tree.js';
@@ -46,8 +47,10 @@ export async function analyzeEventTreeBuiltin(treeText: string, modelText: strin
 
   const modelCheck = validateModelText(modelText);
   if (!modelCheck.valid) return refuse('E_MODEL_NOT_FOUND', `the fault-tree model is not valid (${modelCheck.errors.map((e) => e.code).join(', ')}), so no sequence can be evaluated`);
-  if (unanalysedGroups(JSON.parse(modelText))) return refuse('E_MODEL_NOT_FOUND', 'the fault-tree model has common-cause groups, and analysis of groups is not built yet, so no sequence can be evaluated');
-  const model = JSON.parse(modelText) as NativeModel;
+  // common-cause groups (plan 15) are expanded into ordinary events and gates; the tree and the record name the original model
+  const original = JSON.parse(modelText) as NativeModel;
+  const model = expandGroups(original);
+  const groups = original.common_cause_groups ?? [];
 
   // the tree is checked against exactly this model: the name it uses is the one it names
   let named = '';
@@ -56,7 +59,7 @@ export async function analyzeEventTreeBuiltin(treeText: string, modelText: strin
   } catch {
     /* not JSON: the validator says so */
   }
-  const ref = { hash: modelHash(model), events: new Set(model.events.map((e) => e.id)), gates: new Set(model.gates.map((g) => g.id)) };
+  const ref = { hash: modelHash(original), events: new Set(original.events.map((e) => e.id)), gates: new Set(original.gates.map((g) => g.id)) };
   const v = validateEventTreeText(treeText, { resolveModel: (n) => (n === named ? ref : null) });
   if (!v.valid) return { kind: 'refused', errors: v.errors, warnings: v.warnings };
   const doc = JSON.parse(treeText) as {
@@ -88,7 +91,8 @@ export async function analyzeEventTreeBuiltin(treeText: string, modelText: strin
     initiating_event: { name: doc.initiating_event.name, frequency: doc.initiating_event.frequency, unit: doc.initiating_event.unit },
     headings: doc.headings.map((h) => ({ id: h.id, name: h.name, event: h.event })),
     warnings: v.warnings.map((w) => w.message),
-    caveats: ['A frequency here is a model result under the stated assumptions, not a plant figure.', ...(doc.end_states.some((e) => e.synthetic) ? ['End states marked synthetic are examples, not conditions of any real plant.'] : [])],
+    ...(groups.length ? { common_cause: { method: 'beta-factor' as const, groups: commonCauseRecord(original).common_cause!.groups, note: 'The headings whose events are members of a common-cause group fail together with the stated beta. A different kind of result from one with independent events.' } } : {}),
+    caveats: ['A frequency here is a model result under the stated assumptions, not a plant figure.', ...(groups.length ? ['The fault-tree model has common-cause groups (beta-factor): headings that share a group fail together, which the independent-events assumption above does not say. A different kind of result from one with independent events.'] : []), ...(doc.end_states.some((e) => e.synthetic) ? ['End states marked synthetic are examples, not conditions of any real plant.'] : [])],
   };
   const failed = (status: 'failed' | 'cancelled', reason: string): EventTreeOutcome => {
     const record: EventTreeResult = { ...base, status, completeness: 'unknown', reasons: [reason], sequences: [], end_states: [], total: null, approximation: null };

@@ -19,7 +19,6 @@ export const PROBLEM_HINTS: Record<string, string> = {
   E_CCF_TOO_LARGE: 'A common-cause group can have at most eight basic events. Split it.',
   E_CCF_BETA_RANGE: 'Beta is a fraction of the failures: a number from 0 to 1.',
   E_CCF_UNEQUAL_Q: 'The members of a common-cause group must have one probability. Change the probability of one member and the others follow.',
-  E_CCF_NOT_ANALYSED: 'Event trees and importance measures do not handle common-cause groups yet, so they make no result for this model.',
   E_EXPORT_LIMIT: 'This K-of-N gate is too large to hand to the engine. Split it into smaller gates.',
   W_UNREACHABLE: 'This node is not connected to the top event. It is kept in the model but ignored by the analysis.',
   W_UNKNOWN_FIELD: 'The file has a field this editor does not know. It is kept as it is and ignored.',
