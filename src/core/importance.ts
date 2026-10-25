@@ -4,6 +4,10 @@
 export const IMPORTANCE_ASSUMPTIONS =
   'Static coherent fault tree; basic events independent with constant probabilities, as stated in the model. The measures are exact for that model (not cut-set approximations). They describe this model, not a plant: a ranking is a teaching aid, not a design or licensing finding.';
 
+/** Added to the assumptions when the model has common-cause groups (plan 15). */
+export const IMPORTANCE_GROUPS_NOTE =
+  'The model has common-cause groups (beta-factor), so the basic events here are not independent: the table is for the events the groups are made of. Each member appears as its own failure ("A on its own", ID A.independent) and each group as one shared failure ("common cause of group G", ID G.CCF). A member is not an event of its own any more.';
+
 export const IMPORTANCE_DEFINITIONS: { key: 'birnbaum' | 'raw' | 'rrw' | 'fv'; name: string; meaning: string }[] = [
   { key: 'birnbaum', name: 'Birnbaum', meaning: 'The change of the top probability per unit change of this event\'s probability: P(top | event fails) minus P(top | event works).' },
   { key: 'raw', name: 'Risk achievement worth (RAW)', meaning: 'How many times more likely the top event is if this event is certain to fail: P(top | event fails) / P(top).' },

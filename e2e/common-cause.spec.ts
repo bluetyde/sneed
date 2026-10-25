@@ -153,4 +153,20 @@ test.describe('common-cause groups', () => {
     await expect(page.getByTestId('lesson-complete')).toContainText('common cause');
     await audit(page, 'lesson 5 complete');
   });
+
+  test('importance measures of a model with a group are for the events the group is made of', async ({ app, page }) => {
+    await app.open();
+    await app.select('E1');
+    await app.action('make-group').click();
+    await app.tab('results');
+    await page.getByTestId('compute-importance').click();
+    const table = page.getByTestId('importance-table');
+    await expect(table).toBeVisible({ timeout: 30_000 });
+    const ids = await table.locator('tbody tr').evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.event!).sort());
+    expect(ids).toEqual(['CC1.CCF', 'E1.independent', 'E2.independent']); // a member is not an event of its own any more
+    await expect(table.locator('tr[data-event="CC1.CCF"]')).toContainText('common cause of group CC1');
+    await expect(table.locator('tr[data-event="E1.independent"]')).toContainText('E1 on its own');
+    await expect(page.getByTestId('results')).toContainText('common-cause groups (beta-factor)');
+    await audit(page, 'importance table of a model with a group');
+  });
 });

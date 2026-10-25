@@ -52,6 +52,8 @@ export interface EventTreeResult {
   approximation: { method: 'success-branches-ignored'; note: string; frequency_sum: number } | null;
   warnings: string[];
   caveats: string[];
+  /** Present only when the fault-tree model has common-cause groups (plan 15): the headings that share a group fail together with the stated beta. */
+  common_cause?: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; note: string };
 }
 
 /** The assumptions in words: printed with every result, in the editor and on every figure, because the numbers say nothing without them. */

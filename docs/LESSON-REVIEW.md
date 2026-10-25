@@ -201,7 +201,7 @@ File: `lessons/05-common-cause.json`
 - Beta-factor model: each pump fails alone with probability (1 - 0.1) x 0.1 = 0.09, or both pumps fail together with probability 0.1 x 0.1 = 0.01. The shared failure is one event, G.CCF.
 - AND: the flow stops if the common cause happens, or if both pumps fail alone. P = 1 - (1 - 0.01) x (1 - 0.09 x 0.09) = 0.018019. The cut sets are {G.CCF} and {A.independent, B.independent}. This is higher than 0.01.
 - OR: the flow stops if either pump fails alone or the common cause happens. P = 1 - (1 - 0.09)^2 x (1 - 0.01) = 0.180181. The cut sets are {A.independent}, {B.independent} and {G.CCF}. This is a little lower than 0.19.
-- Why: each pump still fails with probability 0.1 in total, but part of that failure now hits both pumps at once. That makes two failures together more likely. It also makes the failures overlap, so an OR gets a little better.
+- Why: each pump still fails with almost the same probability as before (1 - 0.91 x 0.99 = 0.0991, a little below 0.1, because a pump can fail alone and through the common cause), but part of that failure now hits both pumps at once. That makes two failures together more likely. It also makes the failures overlap, so an OR gets a little better.
 
 **Reviewer**
 

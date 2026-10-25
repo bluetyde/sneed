@@ -67,7 +67,7 @@ Details added after a Codex review of the time-limit fix: the clock is monotonic
 
 ## Known limits
 
-- Common-cause groups (plan 15): `run` and `validate` take a model with groups, `describe` lists the capability `common-cause-beta-factor`, and the result folder's `results.json` carries `common_cause`. The event-tree verbs refuse a model with groups (`E_MODEL_NOT_FOUND`, naming the groups). With the SCRAM engine the groups have not been run against the real SCRAM yet (`tests/engine/ccf.test.ts`, needs WSL).
+- Common-cause groups (plan 15): `run` and `validate` take a model with groups, `describe` lists the capability `common-cause-beta-factor`, and the result folder's `results.json` carries `common_cause`. The event-tree verbs take a model with groups too (the record carries `common_cause`). With the SCRAM engine the groups have not been run against the real SCRAM yet (`tests/engine/ccf.test.ts`, needs WSL).
 
 - Windows with WSL2 and the installed runtime only, like the rest of the engine path.
 - Cancel is confirmed by a process check, not by a handshake with SCRAM; a process that lingers after being killed is reported as `nativeStopped: false`.

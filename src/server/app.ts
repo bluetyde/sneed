@@ -10,11 +10,12 @@ import { analyzeBuiltin as realBuiltin, type BuiltinOptions } from '../engines/b
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION } from '../engines/bdd/solve.js';
 import { BDD_SOURCE_SHA256 } from '../engines/bdd/build-id.js';
 import { importanceIsolated } from '../engines/bdd/isolate.js';
-import { IMPORTANCE_ASSUMPTIONS, importanceFailureText, type ImportanceResponse } from '../core/importance.js';
+import { IMPORTANCE_ASSUMPTIONS, IMPORTANCE_GROUPS_NOTE, importanceFailureText, type ImportanceResponse } from '../core/importance.js';
 import { crossCheck, type CrossCheck, type CrossCheckUnavailable } from '../engines/crosscheck.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
-import { unanalysedGroups, validateModelText } from '../core/validate.js';
+import { validateModelText } from '../core/validate.js';
+import { derivedEventNames, expandGroups } from '../core/ccf.js';
 import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
@@ -632,17 +633,18 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const requestId = optRequestId(body.request_id);
       const validation = validateModelText(text);
       if (!validation.valid) return send(res, 200, { kind: 'refused', errors: validation.errors } satisfies ImportanceResponse);
-      const groups = unanalysedGroups(JSON.parse(text));
-      if (groups) return send(res, 200, { kind: 'refused', errors: [groups] } satisfies ImportanceResponse);
-      const model = JSON.parse(text) as NativeModel;
+      // common-cause groups (plan 15): the table is for the events the groups are made of, so it is made on the expansion
+      const original = JSON.parse(text) as NativeModel;
+      const model = expandGroups(original);
       const job = await takeTurn(res, requestId);
       if (!job) return;
       try {
         const answer = await importanceIsolated(model, { timeoutMs: 15_000, signal: job.abort.signal });
         if (!answer.ok) return send(res, 200, { kind: 'failed', why: answer.why, message: importanceFailureText(answer.why) } satisfies ImportanceResponse);
-        const names = new Map<string, string | undefined>([...model.events, ...model.gates].map((n) => [n.id, (n as { name?: string }).name]));
+        const names = new Map<string, string | undefined>([...original.events, ...original.gates].map((n) => [n.id, (n as { name?: string }).name]));
+        for (const [id, name] of derivedEventNames(original)) names.set(id, name);
         const events = answer.result.rows.map((r) => ({ ...r, ...(names.get(r.id) ? { name: names.get(r.id)! } : {}) }));
-        return send(res, 200, { kind: 'ok', model_hash: modelHash(model), engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, top: answer.result.top, events, assumptions: IMPORTANCE_ASSUMPTIONS } satisfies ImportanceResponse);
+        return send(res, 200, { kind: 'ok', model_hash: modelHash(original), engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, top: answer.result.top, events, assumptions: original.common_cause_groups?.length ? `${IMPORTANCE_ASSUMPTIONS} ${IMPORTANCE_GROUPS_NOTE}` : IMPORTANCE_ASSUMPTIONS } satisfies ImportanceResponse);
       } finally {
         release(job);
       }

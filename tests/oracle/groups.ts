@@ -147,3 +147,27 @@ export function frozenCaseDoc(e: FrozenCase): GroupDoc {
   const doc = mkDoc('TOP', events, [gate]);
   return { ...doc, assumptions: { ...(doc.assumptions as Record<string, unknown>), independence: 'beta-factor-groups' }, common_cause_groups: [{ id: e.group.id, method: 'beta-factor', members: e.group.members, beta: e.group.beta }] } as GroupDoc;
 }
+
+/**
+ * The plain tree a group definition means (plan 15, section 2), written out again here and sharing nothing with src/core/ccf.ts: each member is an OR gate of
+ * its independent part and the group's one common-cause event. The names have no dot (`G__CCF`, `A__independent`) because the enumeration oracle
+ * refuses an id with a dot, and the probabilities are exact decimals (they have at most six digits for the values the generators use).
+ */
+export function groupsToPlain(doc: GroupDoc): Doc {
+  const groups = doc.common_cause_groups ?? [];
+  const members = new Set(groups.flatMap((g) => g.members));
+  const q = new Map(doc.events.map((e) => [e.id, e.probability]));
+  const events: Record<string, number> = {};
+  for (const e of doc.events) if (!members.has(e.id)) events[e.id] = e.probability;
+  const gates = [...doc.gates] as Doc['gates'];
+  for (const g of groups) {
+    const Q0 = q.get(g.members[0]!)!;
+    events[`${g.id}__CCF`] = Number((g.beta * Q0).toPrecision(12));
+    for (const m of g.members) {
+      events[`${m}__independent`] = Number(((1 - g.beta) * Q0).toPrecision(12));
+      gates.push({ id: m, type: 'or', inputs: [`${m}__independent`, `${g.id}__CCF`] });
+    }
+  }
+  const plain = mkDoc(doc.top, events, gates as never);
+  return { ...plain, assumptions: { ...(plain.assumptions as Record<string, unknown>), independence: 'declared-independent' } } as Doc;
+}

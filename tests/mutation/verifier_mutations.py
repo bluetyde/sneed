@@ -1369,8 +1369,6 @@ MUTATIONS += [
     cc("a member fails only when both parts occur", CCF, "gates.push({ id: m, type: 'or',", "gates.push({ id: m, type: 'and',"),
     cc("a member stays a basic event beside its gate", CCF, "const events = model.events.filter((e) => !memberIds.has(e.id));", "const events = [...model.events];"),
     cc("a group of unequal probabilities is expanded", CCF, "if (qm === undefined || qm !== q) throw", "if (qm === undefined) throw"),
-    cc("the event-tree engine ignores the groups", ETA, "if (unanalysedGroups(JSON.parse(modelText))) return refuse(", "if (false as boolean) return refuse("),
-    cc("the importance route ignores the groups", SA, "      if (groups) return send(res, 200, { kind: 'refused', errors: [groups] } satisfies ImportanceResponse);\n", ""),
     cc("the export writes the model without expanding its groups", X, "safeNames(expandGroups(input));", "safeNames(input);"),
     cc("a name with a dot is written with the dot", X, "const base = e.id.replaceAll('.', '__');", "const base = e.id.replaceAll('.', '.');"),
     cc("a taken name is reused", X, "for (let i = 1; taken.has(name); i++) name", "for (let i = 1; false as boolean; i++) name"),
@@ -1381,6 +1379,15 @@ MUTATIONS += [
     cc("the SCRAM path leaves the groups out of the record", AN, "...commonCauseRecord(original) };", "};"),
     cc("the SCRAM path does not expand the groups", AN, "const model = expandGroups(original);", "const model = original;"),
     cc("the runner does not say it handles groups", HL, ", 'common-cause-beta-factor'],", "],"),
+    cc("event trees: the groups are not expanded", ETA, "const model = expandGroups(original);", "const model = original;"),
+    cc("event trees: the tree is checked against the expansion's hash", ETA, "const ref = { hash: modelHash(original),", "const ref = { hash: modelHash(model),"),
+    cc("event trees: the record does not name the groups", ETA, "...(groups.length ? { common_cause: {", "...(false as boolean ? { common_cause: {"),
+    cc("event trees: no caveat about the groups", ETA, "...(groups.length ? ['The fault-tree model has common-cause groups", "...(false as boolean ? ['The fault-tree model has common-cause groups"),
+    cc("importance: the groups are not expanded", SA, "      const model = expandGroups(original);\n      const job", "      const model = original;\n      const job"),
+    cc("importance: the table is for the expansion's hash", SA, "model_hash: modelHash(original), engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, top: answer.result.top", "model_hash: modelHash(model), engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, top: answer.result.top"),
+    cc("importance: no note about the groups", SA, "assumptions: original.common_cause_groups?.length ? `${IMPORTANCE_ASSUMPTIONS} ${IMPORTANCE_GROUPS_NOTE}` : IMPORTANCE_ASSUMPTIONS", "assumptions: IMPORTANCE_ASSUMPTIONS"),
+    cc("importance: the added events have no names", SA, "for (const [id, name] of derivedEventNames(original)) names.set(id, name);", "void derivedEventNames;"),
+    cc("importance: a group event is named like a member", CCF, "out.set(groupEventId(g.id), `common cause of group ${g.name?.trim() || g.id}`);", "out.set(groupEventId(g.id), `${g.name?.trim() || g.id} on its own`);"),
     cc("setting a member's probability leaves the other members", WD, "const members = groupOf(d, id)?.members ?? [id];", "const members = [id];"),
     cc("a group of one is kept", WD, "d.common_cause_groups.filter((g) => g.members.length >= 2);", "d.common_cause_groups.filter((g) => g.members.length >= 1);"),
     cc("the assumption never follows the groups", WD, "independence: used ? 'beta-factor-groups' : 'declared-independent' };", "independence: 'declared-independent' };"),
@@ -1402,7 +1409,6 @@ MUTATIONS += [
     cc("the figure leaves the groups out", FG, "  if (gs.length) parts.push(groupBoxesSvg(v, doc));\n", ""),
     cc("the independent value is not worked out", BA, "if (plain?.ok) independentValue = Math.min(1, plain.solution.probability);", "void plain;"),
     cc("the server cannot read the common-cause oracles for lessons", SL, "oracles = [...oracles, ...cc];", "void cc;"),
-    cc("an empty group list counts as groups", V, "|| doc.common_cause_groups.length === 0) return null;", "|| false as boolean) return null;"),
 ]
 
 def main() -> int:
@@ -1459,8 +1465,10 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th judge:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
-    if only == "ccf":  # just the common-cause group mutations (plan 15)
+    if only == "ccf":  # just the common-cause group mutations (plan 15); an optional second argument keeps the ones whose name matches it
         chosen = [m for m in MUTATIONS if m[0].startswith("common cause:")]
+        if len(sys.argv) > 2:
+            chosen = [m for m in chosen if re.search(sys.argv[2], m[0])]
     if only == "check":
         bad = [m[0] for m in MUTATIONS if m[1].read_bytes().decode("utf-8").count(m[2]) != 1]
         print(f"{len(MUTATIONS) - len(bad)} of {len(MUTATIONS)} patterns occur exactly once", ("; fix: " + ", ".join(bad)) if bad else "")

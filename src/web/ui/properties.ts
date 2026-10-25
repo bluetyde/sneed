@@ -128,7 +128,8 @@ export class Properties {
       q === undefined ? null : h('dl', { class: 'kv', 'data-testid': 'group-numbers' },
         h('dt', {}, 'Probability of each member (Q)'), h('dd', {}, num(q)),
         h('dt', {}, 'Fails alone: (1 - beta) x Q'), h('dd', {}, num((1 - g.beta) * q)),
-        h('dt', {}, 'Common cause: beta x Q'), h('dd', {}, num(g.beta * q))),
+        h('dt', {}, 'Common cause: beta x Q'), h('dd', {}, num(g.beta * q)),
+        h('dt', {}, 'A member fails (either way)'), h('dd', {}, num(1 - (1 - (1 - g.beta) * q) * (1 - g.beta * q)))),
       h('h2', {}, `Members (${g.members.length})`),
       h('ul', { class: 'inputs', 'aria-label': `Members of group ${ed.groupLabel(groupId)}` },
         ...g.members.map((m) => h('li', {},
@@ -136,7 +137,7 @@ export class Properties {
           h('button', { class: 'rm', type: 'button', 'aria-label': `Take ${m} out of group ${ed.groupLabel(groupId)}`, title: 'Take this event out of the group', onclick: () => ed.removeFromGroup(groupId, m) }, icon('close'))))),
       g.members.length <= 2 ? h('p', { class: 'hint' }, 'A group needs two members, so taking one out removes the group.') : null,
       free.length === 0 ? null : h('div', { class: 'add-row' }, add, h('button', { class: 'btn', type: 'button', 'data-action': 'add-member', onclick: () => add.value && ed.addToGroup(groupId, add.value) }, 'Add to group')),
-      h('p', { class: 'hint' }, 'The members share one probability: changing it for one changes it for all.'),
+      h('p', { class: 'hint' }, 'The members share one probability: changing it for one changes it for all. A member can fail alone and also through the common cause, so its overall failure probability is a little below Q (Q - beta x (1 - beta) x Q squared). This is the usual approximation of the beta-factor model.'),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn danger', type: 'button', 'data-action': 'delete-group', onclick: () => ed.deleteGroup(groupId) }, 'Delete the group (the events stay)')),
     ];
   }
