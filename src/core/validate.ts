@@ -192,12 +192,13 @@ function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'eve
 }
 
 /**
- * Until the engines expand common-cause groups (plan 15, stage C2), an analysis must not run on a model that has them:
- * an engine that ignores a group would give the independent answer without a word. Every analysis entry point asks this first.
+ * The built-in fault-tree analysis expands common-cause groups (plan 15, stage C2). Every other analysis (the SCRAM path, the Open-PSA export,
+ * event trees, importance measures) must not run on a model that has them: an engine that ignores a group would give the independent answer
+ * without a word. Each of those entry points asks this first.
  */
 export function unanalysedGroups(doc: unknown): Issue | null {
   if (!isObj(doc) || !Array.isArray(doc.common_cause_groups) || doc.common_cause_groups.length === 0) return null;
-  return issue('E_CCF_NOT_ANALYSED', '/common_cause_groups', 'this model has common-cause groups, and analysis of groups is not built yet; no result is made, so the groups are never silently ignored');
+  return issue('E_CCF_NOT_ANALYSED', '/common_cause_groups', 'this model has common-cause groups, and this analysis does not handle them yet (only the built-in fault-tree analysis does); no result is made, so the groups are never silently ignored');
 }
 
 function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings: Issue[]): void {

@@ -64,7 +64,7 @@ SNEED is MIT licensed ([LICENSE](LICENSE)). Packages it uses are listed in [THIR
 
 ## Limits that matter
 
-- **Model class.** Static, coherent fault trees with independent basic events of constant probability per demand. No common-cause groups, no time dependence, no uncertainty analysis. Event trees have one initiating event with a constant frequency, yes/no headings and no recovery actions.
+- **Model class.** Static, coherent fault trees with independent basic events of constant probability per demand. Common-cause groups (beta-factor, an invented parameter) are analysed by the built-in engine from a model file only: the editor, the SCRAM engine, event trees and importance measures do not handle them yet ([plan 15](docs/plans/15-common-cause.md)). No time dependence, no uncertainty analysis. Event trees have one initiating event with a constant frequency, yes/no headings and no recovery actions.
 - **Numbers.** Probabilities and frequencies are inputs, not data. Example end states are named "(example)". A frequency here is a result under these assumptions, not a plant figure.
 - **Teaching material.** The lessons have not yet had an instructor's read, and the interface has not yet had a human screen-reader pass; both are open ([docs/SCREEN-READER-PASS.md](docs/SCREEN-READER-PASS.md)).
 - **Thermal-hydraulic link.** Early, with the answer entered by hand; what the caller says about plant models and the solver is taken as stated.

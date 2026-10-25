@@ -702,6 +702,7 @@ MUTATIONS += [
 # Event tree engine (plan 13, stage S2) mutations. Removed as equivalent, each with its reason: a non-finite probability (a valid model has probabilities in 0..1, so it cannot occur); an underflowed approximation (it is at least the exact path probability, so the exact check fires first); a partition error that is not a number (the finite checks come first); the order of the compensated sum (Neumaier summation is order-insensitive in practice, the sort is a second guard); the event-count check (the diagram builder refuses first, and that line was deleted); a cancel or an expired deadline before the worker starts (the worker and the last look give the same record); a missing model taking a turn (the validator already refuses it); an end-state total that overflows (it is a part of the total frequency, which is checked, so it is finite whenever that is); a single frequency that overflows (the total of all of them is checked too, and is infinite then).
 ETE = ROOT / "src/engines/bdd/event-tree.ts"
 ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
+CCF = ROOT / "src/core/ccf.ts"
 ETB = ROOT / "src/engines/bdd/bdd.ts"
 ETS = ROOT / "src/engines/bdd/solve.ts"
 ETE_SUITE = ("tests/unit/event-tree-engine.test.ts tests/unit/event-tree-analyze.test.ts tests/unit/server.test.ts tests/unit/bdd.test.ts", 240)
@@ -1359,7 +1360,15 @@ MUTATIONS += [
     cc("the hash leaves the groups out", C, "if (Object.keys(groups).length) out.common_cause_groups = groups;", "void groups;"),
     cc("the hash depends on the order of the members", C, "members: [...g.members].sort(), beta: g.beta }", "members: [...g.members], beta: g.beta }"),
     cc("the hash leaves beta out", C, "groups[g.id] = { method: g.method, members: [...g.members].sort(), beta: g.beta };", "groups[g.id] = { method: g.method, members: [...g.members].sort() };"),
-    cc("the built-in engine ignores the groups", BA, "if (groups) return { kind: 'refused'", "if (false as boolean) return { kind: 'refused'"),
+    cc("the groups are not expanded: the built-in engine ignores them", BA, "const model = expandGroups(original);", "const model = original;"),
+    cc("the record's model hash is the expansion's", BA, "model_hash: modelHash(original)", "model_hash: modelHash(model)"),
+    cc("the record does not name the groups", BA, "...(groups.length ? { common_cause:", "...(false as boolean ? { common_cause:"),
+    cc("the exported-input hash is the model hash", BA, "exported_input_hash = groups.length ? modelHash(model) : hashes.model_hash;", "exported_input_hash = hashes.model_hash;"),
+    cc("the group event has probability (1 - beta) * Q", CCF, "probability: tidy(g.beta * q) });", "probability: tidy((1 - g.beta) * q) });"),
+    cc("the independent part has probability beta * Q", CCF, "probability: tidy((1 - g.beta) * q) });", "probability: tidy(g.beta * q) });"),
+    cc("a member fails only when both parts occur", CCF, "gates.push({ id: m, type: 'or',", "gates.push({ id: m, type: 'and',"),
+    cc("a member stays a basic event beside its gate", CCF, "const events = model.events.filter((e) => !memberIds.has(e.id));", "const events = [...model.events];"),
+    cc("a group of unequal probabilities is expanded", CCF, "if (qm === undefined || qm !== q) throw", "if (qm === undefined) throw"),
     cc("the event-tree engine ignores the groups", ETA, "if (unanalysedGroups(JSON.parse(modelText))) return refuse(", "if (false as boolean) return refuse("),
     cc("the importance route ignores the groups", SA, "      if (groups) return send(res, 200, { kind: 'refused', errors: [groups] } satisfies ImportanceResponse);\n", ""),
     cc("the exporter drops the groups without a word", X, "if (model.common_cause_groups?.length) throw new ExportError(", "if (false as boolean) throw new ExportError("),
