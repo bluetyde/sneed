@@ -41,6 +41,25 @@ export class ResultsPanel {
       h('ul', {}, ...c.differences.map((d) => h('li', {}, d))));
   }
 
+  /** A result under common-cause groups is a different kind of result (plan 15): say so, list the groups, and read the answer against the independent one. */
+  private commonCause(rec: NonNullable<Extract<NonNullable<Editor['result']>, { kind: 'ran' }>['record']>): HTMLElement | null {
+    const cc = rec.common_cause;
+    if (!cc) return null;
+    const ed = this.editor;
+    const p = rec.top_event_probability;
+    const ind = cc.independent_value;
+    let compare: string;
+    if (typeof ind === 'number' && typeof p === 'number') {
+      const word = p > ind ? 'higher' : p < ind ? 'lower' : 'the same';
+      compare = p === ind ? `The same events as independent events give the same probability, ${fmt(ind)}.` : `If these events failed independently the probability would be ${fmt(ind)}. With the groups it is ${fmt(p)}, which is ${word}.`;
+    } else compare = 'This engine did not work out the answer for independent events, so there is nothing to read this one against.';
+    return h('div', { class: 'cc-result', role: 'note', 'data-testid': 'common-cause-result', 'data-independent': typeof ind === 'number' ? String(ind) : '' },
+      h('strong', {}, 'Common-cause groups used (beta-factor). '),
+      'This is a different kind of result from one with independent events. ',
+      h('ul', {}, ...cc.groups.map((g) => h('li', { 'data-group': g.id }, `${ed.groupLabel(g.id)}: ${g.members.join(', ')}; beta ${g.beta}`))),
+      h('p', { 'data-testid': 'common-cause-compare' }, compare));
+  }
+
   /** A saved result for exactly this run exists: say so, and let the student choose. */
   private offer(): Child[] {
     const o = this.editor.reuseOffer;
@@ -116,12 +135,15 @@ export class ResultsPanel {
       out.push(h('p', { class: 'hint' }, 'The numbers below are kept for diagnosis only.'));
     }
     out.push(h('div', { class: 'big-number', 'data-testid': 'top-probability', 'data-value': String(rec.top_event_probability) }, fmt(rec.top_event_probability), h('small', {}, `Probability that the top event occurs${rec.method === 'exact' ? '' : ` (${METHOD_TEXT[rec.method]})`}. Under the stated assumptions; not a frequency.`)));
+    const cc = this.commonCause(rec);
+    if (cc) out.push(cc);
     for (const c of rec.caveats) out.push(h('div', { class: 'caveat', role: 'note', 'data-testid': 'caveat' }, h('strong', {}, 'Note. '), CAVEAT_TEXT[c] ?? c, rec.approximation_value !== null ? ` The ${METHOD_TEXT[rec.method]?.toLowerCase()} value is ${fmt(rec.approximation_value)}.` : ''));
     if (rec.approximation_value !== null && rec.caveats.length === 0) out.push(h('p', { class: 'hint' }, `${METHOD_TEXT[rec.method]} value: ${fmt(rec.approximation_value)}.`));
 
     const rows = rec.minimal_cut_sets.map((cs, i) => ({ cs, i })).sort((a, b) => b.cs.probability - a.cs.probability || a.cs.events.length - b.cs.events.length);
     out.push(h('h2', {}, `Minimal cut sets (${rows.length})`));
     out.push(h('p', { class: 'hint' }, 'The smallest combinations of basic events whose failure together makes the top event happen. Choose one to see it on the drawing.'));
+    if (rec.common_cause) out.push(h('p', { class: 'hint', 'data-testid': 'cc-names' }, 'With common-cause groups, "G.CCF" is the common cause of group G (all its members fail together) and "A.independent" is A failing on its own.'));
     out.push(h('table', { class: 'cutsets', 'aria-label': 'Minimal cut sets' }, h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Failures together'), h('th', { scope: 'col' }, 'Size'), h('th', { scope: 'col' }, 'Probability'))),
       h('tbody', {}, ...rows.map(({ cs, i }) => {
         const selected = ed.highlight.length > 0 && cs.events.length === ed.highlight.length && cs.events.every((e) => ed.highlight.includes(e));

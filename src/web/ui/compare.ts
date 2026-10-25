@@ -143,6 +143,12 @@ export class ComparePanel {
         if (g.threshold) items.push(h('li', {}, `Gate ${g.id}: K ${g.threshold.from ?? 'none'} then ${g.threshold.to ?? 'none'}.`));
         if (g.inputs) items.push(h('li', {}, `Gate ${g.id}: inputs ${list(g.inputs.from)} then ${list(g.inputs.to)}.`));
       }
+      if (m.groups.added.length) items.push(h('li', {}, `Common-cause groups only in the later run: ${list(m.groups.added)}.`));
+      if (m.groups.removed.length) items.push(h('li', {}, `Common-cause groups only in the earlier run: ${list(m.groups.removed)}.`));
+      for (const g of m.groups.changed) {
+        if (g.beta) items.push(h('li', {}, `Group ${g.id}: beta ${fmt(g.beta.from)} then ${fmt(g.beta.to)}.`));
+        if (g.members) items.push(h('li', {}, `Group ${g.id}: members ${list(g.members.from)} then ${list(g.members.to)}.`));
+      }
       out.push(h('ul', { 'data-testid': 'compare-model-changes' }, ...items));
     }
     out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: () => this.editor.clearComparison() }, 'Clear comparison')));

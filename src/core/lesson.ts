@@ -7,10 +7,13 @@ export interface LessonDoc {
   top?: unknown;
   events?: unknown;
   gates?: unknown;
+  /** Common-cause groups (plan 15): `id` is what the group is called on screen, `members` are the names of its events. */
+  common_cause_groups?: unknown;
 }
 type GateType = 'and' | 'or' | 'atleast';
 interface Ev { id: string; probability: number }
 interface Gt { id: string; type: string; inputs: string[]; threshold?: number }
+interface Grp { id: string; members: string[]; beta: number }
 
 export type Check =
   | { kind: 'top-is-event' }
@@ -21,7 +24,11 @@ export type Check =
   | { kind: 'probabilities'; values: number[] }
   | { kind: 'shared-event'; minParents: number }
   /** The top gate is a voting gate with exactly this threshold over this many distinct basic events. */
-  | { kind: 'vote'; threshold: number; inputs: number };
+  | { kind: 'vote'; threshold: number; inputs: number }
+  /** One common-cause group of exactly this many basic events and this beta (a student names the group as the step says). */
+  | { kind: 'group'; members: number; beta: number }
+  /** There is no common-cause group, for a step the student later revises. */
+  | { kind: 'no-group' };
 
 export type Detect =
   | { kind: 'percent-probability' }
@@ -91,6 +98,10 @@ function validCheck(c: unknown): boolean {
       return int(c.minParents, 2);
     case 'vote':
       return int(c.threshold, 1) && int(c.inputs, 2) && c.threshold <= c.inputs;
+    case 'group':
+      return int(c.members, 2) && num(c.beta) && c.beta >= 0 && c.beta <= 1;
+    case 'no-group':
+      return true;
     default:
       return false;
   }
@@ -160,7 +171,7 @@ export function loadLesson(text: string, oracles: OracleEntry[]): Lesson {
   return l as unknown as Lesson;
 }
 
-interface Parts { top: string; events: Ev[]; gates: Gt[]; malformed: boolean }
+interface Parts { top: string; events: Ev[]; gates: Gt[]; groups: Grp[]; malformed: boolean }
 
 /** Read a student's document without coercing anything: an entry of the wrong shape is skipped and marks the document malformed. */
 function parts(doc: unknown): Parts {
@@ -181,8 +192,17 @@ function parts(doc: unknown): Parts {
       } else malformed = true;
     }
   } else malformed = true;
+  const groups: Grp[] = [];
+  if (d.common_cause_groups !== undefined) {
+    if (Array.isArray(d.common_cause_groups)) {
+      for (const g of d.common_cause_groups) {
+        if (isObj(g) && str(g.id) && Array.isArray(g.members) && g.members.every(str) && num(g.beta)) groups.push({ id: g.id, members: g.members as string[], beta: g.beta });
+        else malformed = true;
+      }
+    } else malformed = true;
+  }
   if (!str(d.top)) malformed = true;
-  return { top: typeof d.top === 'string' ? d.top : '', events, gates, malformed };
+  return { top: typeof d.top === 'string' ? d.top : '', events, gates, groups, malformed };
 }
 
 /** For each basic event, how many distinct gates use it. Gate ids are not events and are never counted. */
@@ -221,6 +241,12 @@ export function runCheck(c: Check, doc: LessonDoc): boolean {
       const distinct = new Set(topGate.inputs);
       return distinct.size === topGate.inputs.length && distinct.size === c.inputs && [...distinct].every((i) => events.has(i));
     }
+    case 'group': {
+      const events = new Set(p.events.map((e) => e.id));
+      return p.groups.length === 1 && p.groups[0]!.members.length === c.members && p.groups[0]!.members.every((m) => events.has(m)) && Math.abs(p.groups[0]!.beta - c.beta) <= 1e-12;
+    }
+    case 'no-group':
+      return p.groups.length === 0;
   }
 }
 

@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { enumerate } from '../oracle/enumerate.js';
+import { enumerateGroups, type GroupDoc } from '../oracle/groups.js';
 import { AND, OR, VOTE, mkDoc, ORACLE_MODELS, NATIVE_VOTE, type Doc } from '../oracle/models.js';
 import { checkLesson, loadLesson, matchOutcome, LessonError, type Lesson, type OracleEntry } from '../../src/core/lesson.js';
 
 const root = join(import.meta.dirname, '..', '..');
-const oracles = JSON.parse(readFileSync(join(root, 'tests/oracles.json'), 'utf8')) as OracleEntry[];
+const oracles = [...(JSON.parse(readFileSync(join(root, 'tests/oracles.json'), 'utf8')) as OracleEntry[]), ...(JSON.parse(readFileSync(join(root, 'tests/oracles-common-cause.json'), 'utf8')) as OracleEntry[])];
 const dir = join(root, 'lessons');
 const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
 const lessons = new Map<string, Lesson>(files.map((f) => {
@@ -31,9 +32,9 @@ const SOLUTIONS: Record<string, { doc: Doc; outcome: string }[]> = {
 };
 
 describe('lesson files', () => {
-  it('all four lessons load, with unique ids', () => {
-    expect(files).toHaveLength(4);
-    expect(lessons.size).toBe(4);
+  it('all five lessons load, with unique ids', () => {
+    expect(files).toHaveLength(5);
+    expect(lessons.size).toBe(5);
   });
 
   it('every outcome names an oracle entry and equals it', () => {
@@ -73,6 +74,64 @@ describe('lesson outcomes equal exhaustive enumeration of the model a student bu
     expect(get('04-voting').outcomes.map((o) => o.probability)).toEqual([0.028, 0.03, 0.029701]);
     expect(r.rareEvent.toNumber()).toBeCloseTo(0.03, 12);
     expect(r.mcub.toNumber()).toBeCloseTo(0.029701, 12);
+  });
+});
+
+// Lesson 5 (plan 15, stage C4): the student's model has a common-cause group, so the independent enumeration is the one that evaluates the group definition.
+describe('the common-cause lesson, against the exact evaluation of the group definition', () => {
+  const pumps = (kind: 'and' | 'or', beta = 0.1, extra: Record<string, unknown> = {}): GroupDoc =>
+    ({
+      ...mkDoc('TOP', { A: 0.1, B: 0.1 }, [kind === 'and' ? AND('TOP', ['A', 'B']) : OR('TOP', ['A', 'B'])]),
+      assumptions: { probability_model: 'constant', independence: 'beta-factor-groups', coherence: 'coherent', time: 'none' },
+      common_cause_groups: [{ id: 'G', method: 'beta-factor', members: ['A', 'B'], beta }],
+      ...extra,
+    }) as GroupDoc;
+  const solve = (doc: GroupDoc, lessonDoc: object = doc) => {
+    const r = enumerateGroups(doc);
+    return checkLesson(get('05-common-cause'), lessonDoc, { probability: r.probability.toNumber(), cutSets: r.cutSets });
+  };
+
+  it('both outcomes equal the exact value, and the finished model (OR) completes the lesson', () => {
+    const lesson = get('05-common-cause');
+    for (const [kind, id] of [['and', 'and-with-group'], ['or', 'or-with-group']] as const) {
+      const r = enumerateGroups(pumps(kind));
+      const out = lesson.outcomes.find((o) => o.id === id)!;
+      expect(Math.abs(r.probability.toNumber() - out.probability)).toBeLessThanOrEqual(out.tolerance.absolute);
+      expect(matchOutcome(lesson, r.probability.toNumber(), r.cutSets)?.id).toBe(id);
+    }
+    const done = solve(pumps('or'));
+    expect(done.mistakes).toEqual([]);
+    expect(done.steps.filter((s) => !s.done)).toEqual([]);
+    expect(done.complete).toBe(true);
+  });
+
+  it('the AND version matches its outcome but is not the end of the lesson: the last step asks for OR', () => {
+    const p = solve(pumps('and'));
+    expect(p.outcome).toBe('and-with-group');
+    expect(p.steps.find((s) => s.id === 'switch-to-or')!.done).toBe(false);
+    expect(p.complete).toBe(false);
+  });
+
+  it('a group that is not beta 0.1 over two events is not credited, and its result matches no outcome', () => {
+    const wrongBeta = solve(pumps('or', 0.5));
+    expect(wrongBeta.steps.find((s) => s.id === 'group')!.done).toBe(false);
+    expect(wrongBeta.outcome).toBeNull();
+    expect(wrongBeta.complete).toBe(false);
+    const noGroup = checkLesson(get('05-common-cause'), mkDoc('TOP', { A: 0.1, B: 0.1 }, [OR('TOP', ['A', 'B'])]), { probability: 0.19, cutSets: [['A'], ['B']] });
+    expect(noGroup.steps.find((s) => s.id === 'group')!.done).toBe(false);
+    expect(noGroup.complete).toBe(false);
+    const three = pumps('or', 0.1, { events: [{ id: 'A', probability: 0.1 }, { id: 'B', probability: 0.1 }, { id: 'C', probability: 0.1 }], common_cause_groups: [{ id: 'G', method: 'beta-factor', members: ['A', 'B', 'C'], beta: 0.1 }] });
+    expect(checkLesson(get('05-common-cause'), three).steps.find((s) => s.id === 'group')!.done).toBe(false);
+    const twoGroups = pumps('or', 0.1, { common_cause_groups: [{ id: 'G', method: 'beta-factor', members: ['A', 'B'], beta: 0.1 }, { id: 'H', method: 'beta-factor', members: ['A', 'B'], beta: 0.1 }] });
+    expect(checkLesson(get('05-common-cause'), twoGroups).steps.find((s) => s.id === 'group')!.done).toBe(false);
+  });
+
+  it('the group checks read a document without trusting it: a group of the wrong shape marks it malformed', () => {
+    const bad = { ...pumps('or'), common_cause_groups: [{ id: 'G', members: 'A,B', beta: 0.1 }] };
+    const p = checkLesson(get('05-common-cause'), bad);
+    expect(p.malformed).toBe(true);
+    expect(p.steps.every((s) => !s.done)).toBe(true);
+    expect(checkLesson(get('05-common-cause'), { ...pumps('or'), common_cause_groups: 'none' }).malformed).toBe(true);
   });
 });
 
@@ -174,6 +233,9 @@ describe('steps and mistakes', () => {
     ['03-shared-power-supply', 'one-input-gate', mkDoc('T', { A: 0.1 }, [AND('T', ['G']), OR('G', ['A'])])],
     ['04-voting', 'percent', { top: 'V', events: [{ id: 'A', probability: 10 }], gates: [{ id: 'V', type: 'atleast', inputs: ['A'], threshold: 1 }] }],
     ['04-voting', 'wrong-gate', mkDoc('T', { A: 0.1, B: 0.1, C: 0.1 }, [AND('T', ['A', 'B', 'C'])])],
+    ['05-common-cause', 'percent', { top: 'T', events: [{ id: 'A', probability: 10 }, { id: 'B', probability: 0.1 }], gates: [{ id: 'T', type: 'and', inputs: ['A', 'B'] }] }],
+    ['05-common-cause', 'one-input-gate', mkDoc('T', { A: 0.1, B: 0.1 }, [AND('T', ['G']), OR('G', ['A', 'B'])] as never)],
+    ['05-common-cause', 'unused-event', mkDoc('T', { A: 0.1, B: 0.1, C: 0.1 }, [AND('T', ['A', 'B'])])],
   ];
 
   it('every mistake in every lesson has a fixture, and each fixture fires exactly its mistake', () => {

@@ -1,6 +1,6 @@
 // Reads the lesson files and refuses to serve any that fail validation, or all of them if the oracle file they are checked
 // against is missing: a lesson with an unchecked value must never reach a student (docs/plans/04-lessons.md).
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { loadLesson, LessonError, type Lesson, type OracleEntry } from '../core/lesson.js';
 
@@ -13,6 +13,13 @@ export function loadLessons(dir: string, oraclesFile: string): Lesson[] {
   try {
     oracles = JSON.parse(readFileSync(oraclesFile, 'utf8')) as OracleEntry[];
     if (!Array.isArray(oracles)) throw new Error('not a list');
+    // the common-cause oracles (plan 15) sit beside the others; a lesson may name an entry of either file
+    const ccFile = path.join(path.dirname(oraclesFile), 'oracles-common-cause.json');
+    if (existsSync(ccFile)) {
+      const cc = JSON.parse(readFileSync(ccFile, 'utf8')) as OracleEntry[];
+      if (!Array.isArray(cc)) throw new Error('the common-cause oracle file is not a list');
+      oracles = [...oracles, ...cc];
+    }
   } catch (e) {
     throw new LessonsUnavailable(`the oracle file the lessons are checked against cannot be read (${(e as Error).message})`);
   }

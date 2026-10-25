@@ -368,11 +368,11 @@ describe('lessons over the API', () => {
     return { status: res.status, json: await res.json() };
   };
 
-  it('serves the four validated lessons', async () => {
+  it('serves the five validated lessons', async () => {
     await withServer({ lessonsDir, oraclesFile }, async (url) => {
       const r = await get(url);
       expect(r.status).toBe(200);
-      expect(r.json.lessons.map((l: { id: string }) => l.id)).toEqual(['01-single-pump', '02-redundant-pumps', '03-shared-power-supply', '04-voting']);
+      expect(r.json.lessons.map((l: { id: string }) => l.id)).toEqual(['01-single-pump', '02-redundant-pumps', '03-shared-power-supply', '04-voting', '05-common-cause']);
     });
   });
 

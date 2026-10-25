@@ -9,7 +9,7 @@ import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
 import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
-import { commonCauseRecord, expandGroups } from '../../core/ccf.js';
+import { commonCauseRecord, expandGroups, withoutGroups } from '../../core/ccf.js';
 import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
@@ -94,11 +94,12 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   const engine = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null };
   const base = { model, settings, engine, expectedVersion: BDD_ENGINE_VERSION, expectedName: BDD_ENGINE_NAME, hashes, exportedEvents: events, check };
   const idle = { exit: 0, timedOut: false, cancelled: false, stderr: '' };
+  let independentValue: number | null = null; // with groups: what the same events give as independent events, so the answer can be read against it
   const finish = (record: ResultRecord, extra: Record<string, unknown> = {}): AnalyzeOutcome => {
     const final: ResultRecord = {
       ...record,
       exporter_version: 'none (the built-in engine reads the native model)',
-      ...(groups.length ? commonCauseRecord(original) : {}),
+      ...(groups.length ? commonCauseRecord(original, independentValue) : {}),
     };
     writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, ...extra }, null, 2) + '\n');
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(final, null, 2) + '\n');
@@ -117,6 +118,11 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
     return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [answer.why === 'internal' ? 'engine-error' : answer.why] }));
   }
   sol = answer.solution;
+  if (groups.length) {
+    const left = Math.floor(deadline - now());
+    const plain = left > 0 ? await solveIsolated(withoutGroups(original), { timeoutMs: left, ...(opts.signal ? { signal: opts.signal } : {}), ...(opts.limits ? { limits: opts.limits } : {}), ...(opts.memoryMb ? { memoryMb: opts.memoryMb } : {}) }) : null;
+    if (plain?.ok) independentValue = Math.min(1, plain.solution.probability);
+  }
   const record = assess({ ...base, outcome: idle, reportText: null, parsed: asReport(sol, settings.method, settings.limitOrder) });
   return finish(record, { order: sol.events, nodes: sol.nodes, cut_sets: sol.cutSets.length });
 }

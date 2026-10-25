@@ -1,7 +1,7 @@
 // The drawing of the fault tree: an SVG with pan and zoom, selectable and draggable nodes, drag-to-connect from a gate's
 // port, and full keyboard operation. It draws editor state and calls editor commands; it keeps only view state itself.
 
-import { findEvent, findGate } from '../model/doc.js';
+import { findEvent, findGate, groupOf, groups } from '../model/doc.js';
 import type { Editor } from '../model/editor.js';
 import { neighbor, type Direction, type Visual, type VisualNode } from '../model/visual.js';
 import { h, s } from './dom.js';
@@ -108,7 +108,9 @@ export class Canvas {
     this.nodeEls.clear();
     const edgeLayer = s('g', { class: 'edges' });
     const nodeLayer = s('g', { class: 'nodes' });
-    this.viewport.append(edgeLayer, nodeLayer);
+    const groupLayer = s('g', { class: 'groups' });
+    this.viewport.append(groupLayer, edgeLayer, nodeLayer);
+    for (const box of this.groupBoxes(v)) groupLayer.append(box);
 
     for (const e of v.edges) {
       const from = v.byKey.get(e.from)!;
@@ -132,6 +134,31 @@ export class Canvas {
     this.lastDocKey = sig;
     this.applyView();
     if (focusedKey && this.nodeEls.has(focusedKey)) this.nodeEls.get(focusedKey)!.focus({ preventScroll: true });
+  }
+
+  /**
+   * A box behind the members of each common-cause group, with the group's name and beta (plan 15). The members are marked on their own nodes too,
+   * because a box around members that are far apart also covers other nodes: the mark on the node, not the box, says who belongs.
+   */
+  private groupBoxes(v: Visual): SVGGElement[] {
+    const ed = this.editor;
+    const out: SVGGElement[] = [];
+    for (const grp of groups(ed.doc)) {
+      const members = v.nodes.filter((n) => n.kind === 'event' && grp.members.includes(n.id));
+      if (members.length === 0) continue;
+      const x1 = Math.min(...members.map((n) => n.x - n.w / 2)) - 16;
+      const y1 = Math.min(...members.map((n) => n.y - n.h / 2)) - 30;
+      const x2 = Math.max(...members.map((n) => n.x + n.w / 2)) + 16;
+      const y2 = Math.max(...members.map((n) => n.y + n.h / 2)) + 14;
+      const selected = ed.selectedGroup === grp.id;
+      const label = ed.groupLabel(grp.id);
+      const el = s('g', { class: `ccgroup${selected ? ' selected' : ''}`, 'data-group': grp.id, role: 'button', tabindex: -1, 'aria-pressed': selected ? 'true' : 'false', 'aria-label': `Common-cause group ${label}, ${grp.members.length} basic events that can fail together, beta ${grp.beta}` });
+      el.append(s('rect', { class: 'box', x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 14 }));
+      el.append(s('rect', { class: 'bar', x: x1, y: y1, width: x2 - x1, height: 22, rx: 14 }));
+      el.append(s('text', { class: 't-group', x: x1 + 12, y: y1 + 15 }, short(`${label} · beta ${grp.beta}`, Math.max(12, Math.floor((x2 - x1) / 7)))));
+      out.push(el);
+    }
+    return out;
   }
 
   private edgePath(from: VisualNode, to: VisualNode): string {
@@ -174,6 +201,8 @@ export class Canvas {
       label = `Reference to ${n.id}, which does not exist`;
     }
     if (name && n.kind === 'event') line1 = `${n.id} ${short(name, 13)}`;
+    const memberOf = n.kind === 'event' || n.kind === 'reference' ? groupOf(doc, n.id) : undefined;
+    if (memberOf) label += `, in common-cause group ${ed.groupLabel(memberOf.id)}`;
     if (isTop) label += ', top event';
     if (sev) label += sev === 'error' ? ', has a problem to fix' : ', has a warning';
 
@@ -194,6 +223,12 @@ export class Canvas {
       g.append(s('rect', { class: 'badge-top', x: -hw + 2, y: -hh - 9, width: 34, height: 16, rx: 8 }));
       g.append(s('text', { class: 't-top', x: -hw + 19, y: -hh + 3, 'text-anchor': 'middle' }, 'TOP'));
     }
+    if (memberOf && n.kind === 'event') {
+      const tag = short(ed.groupLabel(memberOf.id), 10);
+      const w = 14 + tag.length * 6.4;
+      g.append(s('rect', { class: 'badge-cc', x: -w / 2, y: hh - 9, width: w, height: 16, rx: 8 }));
+      g.append(s('text', { class: 't-cc', x: 0, y: hh + 3, 'text-anchor': 'middle' }, tag));
+    }
     if (sev) {
       g.append(s('circle', { class: sev === 'error' ? 'badge-err' : 'badge-warn', cx: hw - 4, cy: -hh + 2, r: 9 }));
       g.append(s('text', { class: 't-badge', x: hw - 4, y: -hh + 6.5, 'text-anchor': 'middle' }, '!'));
@@ -211,6 +246,11 @@ export class Canvas {
     if (e.button !== 0) return;
     const port = (e.target as Element).closest('.port');
     const key = this.keyAt(e.target);
+    const group = key ? null : (e.target as Element).closest?.('.ccgroup')?.getAttribute('data-group');
+    if (group) {
+      this.editor.selectGroup(group);
+      return;
+    }
     this.svg.setPointerCapture(e.pointerId);
     if (port && key) {
       this.editor.select(key);

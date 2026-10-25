@@ -3,7 +3,7 @@
   --ground: #0e1013; --frame: #15181b; --panel: #1b1e22; --panel2: #22262b; --raise: #2a2f35; --line: #31363d; --line2: #4a525b;
   --text: #e3e8ee; --muted: #a3abb5; --faint: #8e96a1;
   --accent: #52b8ff; --accent-ink: #04121d; --sel: #1c4a70;
-  --warn: #efc067; --err: #ff8f8f; --ok: #79dba5; --hl: #ffb703;
+  --cc: #c9b0ff; --warn: #efc067; --err: #ff8f8f; --ok: #79dba5; --hl: #ffb703;
   --ui: system-ui, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: dark;
 }
@@ -107,6 +107,17 @@ svg.canvas.panning { cursor: grabbing; }
 .node .badge-err { fill: var(--err); }
 .node .badge-warn { fill: var(--warn); }
 .node text.t-badge { fill: #1b1e22; font-weight: 800; font-size: 12px; }
+.cc-result { background: color-mix(in srgb, var(--cc) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--cc) 45%, var(--line)); border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.cc-result ul { margin: 6px 0 4px 18px; padding: 0; }
+.cc-result p { margin: 4px 0 0; }
+.ccgroup { cursor: pointer; }
+.ccgroup .box { fill: none; stroke: var(--cc); stroke-width: 1.6; stroke-dasharray: 7 4; pointer-events: stroke; }
+.ccgroup .bar { fill: color-mix(in srgb, var(--cc) 22%, #12151a); stroke: none; pointer-events: all; }
+.ccgroup.selected .box { stroke-width: 3; stroke-dasharray: none; }
+.ccgroup text.t-group { fill: var(--cc); font: 700 11.5px var(--ui); pointer-events: none; }
+.ccgroup:focus { outline: none; }
+.node .badge-cc { fill: color-mix(in srgb, var(--cc) 30%, #12151a); stroke: var(--cc); stroke-width: 1; }
+.node text.t-cc { fill: #efe6ff; font: 700 10px var(--mono); }
 .port { fill: var(--accent); stroke: var(--accent-ink); stroke-width: 1.5; cursor: crosshair; }
 .port:hover { fill: #8dd2ff; }
 .connect-line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; fill: none; }

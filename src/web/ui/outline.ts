@@ -1,4 +1,4 @@
-import { findEvent, findGate } from '../model/doc.js';
+import { findEvent, findGate, groups } from '../model/doc.js';
 import type { Editor } from '../model/editor.js';
 import { readingOrder } from '../model/visual.js';
 import { h, rerender } from './dom.js';
@@ -16,7 +16,7 @@ export class Outline {
     const ed = this.editor;
     const sev = new Map<string, 'error' | 'warning'>();
     for (const p of ed.problems) for (const id of p.ids ?? []) if (sev.get(id) !== 'error') sev.set(id, p.severity);
-    const sig = `${ed.text}|${ed.selected}|${[...sev].join(';')}`;
+    const sig = `${ed.text}|${ed.selected}|${ed.selectedGroup}|${[...sev].join(';')}`;
     if (sig === this.signature) return;
     this.signature = sig;
     const v = ed.visual;
@@ -41,7 +41,14 @@ export class Outline {
         if (key === firstUnattached) out.push(h('li', { class: 'tree-group', role: 'presentation' }, 'Not connected to the top event'));
         out.push(items[i]!);
       });
-      return [h('ul', {}, ...out)];
+      const gs = groups(ed.doc);
+      return [
+        h('ul', {}, ...out),
+        gs.length === 0 ? null : h('ul', { 'aria-label': 'Common-cause groups', 'data-testid': 'outline-groups' },
+          h('li', { class: 'tree-group' }, 'Common-cause groups'),
+          ...gs.map((g) => h('li', {}, h('button', { class: 'tree-item', type: 'button', 'data-group': g.id, 'aria-current': ed.selectedGroup === g.id ? 'true' : null, 'aria-label': `Common-cause group ${ed.groupLabel(g.id)}, ${g.members.length} events, beta ${g.beta}`, onclick: () => ed.selectGroup(g.id) },
+            h('span', { class: 'id' }, g.id), h('span', { class: 'nm' }, `group · ${g.members.join(', ')}`))))),
+      ];
     });
   }
 }
