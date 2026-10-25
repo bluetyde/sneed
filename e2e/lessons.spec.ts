@@ -12,6 +12,7 @@ test.describe('lessons', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('lesson-title')).toHaveText('A single pump');
     await expect(app.nodes()).toHaveCount(0); // a lesson starts from nothing
+    await expect(page.getByTestId('lesson-blank')).toContainText('empty'); // and says so, instead of calling the empty model unreadable
     await expect(step(page, 'one-event')).toHaveAttribute('data-done', 'false');
     await expect(step(page, 'one-event')).toContainText('Next');
 

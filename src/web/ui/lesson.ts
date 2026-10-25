@@ -59,7 +59,9 @@ export class LessonPanel {
             current ? h('details', {}, h('summary', {}, 'Hint'), h('p', {}, s.hint)) : null);
         })),
     ];
-    if (p.malformed) out.push(h('div', { class: 'caveat', role: 'status' }, 'Part of the model is not in a form the lesson can read, so no step is credited yet.'));
+    const blank = ed.doc.top === '' && ed.doc.events.length === 0 && ed.doc.gates.length === 0; // a lesson that has just started is empty, not broken
+    if (p.malformed && blank) out.push(h('p', { class: 'hint', role: 'status', 'data-testid': 'lesson-blank' }, 'The model is empty. Start with the first step above.'));
+    else if (p.malformed) out.push(h('div', { class: 'caveat', role: 'status' }, 'Part of the model is not in a form the lesson can read, so no step is credited yet.'));
     if (p.mistakes.length) {
       out.push(h('div', { class: 'caveat', role: 'status', 'data-testid': 'lesson-mistakes' }, h('strong', {}, 'Check this. '), h('ul', {}, ...p.mistakes.map((m) => h('li', { 'data-mistake': m.id }, m.message)))));
     }
