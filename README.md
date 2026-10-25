@@ -48,6 +48,14 @@ npm run test:engine   # also needs WSL and an installed SCRAM
 
 [TODO.md](TODO.md) is the current status and what is open. The method (oracles, mutation checks of the tests) is in [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
+## How it was made
+
+AI tools wrote much of the code, tests and documents in this repository: Claude (Anthropic) wrote and checked most of it, and other AI tools did some delegated tasks and reviews. A person set the goals, made the decisions listed in [TODO.md](TODO.md) and owns the repository. The results do not rest on trust in the AI: they are checked against hand-derived and brute-force oracles ([docs/WORKFLOWS.md](docs/WORKFLOWS.md)).
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to help, and [SECURITY.md](SECURITY.md) to report a problem. A GitHub Actions workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the typecheck, the unit tests and the web build on Node 24.
+
 ## Licence and third-party software
 
 SNEED is MIT licensed ([LICENSE](LICENSE)). Packages it uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
