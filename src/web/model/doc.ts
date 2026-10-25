@@ -28,6 +28,16 @@ export interface Layout {
   [extra: string]: unknown;
 }
 
+/** A common-cause group (plan 15): the members are basic events that can fail together, with the beta-factor model. */
+export interface GroupNode {
+  id: string;
+  name?: string;
+  method: 'beta-factor';
+  members: string[];
+  beta: number;
+  [extra: string]: unknown;
+}
+
 export interface Doc {
   schema: { id: string; version: number };
   model: { id: string; name: string; created: string; updated: string };
@@ -35,11 +45,13 @@ export interface Doc {
   top: string;
   events: EventNode[];
   gates: GateNode[];
+  common_cause_groups?: GroupNode[];
   layout?: Layout;
   [extra: string]: unknown;
 }
 
 export const DEFAULT_PROBABILITY = 0.1;
+export const DEFAULT_BETA = 0.1;
 const clone = <T>(v: T): T => structuredClone(v);
 
 export function newModel(name = 'Untitled model', now = new Date().toISOString()): Doc {
@@ -66,10 +78,14 @@ export const isEvent = (doc: Doc, id: string): boolean => doc.events.some((e) =>
 export const findGate = (doc: Doc, id: string): GateNode | undefined => doc.gates.find((g) => g.id === id);
 export const findEvent = (doc: Doc, id: string): EventNode | undefined => doc.events.find((e) => e.id === id);
 export const exists = (doc: Doc, id: string): boolean => isGate(doc, id) || isEvent(doc, id);
+export const groups = (doc: Doc): GroupNode[] => doc.common_cause_groups ?? [];
+export const findGroup = (doc: Doc, id: string): GroupNode | undefined => groups(doc).find((g) => g.id === id);
+/** The group an event belongs to, if any. */
+export const groupOf = (doc: Doc, eventId: string): GroupNode | undefined => groups(doc).find((g) => g.members.includes(eventId));
 
 /** The smallest unused identifier `<prefix><n>`, so ids are short, stable and valid by construction. */
-export function nextId(doc: Doc, prefix: 'E' | 'G'): string {
-  const used = new Set([...doc.events.map((e) => e.id), ...doc.gates.map((g) => g.id)]);
+export function nextId(doc: Doc, prefix: 'E' | 'G' | 'CC'): string {
+  const used = new Set([...doc.events.map((e) => e.id), ...doc.gates.map((g) => g.id), ...groups(doc).map((g) => g.id)]);
   for (let n = 1; ; n++) if (!used.has(`${prefix}${n}`)) return `${prefix}${n}`;
 }
 
@@ -128,6 +144,8 @@ export function removeNode(doc: Doc, id: string): Doc {
   d.events = d.events.filter((e) => e.id !== id);
   d.gates = d.gates.filter((g) => g.id !== id);
   for (const g of d.gates) g.inputs = g.inputs.filter((x) => x !== id);
+  for (const g of groups(d)) g.members = g.members.filter((x) => x !== id);
+  tidyGroups(d);
   if (d.top === id) d.top = '';
   if (d.layout?.nodes) d.layout.nodes = d.layout.nodes.filter((n) => n.id !== id);
   if (d.layout?.references) d.layout.references = d.layout.references.filter((r) => r.target !== id && !r.node.startsWith(`${id}#`));
@@ -136,10 +154,91 @@ export function removeNode(doc: Doc, id: string): Doc {
 
 export const setTop = (doc: Doc, id: string): Doc => ({ ...clone(doc), top: id });
 
+/** Sets the probability of an event. The members of a common-cause group share one probability, so setting one sets them all. */
 export function setProbability(doc: Doc, id: string, probability: number): Doc {
   const d = clone(doc);
   const e = findEvent(d, id);
-  if (e) e.probability = probability;
+  if (!e) return d;
+  const members = groupOf(d, id)?.members ?? [id];
+  for (const m of members) {
+    const x = findEvent(d, m);
+    if (x) x.probability = probability;
+  }
+  return d;
+}
+
+// ---- common-cause groups (plan 15) ----
+/**
+ * Keeps the document consistent after a change to the groups: a group left with fewer than two members is removed (it would be
+ * refused by the validator and means nothing), and the assumptions say whether groups are in use (E_CCF_ASSUMPTION otherwise).
+ */
+function tidyGroups(d: Doc): void {
+  if (d.common_cause_groups) {
+    d.common_cause_groups = d.common_cause_groups.filter((g) => g.members.length >= 2);
+    if (d.common_cause_groups.length === 0) delete d.common_cause_groups;
+  }
+  const used = groups(d).length > 0;
+  if (used || d.assumptions.independence === 'beta-factor-groups') d.assumptions = { ...d.assumptions, independence: used ? 'beta-factor-groups' : 'declared-independent' };
+}
+
+/** A new group of two or more events that are not in a group yet. They all take the probability of the first one. Returns id '' when nothing was made. */
+export function addGroup(doc: Doc, memberIds: string[], opts: { beta?: number; name?: string } = {}): Added {
+  const d = clone(doc);
+  const members = [...new Set(memberIds)].filter((m) => isEvent(d, m) && !groupOf(d, m));
+  if (members.length < 2) return { doc, id: '' };
+  const id = nextId(d, 'CC');
+  const q = findEvent(d, members[0]!)!.probability;
+  for (const m of members) findEvent(d, m)!.probability = q;
+  const group: GroupNode = { id, ...(opts.name ? { name: opts.name } : {}), method: 'beta-factor', members, beta: opts.beta ?? DEFAULT_BETA };
+  d.common_cause_groups = [...groups(d), group];
+  tidyGroups(d);
+  return { doc: d, id };
+}
+
+/** Adds an event (not in a group yet) to a group. It takes the probability the group's members share. */
+export function addToGroup(doc: Doc, groupId: string, eventId: string): Doc {
+  const d = clone(doc);
+  const g = findGroup(d, groupId);
+  const e = findEvent(d, eventId);
+  if (!g || !e || groupOf(d, eventId)) return d;
+  const q = findEvent(d, g.members[0]!)?.probability;
+  if (q !== undefined) e.probability = q;
+  g.members.push(eventId);
+  return d;
+}
+
+/** Takes an event out of a group. A group left with one member is removed. */
+export function removeFromGroup(doc: Doc, groupId: string, eventId: string): Doc {
+  const d = clone(doc);
+  const g = findGroup(d, groupId);
+  if (!g) return d;
+  g.members = g.members.filter((m) => m !== eventId);
+  tidyGroups(d);
+  return d;
+}
+
+export function removeGroup(doc: Doc, groupId: string): Doc {
+  const d = clone(doc);
+  d.common_cause_groups = groups(d).filter((g) => g.id !== groupId);
+  tidyGroups(d);
+  return d;
+}
+
+/** Sets beta as given: the editor checks the range, and the validator is the arbiter. */
+export function setBeta(doc: Doc, groupId: string, beta: number): Doc {
+  const d = clone(doc);
+  const g = findGroup(d, groupId);
+  if (g) g.beta = beta;
+  return d;
+}
+
+export function setGroupName(doc: Doc, groupId: string, name: string): Doc {
+  const d = clone(doc);
+  const g = findGroup(d, groupId);
+  if (g) {
+    if (name === '') delete g.name;
+    else g.name = name;
+  }
   return d;
 }
 

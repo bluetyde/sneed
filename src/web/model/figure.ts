@@ -5,7 +5,7 @@
 import type { ResultRecord } from '../../core/result.js';
 import type { CrossCheckInfo } from '../api.js';
 import { CAVEAT_TEXT, METHOD_TEXT, reasonText } from '../ui/hints.js';
-import { findEvent, findGate, type Doc } from './doc.js';
+import { findEvent, findGate, groupOf, groups, type Doc } from './doc.js';
 import { buildVisual, type Visual, type VisualNode } from './visual.js';
 
 export interface FigureResult {
@@ -66,6 +66,10 @@ export function resultLines(r: FigureResult | null | undefined): string[] {
   if (!r.stale) {
     out.push(`Method: ${METHOD_TEXT[rec.method] ?? rec.method}. Engine: ${rec.engine.name} ${rec.engine.version}. Status: ${rec.status} / ${rec.completeness}.`);
     if (rec.top_event_probability !== null) out.push(`Top event probability: ${prob(rec.top_event_probability)}${rec.method === 'exact' ? '' : ' (approximation)'}.`);
+    if (rec.common_cause) {
+      out.push('Common-cause groups used (beta-factor): this is a different kind of result from one with independent events.');
+      if (typeof rec.common_cause.independent_value === 'number') out.push(`The same events as independent events would give ${prob(rec.common_cause.independent_value)}.`);
+    }
     out.push(`Minimal cut sets: ${rec.minimal_cut_sets.length}.`);
     const c = r.cross;
     if (c) {
@@ -109,7 +113,24 @@ function nodeSvg(n: VisualNode, doc: Doc): string {
       ? `<text x="0" y="4" text-anchor="middle" font-size="11">${esc(short(l1, 20))}</text>`
       : `<text x="0" y="-3" text-anchor="middle" font-size="11" font-weight="bold">${esc(short(l1, 20))}</text><text x="0" y="14" text-anchor="middle" font-size="10">${esc(l2)}</text>`;
   const top = isTop ? `<rect x="${num(-hw + 2)}" y="${num(-hh - 9)}" width="34" height="16" rx="8" fill="#000"/><text x="${num(-hw + 19)}" y="${num(-hh + 3)}" text-anchor="middle" font-size="9" font-weight="bold" fill="#fff">TOP</text>` : '';
-  return `<g transform="translate(${num(n.x)} ${num(n.y)})">${shape}${text}${top}</g>`;
+  const member = n.kind === 'event' ? groupOf(doc, n.id) : undefined; // print has no colour: the group is named on the node too
+  const tag = member ? `<text x="0" y="${num(hh + 12)}" text-anchor="middle" font-size="9">in ${esc(short(member.name?.trim() || member.id, 14))}</text>` : '';
+  return `<g transform="translate(${num(n.x)} ${num(n.y)})">${shape}${text}${top}${tag}</g>`;
+}
+
+/** The dash-dot rectangle round the members of each common-cause group, with its name and beta. */
+function groupBoxesSvg(v: Visual, doc: Doc): string {
+  return groups(doc)
+    .map((g) => {
+      const members = v.nodes.filter((n) => n.kind === 'event' && g.members.includes(n.id));
+      if (members.length === 0) return '';
+      const x1 = Math.min(...members.map((n) => n.x - n.w / 2)) - 16;
+      const y1 = Math.min(...members.map((n) => n.y - n.h / 2)) - 24;
+      const x2 = Math.max(...members.map((n) => n.x + n.w / 2)) + 16;
+      const y2 = Math.max(...members.map((n) => n.y + n.h / 2)) + 20;
+      return `<rect x="${num(x1)}" y="${num(y1)}" width="${num(x2 - x1)}" height="${num(y2 - y1)}" rx="12" fill="none" stroke="#000" stroke-width="1" stroke-dasharray="10 3 2 3"/><text x="${num(x1 + 8)}" y="${num(y1 + 13)}" font-size="10" font-weight="bold">${esc(short(`${g.name?.trim() || g.id} · beta ${g.beta}`, Math.max(12, Math.floor((x2 - x1) / 6))))}</text>`;
+    })
+    .join('');
 }
 
 function edgePath(v: Visual, from: string, to: string): string {
@@ -129,14 +150,18 @@ export function figureSvg(doc: Doc, opts: FigureOptions = {}): string {
   const m = FIGURE_MARGIN;
   const appName = opts.appName ?? 'SNEED fault-tree editor';
   const head = [short(doc.model.name || 'Untitled model', 80), `Top event: ${doc.top || '(none)'} · ${doc.events.length} basic event${doc.events.length === 1 ? '' : 's'} · ${doc.gates.length} gate${doc.gates.length === 1 ? '' : 's'}`];
-  const legend = 'Ellipse: basic event. Rectangle: gate. Dashed rectangle: the same event or gate used again (one failure, not a copy).';
-  const assumptions = 'Constant probabilities; basic events independent, as declared by the model. A probability here is not a frequency and not a plant risk figure.';
+  const gs = groups(doc);
+  const legend = `Ellipse: basic event. Rectangle: gate. Dashed rectangle: the same event or gate used again (one failure, not a copy).${gs.length ? ' Dash-dot rectangle: a common-cause group.' : ''}`;
+  const assumptions = gs.length
+    ? 'Constant probabilities; basic events independent, except the members of each common-cause group (beta-factor model), which can fail together. A probability here is not a frequency and not a plant risk figure.'
+    : 'Constant probabilities; basic events independent, as declared by the model. A probability here is not a frequency and not a plant risk figure.';
+  const groupLines = gs.map((g) => `Common-cause group ${g.name?.trim() || g.id}: ${g.members.join(', ')}; beta ${g.beta}.`);
   const headH = 20 + head.length * LINE + 10;
   const treeW = Math.max(v.bounds.w, 1);
   const treeH = Math.max(v.bounds.h, 1);
   const contentW = Math.max(treeW, 640);
   const width = Math.ceil(contentW + 2 * m);
-  const foot = [legend, assumptions, ...resultLines(opts.result), `${appName}${opts.generated ? ` · ${opts.generated}` : ''}`].flatMap((t) => wrapText(t, Math.floor(contentW / CHAR_W)));
+  const foot = [legend, assumptions, ...groupLines, ...resultLines(opts.result), `${appName}${opts.generated ? ` · ${opts.generated}` : ''}`].flatMap((t) => wrapText(t, Math.floor(contentW / CHAR_W)));
   const footTop = m + headH + treeH + 24;
   const height = Math.ceil(footTop + foot.length * LINE + m);
   const tx = m + (width - 2 * m - treeW) / 2 - v.bounds.x;
@@ -152,6 +177,7 @@ export function figureSvg(doc: Doc, opts: FigureOptions = {}): string {
   parts.push(`<text x="${m}" y="${m + 14}" font-size="16" font-weight="bold">${esc(head[0]!)}</text>`);
   parts.push(`<text x="${m}" y="${m + 14 + LINE + 4}" font-size="11">${esc(head[1]!)}</text>`);
   parts.push(`<g transform="translate(${num(tx)} ${num(ty)})">`);
+  if (gs.length) parts.push(groupBoxesSvg(v, doc));
   parts.push(`<g fill="none" stroke="#000" stroke-width="1.25">${v.edges.map((e) => `<path d="${edgePath(v, e.from, e.to)}"${v.byKey.get(e.to)!.kind === 'reference' || v.byKey.get(e.to)!.kind === 'missing' ? ' stroke-dasharray="5 3"' : ''}/>`).join('')}</g>`);
   parts.push(v.nodes.map((n) => nodeSvg(n, doc)).join(''));
   parts.push(`</g>`);

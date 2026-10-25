@@ -1,5 +1,7 @@
 # Plan 04: Lessons
 
+*Lesson 5, "Pumps that fail together" (common-cause groups, plan 15) was added 2026-10-25; see [EDITOR.md](../EDITOR.md).*
+
 Three guided lessons and the rules for writing more. Milestone P3. Probabilities are synthetic and labelled so; none represents a real plant.
 
 ## Lesson format

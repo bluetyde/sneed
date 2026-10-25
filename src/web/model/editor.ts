@@ -4,6 +4,7 @@
 import { ApiError, type Api, type Engine, type ImportanceResponse, type ImportResponse, type RanResponse, type RunStatus, type Issue, type Method, type ModelInfo, type RunInfo, type RunResponse, type RuntimeInfo, type SavedRun, type ValidateResponse } from '../api.js';
 import { diffModels, diffResults, type ModelDiff, type ResultDiff } from '../../core/compare.js';
 import { checkLesson, type EngineResult, type Lesson, type LessonDoc, type LessonProgress } from '../../core/lesson.js';
+import { CCF_SUFFIX, INDEPENDENT_SUFFIX } from '../../core/ccf.js';
 import * as D from './doc.js';
 import { figureSvg } from './figure.js';
 import { buildVisual, type Visual } from './visual.js';
@@ -35,6 +36,8 @@ export interface EditorOptions {
 export class Editor {
   doc: D.Doc = D.newModel();
   selected: string | null = null;
+  /** The common-cause group being edited, if one is selected (then no node is). */
+  selectedGroup: string | null = null;
   fileName: string | null = null;
   validation: ValidateResponse | null = null;
   /** The text the current `validation` is for. While the text on screen differs, the shown result may be for another model. */
@@ -185,6 +188,7 @@ export class Editor {
   private afterChange(): void {
     this.highlight = [];
     if (this.selected && !this.visual.byKey.has(this.selected)) this.selected = null;
+    if (this.selectedGroup && !D.findGroup(this.doc, this.selectedGroup)) this.selectedGroup = null;
     this.scheduleValidation();
     this.emit();
   }
@@ -208,8 +212,17 @@ export class Editor {
   // ---- selection ----
   select(key: string | null): void {
     if (key !== null && !this.visual.byKey.has(key)) key = null;
-    if (key === this.selected) return;
+    if (key === this.selected && this.selectedGroup === null) return;
     this.selected = key;
+    this.selectedGroup = null;
+    this.emit();
+  }
+  /** Selects a common-cause group (it is edited in the Properties panel); no node is selected then. */
+  selectGroup(id: string | null): void {
+    if (id !== null && !D.findGroup(this.doc, id)) id = null;
+    if (id === this.selectedGroup && this.selected === null) return;
+    this.selectedGroup = id;
+    this.selected = null;
     this.emit();
   }
 
@@ -234,6 +247,7 @@ export class Editor {
   }
   /** Deletes the selected node. For a repeated reference it removes only that input, never the node it points at. */
   deleteSelected(): void {
+    if (this.selectedGroup) return this.deleteGroup(this.selectedGroup);
     const n = this.selected ? this.visual.byKey.get(this.selected) : undefined;
     if (!n) return;
     if ((n.kind === 'reference' || n.kind === 'missing') && n.parent) {
@@ -260,6 +274,42 @@ export class Editor {
     this.commit(D.setProbability(this.doc, id, value), `Set probability of ${id}`);
     return true;
   }
+  // ---- common-cause groups (plan 15) ----
+  /** Makes a group of two events that are not in a group yet. The group takes the first event's probability for both. */
+  makeGroup(eventId: string, otherId: string): string {
+    const { doc, id } = D.addGroup(this.doc, [eventId, otherId]);
+    if (id === '') return '';
+    this.commit(doc, `Make a common-cause group ${id} of ${eventId} and ${otherId}`);
+    this.selectGroup(id);
+    return id;
+  }
+  addToGroup(groupId: string, eventId: string): void {
+    this.commit(D.addToGroup(this.doc, groupId, eventId), `Add ${eventId} to group ${groupId}`);
+  }
+  removeFromGroup(groupId: string, eventId: string): void {
+    this.commit(D.removeFromGroup(this.doc, groupId, eventId), `Remove ${eventId} from group ${groupId}`);
+  }
+  deleteGroup(groupId: string): void {
+    this.commit(D.removeGroup(this.doc, groupId), `Delete group ${groupId}`);
+    this.selectGroup(null);
+  }
+  setBeta(groupId: string, beta: number): boolean {
+    if (!Number.isFinite(beta)) return false;
+    this.commit(D.setBeta(this.doc, groupId, beta), `Set beta of ${groupId}`);
+    return true;
+  }
+  setGroupName(groupId: string, name: string): void {
+    this.commit(D.setGroupName(this.doc, groupId, name), `Rename group ${groupId}`);
+  }
+  /** Events that can still join a group: the ones that are in none. */
+  get ungroupedEvents(): D.EventNode[] {
+    return this.doc.events.filter((e) => !D.groupOf(this.doc, e.id));
+  }
+  /** What a group is called on screen: its name, or its ID. */
+  groupLabel(id: string): string {
+    return D.findGroup(this.doc, id)?.name?.trim() || id;
+  }
+
   setName(id: string, name: string): void {
     this.commit(D.setName(this.doc, id, name), `Rename ${id}`);
   }
@@ -302,7 +352,9 @@ export class Editor {
   }
   /** "The top event occurs if A and B both fail." Uses display names where there are any. */
   describeCutSet(events: string[]): string {
-    const label = (id: string): string => D.findEvent(this.doc, id)?.name ?? id;
+    const own = (id: string): string => D.findEvent(this.doc, id)?.name ?? id;
+    // a cut set of a model with groups names the group's event and the independent parts (src/core/ccf.ts)
+    const label = (id: string): string => (id.endsWith(CCF_SUFFIX) ? `the common cause of group ${this.groupLabel(id.slice(0, -CCF_SUFFIX.length))}` : id.endsWith(INDEPENDENT_SUFFIX) ? `${own(id.slice(0, -INDEPENDENT_SUFFIX.length))} on its own` : own(id));
     const names = events.map(label);
     if (names.length === 1) return `The top event occurs if ${names[0]} fails.`;
     if (names.length === 2) return `The top event occurs if ${names[0]} and ${names[1]} both fail.`;
@@ -312,6 +364,8 @@ export class Editor {
   // ---- problems ----
   /** Selects the first node a problem names, so a click in the Problems list lands on the offender. */
   selectIssue(issue: Issue): void {
+    const group = (issue.ids ?? []).find((id) => D.findGroup(this.doc, id));
+    if (group) return this.selectGroup(group);
     for (const id of issue.ids ?? []) {
       const key = this.visual.nodes.find((n) => n.id === id && (n.kind === 'event' || n.kind === 'gate'))?.key;
       if (key) return this.select(key);
@@ -563,7 +617,9 @@ export class Editor {
       const name = n.name?.trim();
       if (name && counts.get(name) === 1) label.set(n.id, name);
     }
-    return (id) => label.get(id) ?? id;
+    const base = (id: string): string => label.get(id) ?? id;
+    // the events a group adds to the analysis are named as the lesson finds them: `<group>.CCF` and `<member>.independent`
+    return (id) => (id.endsWith(CCF_SUFFIX) ? this.groupLabel(id.slice(0, -CCF_SUFFIX.length)) + CCF_SUFFIX : id.endsWith(INDEPENDENT_SUFFIX) ? base(id.slice(0, -INDEPENDENT_SUFFIX.length)) + INDEPENDENT_SUFFIX : base(id));
   }
   get lessonDoc(): LessonDoc {
     const nm = this.nameOf();
@@ -571,6 +627,7 @@ export class Editor {
       top: nm(this.doc.top),
       events: this.doc.events.map((e) => ({ id: nm(e.id), probability: e.probability })),
       gates: this.doc.gates.map((g) => ({ id: nm(g.id), type: g.type, inputs: g.inputs.map(nm), ...(g.threshold !== undefined ? { threshold: g.threshold } : {}) })),
+      common_cause_groups: D.groups(this.doc).map((g) => ({ id: this.groupLabel(g.id), members: g.members.map(nm), beta: g.beta })),
     };
   }
   /** The shown result as the lesson compares it: only a current, completed and complete result counts. */

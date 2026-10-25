@@ -1,6 +1,7 @@
 // Common-cause groups (plan 15, section 4): a group is expanded into ordinary events and gates before the built-in engine runs.
 // The expansion is the one place where the beta-factor model is defined. Callers validate the document first.
 import type { NativeModel } from './model.js';
+import type { ResultRecord } from './result.js';
 
 export const CCF_SUFFIX = '.CCF';
 export const INDEPENDENT_SUFFIX = '.independent';
@@ -10,14 +11,25 @@ export const groupEventId = (groupId: string): string => groupId + CCF_SUFFIX;
 /** The id of the part of member `memberId` that fails alone. */
 export const independentPartId = (memberId: string): string => memberId + INDEPENDENT_SUFFIX;
 
-/** The `common_cause` block of a result record (plan 15): which groups were used. Absent when the model has none. */
-export function commonCauseRecord(model: NativeModel): { common_cause: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; note: string } } | Record<string, never> {
+/** The same model with its groups taken away and its events independent: the textbook model the groups are compared with. */
+export function withoutGroups(model: NativeModel): NativeModel {
+  const { common_cause_groups: _groups, ...rest } = model;
+  void _groups;
+  return { ...rest, assumptions: { ...model.assumptions, independence: 'declared-independent' } };
+}
+
+/**
+ * The `common_cause` block of a result record (plan 15): which groups were used, and the probability the same events would have if they were
+ * independent (`independent_value`, null when the engine did not work it out). Absent when the model has no group.
+ */
+export function commonCauseRecord(model: NativeModel, independentValue: number | null = null): { common_cause: NonNullable<ResultRecord['common_cause']> } | Record<string, never> {
   const groups = model.common_cause_groups ?? [];
   if (groups.length === 0) return {};
   return {
     common_cause: {
       method: 'beta-factor',
       groups: groups.map((g) => ({ id: g.id, members: [...g.members], beta: g.beta })),
+      independent_value: independentValue,
       note: 'A result under common-cause groups is a different kind of result from one with independent events.',
     },
   };

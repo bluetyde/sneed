@@ -166,3 +166,47 @@ File: `lessons/04-voting.json`
 - Verdict (approved / approved with changes / not approved): 
 - Changes asked for: 
 
+## Pumps that fail together
+
+File: `lessons/05-common-cause.json`
+
+**Goals**
+- See that one shared cause can make two redundant pumps fail together.
+- See that the same group makes an AND gate fail more often and an OR gate a little less often.
+- Read a result with common-cause groups against the result for independent events.
+
+**Assumptions shown to the student:** Pumps A and B each fail with a made-up probability of 0.1. A made-up fraction beta = 0.1 of each pump's failures is a common cause, for example one maintenance error, that fails both pumps at once. The beta-factor model is a teaching model. Nothing here describes a real plant.
+
+**Steps**
+1. Add two basic events named A and B, each with probability 0.1.
+   - Hint: The AND gate button adds two events for you. Name each one in the Name field of the Properties tab. The lesson finds your events by their names.
+2. Make an AND gate the top event: the flow stops only when A and B both fail. Run, and note the probability for independent pumps.
+   - Hint: An AND gate fails only when every input fails. The first gate you add becomes the top event.
+3. Say that A and B can fail together. Put them in one common-cause group named G with beta 0.1. Then run again and compare.
+   - Hint: Select A. In the Properties tab, under Common-cause group, choose B and press Make a group. Then name the group G and set beta to 0.1 in the group's properties. The group box and the result panel show what changed.
+4. Now suppose either pump failing stops the flow. Change the gate to OR and run again. The group helps here, a little.
+   - Hint: Select the gate and change its type in the properties panel. An OR gate fails when any input fails.
+
+**Expected results** (each equals an independently checked oracle entry)
+- Both pumps must fail (AND), with a common cause: probability 0.018019; cut sets {G.CCF}, {A.independent, B.independent} (oracle `cc-and`)
+- Either pump failing stops the flow (OR), with a common cause: probability 0.180181; cut sets {A.independent}, {B.independent}, {G.CCF} (oracle `cc-or`)
+
+**"Check this" messages**
+- A probability above 1 is not allowed. Write 10 percent as 0.1.
+- A gate with one input only repeats that input. Give the gate both pumps.
+- One of your events is not connected to any gate, so it does not change the result.
+
+**Hand calculation (shown after the student has run the model)**
+- Independent pumps: AND is 0.1 x 0.1 = 0.01. OR is 1 - 0.9 x 0.9 = 0.19.
+- Beta-factor model: each pump fails alone with probability (1 - 0.1) x 0.1 = 0.09, or both pumps fail together with probability 0.1 x 0.1 = 0.01. The shared failure is one event, G.CCF.
+- AND: the flow stops if the common cause happens, or if both pumps fail alone. P = 1 - (1 - 0.01) x (1 - 0.09 x 0.09) = 0.018019. The cut sets are {G.CCF} and {A.independent, B.independent}. This is higher than 0.01.
+- OR: the flow stops if either pump fails alone or the common cause happens. P = 1 - (1 - 0.09)^2 x (1 - 0.01) = 0.180181. The cut sets are {A.independent}, {B.independent} and {G.CCF}. This is a little lower than 0.19.
+- Why: each pump still fails with probability 0.1 in total, but part of that failure now hits both pumps at once. That makes two failures together more likely. It also makes the failures overlap, so an OR gets a little better.
+
+**Reviewer**
+
+- Name and role: 
+- Date: 
+- Verdict (approved / approved with changes / not approved): 
+- Changes asked for: 
+

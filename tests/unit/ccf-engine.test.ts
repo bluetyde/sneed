@@ -94,6 +94,7 @@ describe('the frozen common-cause oracles (tests/oracles-common-cause.json) thro
       // the record says whose result this is
       expect(r.assumptions).toMatchObject({ independence: 'beta-factor-groups' });
       expect(r.common_cause).toMatchObject({ method: 'beta-factor', groups: [{ id: e.group.id, members: e.group.members, beta: e.group.beta }] });
+      expect(Math.abs(r.common_cause!.independent_value! - e.independent_value)).toBeLessThanOrEqual(1e-12); // what the same events give without the group
       expect(r.input_hashes.model_hash).toBe(modelHash(JSON.parse(text)));
       expect(r.input_hashes.exported_input_hash).not.toBe(r.input_hashes.model_hash); // what the engine read is the expansion
       // the files of a run are the same as for any run, and the native model is the one that was submitted

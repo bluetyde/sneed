@@ -47,8 +47,9 @@ export interface ResultRecord {
   /**
    * Present only when the model has common-cause groups (plan 15): the method and the groups used. The cut sets then name the group event
    * `<group>.CCF` and the independent part `<member>.independent`. Such a result is a different kind of result from one with independent events.
+   * `independent_value` is the probability the same events would give without the groups (the built-in engine works it out; null otherwise).
    */
-  common_cause?: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; note: string };
+  common_cause?: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; independent_value: number | null; note: string };
 }
 
 export interface Outcome {

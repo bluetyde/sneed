@@ -22,6 +22,8 @@ export interface ModelDiff {
   top: Change<string> | null;
   events: { added: string[]; removed: string[]; changed: EventChange[] };
   gates: { added: string[]; removed: string[]; changed: GateChange[] };
+  /** Common-cause groups (plan 15): a group is part of what the model means, so a difference here is a difference in the model. */
+  groups: { added: string[]; removed: string[]; changed: GroupChange[] };
   /** True when nothing that affects the analysis differs (names and notes count only where listed above). */
   identical: boolean;
 }
@@ -50,9 +52,15 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const str = (v: unknown): v is string => typeof v === 'string';
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+export interface GroupChange {
+  id: string;
+  beta: Change<number | null> | null;
+  members: Change<string[]> | null;
+}
+interface ReadGroup { id: string; beta: number | null; members: string[] }
 interface ReadEvent { id: string; probability: number | null; name: string | null }
 interface ReadGate { id: string; type: string; threshold: number | null; inputs: string[] }
-interface ReadDoc { top: string; events: Map<string, ReadEvent>; gates: Map<string, ReadGate> }
+interface ReadDoc { top: string; events: Map<string, ReadEvent>; gates: Map<string, ReadGate>; groups: Map<string, ReadGroup> }
 
 /** Reads a native document without trusting its shape. Null when it is not a recognisable model. */
 export function readDoc(raw: unknown): ReadDoc | null {
@@ -67,7 +75,14 @@ export function readDoc(raw: unknown): ReadDoc | null {
     if (!isObj(g) || !str(g.id) || !str(g.type) || !Array.isArray(g.inputs) || !g.inputs.every(str)) return null;
     gates.set(g.id, { id: g.id, type: g.type, threshold: num(g.threshold) ? g.threshold : null, inputs: g.inputs as string[] });
   }
-  return { top: str(raw.top) ? raw.top : '', events, gates };
+  const groups = new Map<string, ReadGroup>();
+  if (Array.isArray(raw.common_cause_groups)) {
+    for (const g of raw.common_cause_groups) {
+      if (!isObj(g) || !str(g.id) || !Array.isArray(g.members) || !g.members.every(str)) return null;
+      groups.set(g.id, { id: g.id, beta: num(g.beta) ? g.beta : null, members: g.members as string[] });
+    }
+  }
+  return { top: str(raw.top) ? raw.top : '', events, gates, groups };
 }
 
 const same = (a: string[], b: string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -102,9 +117,21 @@ export function diffModels(a: unknown, b: unknown): ModelDiff | null {
     const inputs = !same([...g.inputs].sort(), [...h.inputs].sort()) ? { from: g.inputs, to: h.inputs } : null;
     if (type || threshold || inputs) gates.changed.push({ id, type, threshold, inputs });
   }
+  const groups = { added: [] as string[], removed: [] as string[], changed: [] as GroupChange[] };
+  for (const id of y.groups.keys()) if (!x.groups.has(id)) groups.added.push(id);
+  for (const [id, g] of x.groups) {
+    const k = y.groups.get(id);
+    if (!k) {
+      groups.removed.push(id);
+      continue;
+    }
+    const beta = g.beta !== k.beta ? { from: g.beta, to: k.beta } : null;
+    const members = !same([...g.members].sort(), [...k.members].sort()) ? { from: g.members, to: k.members } : null;
+    if (beta || members) groups.changed.push({ id, beta, members });
+  }
   const top = x.top !== y.top ? { from: x.top, to: y.top } : null;
-  const logic = events.added.length + events.removed.length + gates.added.length + gates.removed.length + gates.changed.length + events.changed.filter((e) => e.probability).length;
-  return { top, events, gates, identical: top === null && logic === 0 };
+  const logic = events.added.length + events.removed.length + gates.added.length + gates.removed.length + gates.changed.length + events.changed.filter((e) => e.probability).length + groups.added.length + groups.removed.length + groups.changed.length;
+  return { top, events, gates, groups, identical: top === null && logic === 0 };
 }
 
 const key = (events: string[]): string => JSON.stringify([...events].sort());
