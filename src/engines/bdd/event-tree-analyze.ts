@@ -8,7 +8,7 @@ import { documentHash, modelHash } from '../../core/canonical.js';
 import { eventTreeHash, validateEventTreeText, type EtIssue } from '../../core/event-tree.js';
 import { EVENT_TREE_RESULT_SCHEMA, eventTreeFailureText, type EtEndStateRow, type EtSequenceRow, type EventTreeResult } from '../../core/event-tree-result.js';
 import type { NativeModel } from '../../core/model.js';
-import { validateModelText } from '../../core/validate.js';
+import { unanalysedGroups, validateModelText } from '../../core/validate.js';
 import { BDD_SOURCE_SHA256 } from './build-id.js';
 import type { BddLimits } from './bdd.js';
 import type { EventTreeInput } from './event-tree.js';
@@ -46,6 +46,7 @@ export async function analyzeEventTreeBuiltin(treeText: string, modelText: strin
 
   const modelCheck = validateModelText(modelText);
   if (!modelCheck.valid) return refuse('E_MODEL_NOT_FOUND', `the fault-tree model is not valid (${modelCheck.errors.map((e) => e.code).join(', ')}), so no sequence can be evaluated`);
+  if (unanalysedGroups(JSON.parse(modelText))) return refuse('E_MODEL_NOT_FOUND', 'the fault-tree model has common-cause groups, and analysis of groups is not built yet, so no sequence can be evaluated');
   const model = JSON.parse(modelText) as NativeModel;
 
   // the tree is checked against exactly this model: the name it uses is the one it names

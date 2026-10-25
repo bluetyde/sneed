@@ -35,7 +35,14 @@ function projection(doc) {
   }
   const events = {};
   for (const [id, e] of Object.entries(evById)) events[id] = e.probability;
-  return { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
+  const out = { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
+  const grById = byId(doc.common_cause_groups || [], 'group');
+  for (const id of Object.keys(grById)) if (id in evById || id in gById) throw new Error('E_DUP_ID group namespace clash');
+  if (Object.keys(grById).length) {
+    out.common_cause_groups = {};
+    for (const [gid, g] of Object.entries(grById)) out.common_cause_groups[gid] = { method: g.method, members: [...g.members].sort(), beta: g.beta };
+  }
+  return out;
 }
 const hash = (doc) => crypto.createHash('sha256').update(canon(projection(doc)), 'utf8').digest('hex');
 
@@ -49,6 +56,11 @@ for (const c of vec.model_cases) {
   const doc = JSON.parse(c.document_json);
   const got = hash(doc);
   if (got !== c.model_hash) { bad++; console.log('HASH FAIL', c.id, got, c.model_hash); }
+}
+const hashOf = (id) => vec.model_cases.find((m) => m.id === id).model_hash;
+for (const c of vec.model_cases) {
+  if (c.same_as && c.model_hash !== hashOf(c.same_as)) { bad++; console.log('RELATION FAIL (should equal ' + c.same_as + ')', c.id); }
+  if (c.differs_from && c.model_hash === hashOf(c.differs_from)) { bad++; console.log('RELATION FAIL (should differ from ' + c.differs_from + ')', c.id); }
 }
 const idRe = /^[A-Za-z_]([A-Za-z0-9_-]{0,62}[A-Za-z0-9_])?$/;
 for (const c of vec.id_cases) if (idRe.test(c.id) !== c.valid) { bad++; console.log('ID FAIL', JSON.stringify(c.id)); }

@@ -9,7 +9,7 @@ import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
 import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
-import { validateModelText } from '../../core/validate.js';
+import { unanalysedGroups, validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
 import { BDD_SOURCE_SHA256 } from './build-id.js';
@@ -66,6 +66,8 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
 
   const validation = validateModelText(documentText);
   if (!validation.valid) return { kind: 'refused', errors: validation.errors, warnings: validation.warnings };
+  const groups = unanalysedGroups(JSON.parse(documentText));
+  if (groups) return { kind: 'refused', errors: [groups], warnings: validation.warnings };
   const model = JSON.parse(documentText) as NativeModel;
   const events = reachableEvents(model);
   const settings: Settings = { method: 'exact', limitOrder: Math.max(1, events.length), ...opts.settings };

@@ -10,7 +10,7 @@ import { defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import { ExportError, exportOpenPsa, type VotingMode } from './export.js';
 import type { Method, NativeModel, Settings } from './model.js';
 import { assess, AssessAborted, MAX_REPORT_BYTES, type EngineIdentity, type ResultRecord } from './result.js';
-import { validateModelText, type Issue } from './validate.js';
+import { unanalysedGroups, validateModelText, type Issue } from './validate.js';
 
 export interface AnalyzeOptions {
   /** Directory that holds one sub-directory per run (runs/<id>/{inputs,native,log,results.json}). */
@@ -66,6 +66,8 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   const deadline = now() + (opts.timeoutMs ?? 60000);
   const validation = validateModelText(documentText);
   if (!validation.valid) return { kind: 'refused', errors: validation.errors, warnings: validation.warnings };
+  const groups = unanalysedGroups(JSON.parse(documentText));
+  if (groups) return { kind: 'refused', errors: [groups], warnings: validation.warnings };
 
   const model = JSON.parse(documentText) as NativeModel;
   const events = reachableEvents(model);

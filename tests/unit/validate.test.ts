@@ -8,7 +8,7 @@ const expected = JSON.parse(readFileSync(join(vecDir, 'expected.json'), 'utf8'))
 const codes = (list: Issue[]): string[] => list.map((i) => i.code).sort();
 const load = (rel: string): string => readFileSync(join(vecDir, rel), 'utf8');
 
-const ERROR_CODES = ['E_SCHEMA', 'E_ID_FORMAT', 'E_DUP_ID', 'E_PROB_RANGE', 'E_NO_TOP', 'E_MISSING_REF', 'E_CYCLE', 'E_GATE_ARITY', 'E_VOTE_RANGE', 'E_VOTE_DUP'];
+const ERROR_CODES = ['E_SCHEMA', 'E_ID_FORMAT', 'E_DUP_ID', 'E_PROB_RANGE', 'E_NO_TOP', 'E_MISSING_REF', 'E_CYCLE', 'E_GATE_ARITY', 'E_VOTE_RANGE', 'E_VOTE_DUP', 'E_CCF_ASSUMPTION', 'E_CCF_UNKNOWN_MEMBER', 'E_CCF_OVERLAP', 'E_CCF_TOO_SMALL', 'E_CCF_TOO_LARGE', 'E_CCF_BETA_RANGE', 'E_CCF_UNEQUAL_Q']; // E_CCF_NOT_ANALYSED is an analysis refusal, tested in ccf-not-analysed.test.ts
 
 describe('fixtures', () => {
   for (const [rel, want] of Object.entries(expected)) {

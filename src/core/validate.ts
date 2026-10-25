@@ -20,7 +20,15 @@ export type ErrorCode =
   | 'E_CYCLE'
   | 'E_GATE_ARITY'
   | 'E_VOTE_RANGE'
-  | 'E_VOTE_DUP';
+  | 'E_VOTE_DUP'
+  | 'E_CCF_ASSUMPTION'
+  | 'E_CCF_UNKNOWN_MEMBER'
+  | 'E_CCF_OVERLAP'
+  | 'E_CCF_TOO_SMALL'
+  | 'E_CCF_TOO_LARGE'
+  | 'E_CCF_BETA_RANGE'
+  | 'E_CCF_UNEQUAL_Q'
+  | 'E_CCF_NOT_ANALYSED';
 export type WarningCode = 'W_UNREACHABLE' | 'W_UNKNOWN_FIELD' | 'W_LAYOUT_STALE';
 export type Code = ErrorCode | WarningCode;
 
@@ -67,7 +75,10 @@ function mapAjvError(e: ErrorObject): Issue | null {
   if (/^\/events\/\d+\/probability$/.test(path)) {
     return issue('E_PROB_RANGE', path, `probability ${detail}`);
   }
-  if (/^\/(events|gates)\/\d+\/id$/.test(path) && e.keyword === 'pattern') {
+  if (/^\/common_cause_groups\/\d+\/beta$/.test(path)) {
+    return issue('E_CCF_BETA_RANGE', path, `beta ${detail}`);
+  }
+  if (/^\/(events|gates|common_cause_groups)\/\d+\/id$/.test(path) && e.keyword === 'pattern') {
     return issue('E_ID_FORMAT', path, `id does not match the identifier pattern`);
   }
   const where = missing ? `${path}/${missing}` : path;
@@ -75,7 +86,7 @@ function mapAjvError(e: ErrorObject): Issue | null {
 }
 
 const KNOWN: Record<string, string[]> = {
-  '': ['schema', 'model', 'assumptions', 'top', 'events', 'gates', 'layout'],
+  '': ['schema', 'model', 'assumptions', 'top', 'events', 'gates', 'common_cause_groups', 'layout'],
   schema: ['id', 'version'],
   model: ['id', 'name', 'created', 'updated'],
   assumptions: ['probability_model', 'independence', 'coherence', 'time'],
@@ -83,6 +94,7 @@ const KNOWN: Record<string, string[]> = {
   source: ['kind', 'citation'],
   link: ['app', 'component_id', 'revision', 'review'],
   gate: ['id', 'name', 'type', 'inputs', 'threshold'],
+  group: ['id', 'name', 'method', 'members', 'beta'],
   layout: ['nodes', 'references'],
   layoutNode: ['id', 'x', 'y'],
   layoutRef: ['node', 'target', 'x', 'y'],
@@ -112,6 +124,7 @@ function unknownFields(doc: Record<string, unknown>, out: Issue[]): void {
     }
   });
   eachIn(doc.gates, 'gate', '/gates');
+  eachIn(doc.common_cause_groups, 'group', '/common_cause_groups');
   if (isObj(doc.layout)) {
     scan(doc.layout, 'layout', '/layout');
     eachIn(doc.layout.nodes, 'layoutNode', '/layout/nodes');
@@ -125,6 +138,66 @@ interface Gate {
   type: unknown;
   inputs: string[];
   threshold: unknown;
+}
+
+/** Common-cause groups (plan 15). A group is a visible object: its members are basic events with one shared probability, and the model's assumptions say groups are in use. */
+const CCF_MIN = 2;
+const CCF_MAX = 8;
+function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'event' | 'gate'>, errors: Issue[]): void {
+  const groups = Array.isArray(doc.common_cause_groups) ? doc.common_cause_groups : [];
+  const independence = isObj(doc.assumptions) ? doc.assumptions.independence : undefined;
+  if (groups.length > 0 && independence !== 'beta-factor-groups') {
+    errors.push(issue('E_CCF_ASSUMPTION', '/assumptions/independence', 'the model has common-cause groups, so "independence" must be "beta-factor-groups"'));
+  } else if (groups.length === 0 && independence === 'beta-factor-groups') {
+    errors.push(issue('E_CCF_ASSUMPTION', '/assumptions/independence', '"independence" is "beta-factor-groups" but the model has no common-cause group'));
+  }
+  const probability = new Map<string, number>();
+  if (Array.isArray(doc.events)) {
+    for (const ev of doc.events) if (isObj(ev) && typeof ev.id === 'string' && typeof ev.probability === 'number') probability.set(ev.id, ev.probability);
+  }
+  const groupIds = new Set<string>();
+  const memberOf = new Map<string, string>();
+  groups.forEach((g, i) => {
+    if (!isObj(g) || typeof g.id !== 'string') return;
+    const gid = g.id;
+    const path = `/common_cause_groups/${i}`;
+    if (groupIds.has(gid) || kinds.has(gid)) {
+      errors.push(issue('E_DUP_ID', `${path}/id`, groupIds.has(gid) ? `two groups share the id ${q(gid)}` : `a group and an ${kinds.get(gid)} share the id ${q(gid)}`, [gid]));
+    }
+    groupIds.add(gid);
+    const members = Array.isArray(g.members) ? g.members.filter((m): m is string => typeof m === 'string') : [];
+    if (members.length < CCF_MIN) errors.push(issue('E_CCF_TOO_SMALL', `${path}/members`, `group ${q(gid)} has ${members.length} member(s); at least ${CCF_MIN} are required`, [gid]));
+    if (members.length > CCF_MAX) errors.push(issue('E_CCF_TOO_LARGE', `${path}/members`, `group ${q(gid)} has ${members.length} members; at most ${CCF_MAX} are allowed`, [gid]));
+    const inThis = new Set<string>();
+    members.forEach((m, j) => {
+      const at = `${path}/members/${j}`;
+      if (kinds.get(m) !== 'event') {
+        errors.push(issue('E_CCF_UNKNOWN_MEMBER', at, kinds.has(m) ? `member ${q(m)} of group ${q(gid)} is a gate; a member must be a basic event` : `member ${q(m)} of group ${q(gid)} is not an event of the model`, [gid, m]));
+        return;
+      }
+      const other = memberOf.get(m);
+      if (inThis.has(m) || other !== undefined) {
+        errors.push(issue('E_CCF_OVERLAP', at, inThis.has(m) ? `event ${q(m)} is listed twice in group ${q(gid)}` : `event ${q(m)} is in groups ${q(other)} and ${q(gid)}; an event can be in one group only`, [gid, m]));
+        return;
+      }
+      inThis.add(m);
+      memberOf.set(m, gid);
+    });
+    const known = [...inThis];
+    const first = known.length ? probability.get(known[0]!) : undefined;
+    if (first !== undefined && known.some((m) => probability.get(m) !== first)) {
+      errors.push(issue('E_CCF_UNEQUAL_Q', `${path}/members`, `the members of group ${q(gid)} must have one probability (the beta-factor model has one total probability per group)`, [gid, ...known]));
+    }
+  });
+}
+
+/**
+ * Until the engines expand common-cause groups (plan 15, stage C2), an analysis must not run on a model that has them:
+ * an engine that ignores a group would give the independent answer without a word. Every analysis entry point asks this first.
+ */
+export function unanalysedGroups(doc: unknown): Issue | null {
+  if (!isObj(doc) || !Array.isArray(doc.common_cause_groups) || doc.common_cause_groups.length === 0) return null;
+  return issue('E_CCF_NOT_ANALYSED', '/common_cause_groups', 'this model has common-cause groups, and analysis of groups is not built yet; no result is made, so the groups are never silently ignored');
 }
 
 function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings: Issue[]): void {
@@ -182,6 +255,8 @@ function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings:
       }
     }
   }
+
+  commonCauseChecks(doc, kinds, errors);
 
   // cycles among gates (iterative three-colour DFS; first definition of an id wins)
   const color = new Map<string, 0 | 1 | 2>();

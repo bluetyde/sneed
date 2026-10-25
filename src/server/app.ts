@@ -14,7 +14,7 @@ import { IMPORTANCE_ASSUMPTIONS, importanceFailureText, type ImportanceResponse 
 import { crossCheck, type CrossCheck, type CrossCheckUnavailable } from '../engines/crosscheck.js';
 import { documentHash, modelHash } from '../core/canonical.js';
 import type { Method, NativeModel } from '../core/model.js';
-import { validateModelText } from '../core/validate.js';
+import { unanalysedGroups, validateModelText } from '../core/validate.js';
 import { RuntimeNotInstalledError, defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import type { RuntimeEnv } from '../runtime/install.js';
 import { importOpenPsa } from '../core/import.js';
@@ -632,6 +632,8 @@ export async function startServer(opts: ServerOptions, port = 0, host = '127.0.0
       const requestId = optRequestId(body.request_id);
       const validation = validateModelText(text);
       if (!validation.valid) return send(res, 200, { kind: 'refused', errors: validation.errors } satisfies ImportanceResponse);
+      const groups = unanalysedGroups(JSON.parse(text));
+      if (groups) return send(res, 200, { kind: 'refused', errors: [groups] } satisfies ImportanceResponse);
       const model = JSON.parse(text) as NativeModel;
       const job = await takeTurn(res, requestId);
       if (!job) return;

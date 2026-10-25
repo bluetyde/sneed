@@ -20,6 +20,7 @@ interface Doc {
   top: string;
   events: { id: string; probability: number }[];
   gates: { id: string; type: string; inputs: string[]; threshold?: number }[];
+  common_cause_groups?: { id: string; method: string; members: string[]; beta: number }[];
 }
 
 /** Semantic projection hashed as model_hash. Callers validate first; duplicates are refused here too. */
@@ -36,7 +37,15 @@ export function projection(doc: Doc): unknown {
     if (g.threshold !== undefined) entry.threshold = g.threshold;
     gates[g.id] = entry;
   }
-  return { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
+  const out: Record<string, unknown> = { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
+  // common-cause groups (plan 15): present only when the list is not empty, so a model without groups keeps its hash
+  const groups: Record<string, unknown> = {};
+  for (const g of doc.common_cause_groups ?? []) {
+    if (Object.hasOwn(groups, g.id) || Object.hasOwn(events, g.id) || Object.hasOwn(gates, g.id)) throw new Error('E_DUP_ID group ' + g.id);
+    groups[g.id] = { method: g.method, members: [...g.members].sort(), beta: g.beta };
+  }
+  if (Object.keys(groups).length) out.common_cause_groups = groups;
+  return out;
 }
 
 export const modelHash = (doc: Doc): string => createHash('sha256').update(canon(projection(doc)), 'utf8').digest('hex');

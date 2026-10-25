@@ -10,12 +10,25 @@ A UTF-8 JSON document. `events` and `gates` are **arrays of objects with an `id`
 |---|---|---|---|
 | `schema` | `{id, version}` | yes | `id` is `"sneed.fault-tree"`; `version` is an integer, 1 here |
 | `model` | `{id, name, created, updated}` | yes | Metadata only. Excluded from `model_hash`. `created`/`updated` are ISO 8601 strings |
-| `assumptions` | object | yes | V1 values only: `probability_model: "constant"`, `independence: "declared-independent"`, `coherence: "coherent"`, `time: "none"`. Any other value is refused in V1 (`E_SCHEMA`) |
+| `assumptions` | object | yes | `probability_model: "constant"`, `independence: "declared-independent"` or, for a model with common-cause groups, `"beta-factor-groups"` (`E_CCF_ASSUMPTION` when the value and the groups disagree), `coherence: "coherent"`, `time: "none"`. Any other value is refused (`E_SCHEMA`) |
 | `top` | string | yes | ID of an existing event or gate |
 | `events` | array of event | yes | At least one |
 | `gates` | array of gate | yes | May be empty (a basic-event top needs no gate) |
+| `common_cause_groups` | array of group | no | Beta-factor groups ([plan 15](plans/15-common-cause.md)). Part of `model_hash` only when the list is not empty, so a model without groups keeps its hash |
 | `layout` | object | no | Positions and visual references; excluded from `model_hash` |
 | any other field | any | no | Preserved on save, never interpreted (`W_UNKNOWN_FIELD`) |
+
+### Common-cause group (plan 15, stage C1, 2026-10-25)
+
+| Field | Type | Required | Rule |
+|---|---|---|---|
+| `id` | string | yes | Identifier pattern. Not the id of an event, a gate or another group (`E_DUP_ID`) |
+| `name` | string | no | Display text, 1 to 200 characters. Excluded from `model_hash` |
+| `method` | string | yes | `"beta-factor"` only (`E_SCHEMA` for any other value) |
+| `members` | array of string | yes | 2 to 8 basic events (`E_CCF_TOO_SMALL`, `E_CCF_TOO_LARGE`). Each exists and is an event (`E_CCF_UNKNOWN_MEMBER`), in one group only and once (`E_CCF_OVERLAP`), with one probability for all members (`E_CCF_UNEQUAL_Q`). Order is not semantic |
+| `beta` | number | yes | In [0, 1]. A string, a boolean or a number outside the range is `E_CCF_BETA_RANGE`. A missing `beta` is `E_SCHEMA` |
+
+`model_hash` adds `common_cause_groups`, an object keyed by group id of `{method, members (sorted), beta}`. The group `name` and unknown fields are left out. **Analysis of groups is not built yet** (stage C2): until then the validator accepts a model with groups, every analysis and the Open-PSA export refuse it with `E_CCF_NOT_ANALYSED`, and nothing is computed, so a group is never silently ignored.
 
 ### Event
 
@@ -62,6 +75,13 @@ Each code gets one failing fixture (item 6). "Level" says where it is raised.
 | `E_GATE_ARITY` | validator | `and`/`or` with fewer than two input references before deduplication |
 | `E_VOTE_RANGE` | validator | `atleast` threshold missing, non-integer, below 2, or not below the input count |
 | `E_VOTE_DUP` | validator | `atleast` gate with a duplicate input |
+| `E_CCF_ASSUMPTION` | validator | Groups present and `independence` is not `beta-factor-groups`, or the reverse |
+| `E_CCF_UNKNOWN_MEMBER` | validator | A group member is not an event of the model (a gate, or no id) |
+| `E_CCF_OVERLAP` | validator | An event is in two groups, or twice in one |
+| `E_CCF_TOO_SMALL` / `E_CCF_TOO_LARGE` | validator | A group has fewer than 2 or more than 8 members |
+| `E_CCF_BETA_RANGE` | schema | `beta` is not a number in [0, 1] |
+| `E_CCF_UNEQUAL_Q` | validator | The members of one group have different probabilities |
+| `E_CCF_NOT_ANALYSED` | analysis | The model has groups and the engines do not expand them yet; no result is made. Removed at stage C2 |
 | `E_UNSUPPORTED` | import | An imported construct outside the subset in [OPEN-PSA-SUBSET.md](OPEN-PSA-SUBSET.md); names the construct and line; original file kept byte for byte |
 | `E_EXPORT_LIMIT` | analysis | A voting gate would expand to more than 2000 terms when written for the engine; refused before any run, no run directory is created ([OPEN-PSA-SUBSET.md](OPEN-PSA-SUBSET.md)) |
 | `W_UNREACHABLE` | validator | A gate or event not reachable from the top; kept, not analysed |

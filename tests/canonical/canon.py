@@ -75,13 +75,20 @@ def projection(doc):
         if "threshold" in g:
             entry["threshold"] = g["threshold"]
         gates[gid] = entry
-    return {
+    out = {
         "schema": {"id": doc["schema"]["id"], "version": doc["schema"]["version"]},
         "assumptions": doc["assumptions"],
         "top": doc["top"],
         "events": {eid: e["probability"] for eid, e in events_by_id.items()},
         "gates": gates,
     }
+    # common-cause groups (plan 15): present only when the list is not empty, so a model without groups keeps its hash
+    groups_by_id = _by_id(doc.get("common_cause_groups", []), "group")
+    if set(groups_by_id) & (set(events_by_id) | set(gates_by_id)):
+        raise ValueError("E_DUP_ID group/event namespace clash")
+    if groups_by_id:
+        out["common_cause_groups"] = {gid: {"method": g["method"], "members": sorted(g["members"]), "beta": g["beta"]} for gid, g in groups_by_id.items()}
+    return out
 
 
 def model_hash(doc):
