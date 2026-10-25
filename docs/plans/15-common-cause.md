@@ -1,6 +1,6 @@
 # Plan 15: Common-cause failure groups (plan 07, step 3): semantics, written before any code
 
-**Status 2026-10-25: PROPOSED. No code exists. The owner has to decide the questions in section 8 first.** This plan follows [plan 07](07-extensions.md), which says each extension needs a stated model, its assumptions, its data source and independent reference cases before it ships. It also says the rule "nothing starts until P3 is verified". P3 is not verified yet (the instructor read and the screen-reader pass are open), so this plan stays on paper until the owner says otherwise.
+**Status 2026-10-25: DECIDED (the owner approved all five recommendations in section 8). Stage C0 is done: oracles CC1 to CC6 are frozen in `tests/oracles-common-cause.json`. No engine code exists yet.** This plan follows [plan 07](07-extensions.md), which says each extension needs a stated model, its assumptions, its data source and independent reference cases before it ships. The owner chose to start before P3 is verified (question Q4), which plan 07 does not otherwise allow.
 
 ## 1. What this is, and what it is not
 
@@ -47,6 +47,8 @@ The expansion is deterministic, so the same model gives the same run. It adds `n
 
 ## 5. Reference cases (oracles), worked by hand before any code
 
+**Frozen 2026-10-25** in `tests/oracles-common-cause.json`, a file of its own. It is kept apart from `tests/oracles.json` because many suites run every entry of that file through the engines, and the engines have no group support yet. `tests/unit/oracle-common-cause.test.ts` recomputes each value in exact rational arithmetic from the group definition (not from the closed forms) and checks the zero check, the closed forms and the cut-set names. Two deliberate breaks (a frozen value off by 1e-6, and a wrong rule in the evaluator) make it fail. The engines are checked against the same file at stage C2. For the cases with `beta` = 0 or 1 the cut sets are not frozen.
+
 All values use `Q = 0.1` and `beta = 0.1`. So `P(I) = 0.09` and `P(C) = 0.01`. These are the values to freeze in `tests/oracles.json` first. They must also agree with the brute-force enumeration oracle on the expanded model.
 
 | Case | Logic | Hand result | How |
@@ -82,7 +84,7 @@ CC7 needs a chosen tree and a hand value. I will not freeze a number for it unti
 4. **Stage C3.** Export to Open-PSA (the expansion is written out) and the headless verbs. Import of groups stays out: the Open-PSA subset grows only with a documented change.
 5. **Stage C4.** Editor, result panel, one lesson.
 
-## 8. Questions for the owner
+## 8. Questions for the owner (all five approved as recommended, 2026-10-25)
 
 - **Q1. Which model?** Recommended: beta-factor only. It has one parameter, a hand-checkable closed form and the clear zero check. Alpha-factor and MGL need more data and give partial events. They can follow as a later step.
 - **Q2. One `Q` per group (`E_CCF_UNEQUAL_Q`), or let members differ?** Recommended: one `Q`. The beta-factor model is defined that way.
