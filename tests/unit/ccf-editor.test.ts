@@ -250,7 +250,10 @@ describe('the editor with common-cause groups', () => {
     expect(ed.groupLabel('CC1')).toBe('CC1');
     ed.setGroupName('CC1', 'Pumps');
     expect(ed.groupLabel('CC1')).toBe('Pumps');
+    ed.selectGroup('CC1');
+    expect(ed.selectedGroup).toBe('CC1');
     ed.select('E3');
+    expect(ed.selected).toBe('E3');
     expect(ed.selectedGroup).toBeNull(); // choosing a node leaves the group
     ed.selectGroup('CC1');
     expect(ed.selected).toBeNull();
@@ -278,6 +281,8 @@ describe('the editor with common-cause groups', () => {
     ed.setBeta('CC1', 2);
     await ed.revalidate();
     expect(ed.problems.map((p) => p.code)).toContain('E_CCF_BETA_RANGE');
+    ed.select('E1'); // not the group, so the click on the problem has something to do
+    expect(ed.selectedGroup).toBeNull();
     ed.selectIssue(ed.problems.find((p) => p.code === 'E_CCF_BETA_RANGE')!);
     expect(ed.selectedGroup).toBe('CC1'); // a problem that names a group selects it
   });

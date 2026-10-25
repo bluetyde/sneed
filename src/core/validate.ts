@@ -343,7 +343,14 @@ export function validateModel(doc: unknown): ValidationResult {
   if (!checkSchema(doc)) {
     for (const e of checkSchema.errors ?? []) {
       const m = mapAjvError(e);
-      if (m) errors.push(m);
+      if (!m) continue;
+      // a beta out of range names its group, so the editor can select it (the schema error knows only the position)
+      const at = /^\/common_cause_groups\/(\d+)\/beta$/.exec(m.path);
+      const listed = (doc as Record<string, unknown>)['common_cause_groups'];
+      const entry = at && Array.isArray(listed) ? (listed as unknown[])[Number(at[1])] : undefined;
+      const gid = isObj(entry) ? entry.id : undefined;
+      if (m.code === 'E_CCF_BETA_RANGE' && typeof gid === 'string') m.ids = [gid];
+      errors.push(m);
     }
   }
   semanticChecks(doc, errors, warnings);
