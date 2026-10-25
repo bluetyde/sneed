@@ -9,7 +9,7 @@ import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
 import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
-import { expandGroups } from '../../core/ccf.js';
+import { commonCauseRecord, expandGroups } from '../../core/ccf.js';
 import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
@@ -98,7 +98,7 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
     const final: ResultRecord = {
       ...record,
       exporter_version: 'none (the built-in engine reads the native model)',
-      ...(groups.length ? { common_cause: { method: 'beta-factor', groups: groups.map((g) => ({ id: g.id, members: [...g.members], beta: g.beta })), note: 'A result under common-cause groups is a different kind of result from one with independent events.' } } : {}),
+      ...(groups.length ? commonCauseRecord(original) : {}),
     };
     writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, engine: { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION }, ...extra }, null, 2) + '\n');
     writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(final, null, 2) + '\n');

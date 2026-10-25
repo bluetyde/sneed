@@ -10,7 +10,8 @@ import { defaultRuntimeEnv, resolveEngine } from '../runtime/resolve.js';
 import { ExportError, exportOpenPsa, type VotingMode } from './export.js';
 import type { Method, NativeModel, Settings } from './model.js';
 import { assess, AssessAborted, MAX_REPORT_BYTES, type EngineIdentity, type ResultRecord } from './result.js';
-import { unanalysedGroups, validateModelText, type Issue } from './validate.js';
+import { validateModelText, type Issue } from './validate.js';
+import { commonCauseRecord, expandGroups } from './ccf.js';
 
 export interface AnalyzeOptions {
   /** Directory that holds one sub-directory per run (runs/<id>/{inputs,native,log,results.json}). */
@@ -66,10 +67,10 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   const deadline = now() + (opts.timeoutMs ?? 60000);
   const validation = validateModelText(documentText);
   if (!validation.valid) return { kind: 'refused', errors: validation.errors, warnings: validation.warnings };
-  const groups = unanalysedGroups(JSON.parse(documentText));
-  if (groups) return { kind: 'refused', errors: [groups], warnings: validation.warnings };
 
-  const model = JSON.parse(documentText) as NativeModel;
+  // common-cause groups (plan 15) are expanded into ordinary events and gates, and the expansion is what is written for the engine
+  const original = JSON.parse(documentText) as NativeModel;
+  const model = expandGroups(original);
   const events = reachableEvents(model);
   const settings: Settings = { method: 'exact', limitOrder: Math.max(1, events.length), ...opts.settings };
   if (!Number.isInteger(settings.limitOrder) || settings.limitOrder < 1) throw new RangeError('limitOrder must be an integer >= 1');
@@ -83,7 +84,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     throw e;
   }
   const xml = opts.transformXml ? opts.transformXml(exported.xml) : exported.xml;
-  const hashes = { model_hash: modelHash(model), document_hash: documentHash(Buffer.from(documentText, 'utf8')), exported_input_hash: sha256(xml) };
+  const hashes = { model_hash: modelHash(original), document_hash: documentHash(Buffer.from(documentText, 'utf8')), exported_input_hash: sha256(xml) };
 
   // no explicit engine: the installed runtime, or a typed E_SETUP_REQUIRED error; never an unmanaged binary
   const engineCfg = opts.engine ?? resolveEngine(defaultRuntimeEnv());
@@ -103,8 +104,9 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   writeAtomic(path.join(runDir, 'inputs', 'settings.json'), JSON.stringify({ settings, argv: argv.map(scrub), export_mapping: exported.mapping }, null, 2) + '\n');
 
   const finish = (record: ResultRecord): AnalyzeOutcome => {
-    writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(record, null, 2) + '\n');
-    return { kind: 'ran', runDir, record };
+    const final: ResultRecord = { ...record, ...commonCauseRecord(original) };
+    writeAtomic(path.join(runDir, 'results.json'), JSON.stringify(final, null, 2) + '\n');
+    return { kind: 'ran', runDir, record: final };
   };
   // the checks on a large report poll this and stop
   const check = (): void => {
@@ -112,7 +114,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
     if (now() > deadline) throw new AssessAborted('timeout');
   };
   const assessWith = (engine: EngineIdentity, outcome: Parameters<typeof assess>[0]['outcome'], reportText: string | null): AnalyzeOutcome =>
-    finish(assess({ model, settings, engine, expectedVersion: engineCfg.expectedVersion, outcome, reportText, hashes, exportedEvents: exported.mapping.events, check }));
+    finish(assess({ model, settings, engine, expectedVersion: engineCfg.expectedVersion, outcome, reportText, hashes, exportedEvents: exported.mapping.events, ...(exported.mapping.renamed ? { renameEvents: exported.mapping.renamed } : {}), check }));
 
   let identity: EngineIdentity;
   try {
@@ -124,7 +126,7 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   }
   if (engineCfg.expectedSha256 && identity.sha256 !== engineCfg.expectedSha256) {
     // refuse to run an engine that is not the pinned build; keep the reason in the record
-    const rec = assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: 0, timedOut: false, cancelled: false, stderr: '' }, reportText: null, hashes, exportedEvents: exported.mapping.events });
+    const rec = assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: 0, timedOut: false, cancelled: false, stderr: '' }, reportText: null, hashes, exportedEvents: exported.mapping.events, ...(exported.mapping.renamed ? { renameEvents: exported.mapping.renamed } : {}) });
     return finish({ ...rec, reasons: ['engine-build-mismatch'] });
   }
 
@@ -138,5 +140,5 @@ export async function analyze(documentText: string, opts: AnalyzeOptions): Promi
   writeFileSync(path.join(runDir, 'log', 'stderr.txt'), scrub(result.stderr), 'utf8');
   const reportTooLarge = existsSync(reportPath) && statSync(reportPath).size > MAX_REPORT_BYTES; // never read into memory
   const reportText = existsSync(reportPath) && !reportTooLarge ? readFileSync(reportPath, 'utf8') : null;
-  return finish(assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: result.exit, timedOut: result.timedOut, cancelled: result.cancelled, stderr: result.stderr }, reportText, reportTooLarge, hashes, exportedEvents: exported.mapping.events, check }));
+  return finish(assess({ model, settings, engine: identity, expectedVersion: engineCfg.expectedVersion, outcome: { exit: result.exit, timedOut: result.timedOut, cancelled: result.cancelled, stderr: result.stderr }, reportText, reportTooLarge, hashes, exportedEvents: exported.mapping.events, ...(exported.mapping.renamed ? { renameEvents: exported.mapping.renamed } : {}), check }));
 }

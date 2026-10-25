@@ -1,3 +1,4 @@
+import { expandGroups } from './ccf.js';
 import type { NativeModel } from './model.js';
 
 export const EXPORTER_VERSION = 'sneed-export-1';
@@ -14,7 +15,7 @@ export const MAX_VOTE_TERMS = 2000;
 
 export class ExportError extends Error {
   constructor(
-    readonly code: 'E_EXPORT_LIMIT' | 'E_CCF_NOT_ANALYSED',
+    readonly code: 'E_EXPORT_LIMIT',
     message: string,
     readonly ids: string[],
   ) {
@@ -40,6 +41,11 @@ export interface ExportMapping {
   events: string[];
   /** The id the exported top gate carries (the wrapper's name when a wrapper was needed). */
   top: string;
+  /**
+   * Only for a model with common-cause groups: the event names written to the XML -> the names the model uses. SCRAM refuses a dot in a name
+   * (docs/spike/README.md), so `G.CCF` is written as `G__CCF`. Absent when no name was changed.
+   */
+  renamed?: Record<string, string>;
 }
 
 export interface Exported {
@@ -61,6 +67,29 @@ export function xmlFloat(p: number): string {
   return padded.slice(0, padded.length - s) + '.' + padded.slice(padded.length - s);
 }
 
+/**
+ * The events the expansion of a group adds have a dot in their name (`G.CCF`, `A.independent`), and a valid id never has one.
+ * SCRAM reads a dot as the Open-PSA path separator, so the XML gets `G__CCF` instead. A name that is already taken gets a number.
+ * Returns the model to write and the names to translate back (written name -> model name).
+ */
+function safeNames(model: NativeModel): { model: NativeModel; renamed: Record<string, string> } {
+  const dotted = model.events.filter((e) => e.id.includes('.'));
+  if (dotted.length === 0) return { model, renamed: {} };
+  const taken = new Set<string>([...model.events.map((e) => e.id), ...model.gates.map((g) => g.id)]);
+  const to = new Map<string, string>();
+  const renamed: Record<string, string> = {};
+  for (const e of dotted) {
+    const base = e.id.replaceAll('.', '__');
+    let name = base;
+    for (let i = 1; taken.has(name); i++) name = `${base}_${i}`;
+    taken.add(name);
+    to.set(e.id, name);
+    renamed[name] = e.id;
+  }
+  const nm = (id: string): string => to.get(id) ?? id;
+  return { model: { ...model, events: model.events.map((e) => ({ ...e, id: nm(e.id) })), gates: model.gates.map((g) => ({ ...g, inputs: g.inputs.map(nm) })) }, renamed };
+}
+
 type Formula = { ref: string } | { op: 'and' | 'or'; args: Formula[] } | { op: 'atleast'; min: number; args: Formula[] };
 
 /**
@@ -68,8 +97,10 @@ type Formula = { ref: string } | { op: 'and' | 'or'; args: Formula[] } | { op: '
  * Identity is preserved: a repeated event is never copied, duplicate inputs collapse, and anything
  * SCRAM cannot express directly (duplicate inputs on a voting gate) is rewritten to equivalent AND/OR logic.
  */
-export function exportOpenPsa(model: NativeModel, options: ExportOptions = {}): Exported {
-  if (model.common_cause_groups?.length) throw new ExportError('E_CCF_NOT_ANALYSED', 'the model has common-cause groups, and the export of groups is not built yet (stage C3); a file without them would be a different model', model.common_cause_groups.map((g) => g.id));
+export function exportOpenPsa(input: NativeModel, options: ExportOptions = {}): Exported {
+  // common-cause groups are written as their expansion (plan 15, section 4); a name with a dot is written with a name SCRAM accepts
+  const { model: exportable, renamed } = safeNames(expandGroups(input));
+  const model = exportable;
   const voting: VotingMode = options.voting ?? 'auto';
   const gateById = new Map(model.gates.map((g) => [g.id, g]));
 
@@ -191,6 +222,7 @@ export function exportOpenPsa(model: NativeModel, options: ExportOptions = {}): 
       gates: [...emittedGates].sort(),
       events: [...emittedEvents].sort(),
       top: wrapperGate ?? topResolved,
+      ...(Object.keys(renamed).length ? { renamed } : {}),
     },
   };
 }

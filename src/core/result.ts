@@ -74,6 +74,12 @@ export interface AssessInput {
    * The checks are CPU-bound and cannot be interrupted from outside, so they poll.
    */
   check?: () => void;
+  /**
+   * Event names the engine reports -> the names the model uses (common-cause groups: SCRAM cannot take a dot in a name, so the exporter wrote
+   * `G__CCF` for `G.CCF`). Applied to the cut sets as soon as the report is read, so every check and the record see the model's names.
+   * `exportedEvents` stays the names written to the XML.
+   */
+  renameEvents?: Record<string, string>;
   /** The caller found the report file larger than MAX_REPORT_BYTES and did not read it. */
   reportTooLarge?: boolean;
   /**
@@ -229,6 +235,10 @@ export function assess(input: AssessInput): ResultRecord {
     }
   }
 
+  const rename = input.renameEvents;
+  const back = (e: string): string => rename?.[e] ?? e;
+  if (rename && !input.parsed) report = { ...report, products: report.products.map((x) => ({ ...x, events: x.events.map(back) })) };
+
   const reasons: string[] = [];
   if (report.software.name !== (input.expectedName ?? 'SCRAM') || report.software.version !== input.expectedVersion) reasons.push('engine-version-mismatch');
   if (report.approximation !== APPROXIMATION[settings.method]) reasons.push('method-mismatch');
@@ -238,7 +248,7 @@ export function assess(input: AssessInput): ResultRecord {
   if (adjusted && settings.method === 'exact' && !close(report.probability, 1)) reasons.push('probability-adjusted-by-engine');
 
   if (report.products.length > MAX_CUT_SETS) return { ...fail('too-many-cut-sets'), warnings: report.warning ? [report.warning] : [] };
-  const known = new Set(input.exportedEvents);
+  const known = new Set(input.exportedEvents.map(back));
   const p = new Map(model.events.map((e) => [e.id, e.probability]));
   const keys = new Set<string>();
   const check = input.check ?? ((): void => undefined);

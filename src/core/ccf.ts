@@ -10,6 +10,19 @@ export const groupEventId = (groupId: string): string => groupId + CCF_SUFFIX;
 /** The id of the part of member `memberId` that fails alone. */
 export const independentPartId = (memberId: string): string => memberId + INDEPENDENT_SUFFIX;
 
+/** The `common_cause` block of a result record (plan 15): which groups were used. Absent when the model has none. */
+export function commonCauseRecord(model: NativeModel): { common_cause: { method: 'beta-factor'; groups: { id: string; members: string[]; beta: number }[]; note: string } } | Record<string, never> {
+  const groups = model.common_cause_groups ?? [];
+  if (groups.length === 0) return {};
+  return {
+    common_cause: {
+      method: 'beta-factor',
+      groups: groups.map((g) => ({ id: g.id, members: [...g.members], beta: g.beta })),
+      note: 'A result under common-cause groups is a different kind of result from one with independent events.',
+    },
+  };
+}
+
 /** 15 significant digits, so that (1 - 0.1) * 0.1 is 0.09 and not 0.09000000000000001. Far below any tolerance of an oracle. */
 const tidy = (x: number): number => Number(x.toPrecision(15));
 

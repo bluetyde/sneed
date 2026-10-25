@@ -28,7 +28,7 @@ A UTF-8 JSON document. `events` and `gates` are **arrays of objects with an `id`
 | `members` | array of string | yes | 2 to 8 basic events (`E_CCF_TOO_SMALL`, `E_CCF_TOO_LARGE`). Each exists and is an event (`E_CCF_UNKNOWN_MEMBER`), in one group only and once (`E_CCF_OVERLAP`), with one probability for all members (`E_CCF_UNEQUAL_Q`). Order is not semantic |
 | `beta` | number | yes | In [0, 1]. A string, a boolean or a number outside the range is `E_CCF_BETA_RANGE`. A missing `beta` is `E_SCHEMA` |
 
-`model_hash` adds `common_cause_groups`, an object keyed by group id of `{method, members (sorted), beta}`. The group `name` and unknown fields are left out. **Analysis (stage C2, 2026-10-25):** only the built-in fault-tree analysis handles groups. It expands each group (see [plan 15](plans/15-common-cause.md), section 4) and its result record carries `common_cause {method, groups, note}`. The SCRAM path, the Open-PSA export, event trees and importance measures refuse a model with groups with `E_CCF_NOT_ANALYSED` and compute nothing, so a group is never silently ignored.
+`model_hash` adds `common_cause_groups`, an object keyed by group id of `{method, members (sorted), beta}`. The group `name` and unknown fields are left out. **Analysis (stages C2 and C3, 2026-10-25):** the built-in fault-tree analysis and the SCRAM path (through the Open-PSA export, which writes the expansion: [OPEN-PSA-SUBSET.md](OPEN-PSA-SUBSET.md), rule 8) handle groups. Each expands every group (see [plan 15](plans/15-common-cause.md), section 4), and the result record carries `common_cause {method, groups, note}`. Event trees and importance measures refuse a model with groups with `E_CCF_NOT_ANALYSED` and compute nothing, so a group is never silently ignored.
 
 ### Event
 
@@ -81,7 +81,7 @@ Each code gets one failing fixture (item 6). "Level" says where it is raised.
 | `E_CCF_TOO_SMALL` / `E_CCF_TOO_LARGE` | validator | A group has fewer than 2 or more than 8 members |
 | `E_CCF_BETA_RANGE` | schema | `beta` is not a number in [0, 1] |
 | `E_CCF_UNEQUAL_Q` | validator | The members of one group have different probabilities |
-| `E_CCF_NOT_ANALYSED` | analysis | The model has groups and this analysis does not handle them yet (SCRAM path, export, event trees, importance); no result is made. The built-in fault-tree analysis handles groups |
+| `E_CCF_NOT_ANALYSED` | analysis | The model has groups and this analysis does not handle them yet (event trees, importance measures); no result is made. The fault-tree analyses (built-in and SCRAM) handle groups |
 | `E_UNSUPPORTED` | import | An imported construct outside the subset in [OPEN-PSA-SUBSET.md](OPEN-PSA-SUBSET.md); names the construct and line; original file kept byte for byte |
 | `E_EXPORT_LIMIT` | analysis | A voting gate would expand to more than 2000 terms when written for the engine; refused before any run, no run directory is created ([OPEN-PSA-SUBSET.md](OPEN-PSA-SUBSET.md)) |
 | `W_UNREACHABLE` | validator | A gate or event not reachable from the top; kept, not analysed |

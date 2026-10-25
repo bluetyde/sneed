@@ -6,7 +6,7 @@
 import { validateModel } from '../../src/core/validate.js';
 import { topOccurs, MAX_EVENTS, type NativeDoc } from './enumerate.js';
 import { Q, parseDecimal } from './rational.js';
-import { mkDoc, rng, randomDoc, type Doc } from './models.js';
+import { AND, OR, VOTE, mkDoc, rng, randomDoc, type Doc } from './models.js';
 
 export interface GroupDef {
   id: string;
@@ -127,4 +127,23 @@ export function randomGroupDoc(seed: number): GroupDoc & Doc {
   });
   const doc = mkDoc(base.top, Object.fromEntries(fixed.map((e) => [e.id, e.probability])), base.gates);
   return { ...doc, assumptions: { ...(doc.assumptions as Record<string, unknown>), independence: 'beta-factor-groups' }, common_cause_groups: groups } as GroupDoc & Doc;
+}
+
+/** One entry of tests/oracles-common-cause.json. */
+export interface FrozenCase {
+  id: string;
+  group: GroupDef & { q: number };
+  logic: { kind: 'and' | 'or' | 'atleast'; k?: number };
+  expected_probability: number;
+  expected_cut_sets: string[][] | null;
+  independent_value: number;
+  tolerance: { absolute: number };
+}
+
+/** The frozen case as a native model: the members are events of one probability, the top is the stated gate over them. */
+export function frozenCaseDoc(e: FrozenCase): GroupDoc {
+  const events = Object.fromEntries(e.group.members.map((m) => [m, e.group.q]));
+  const gate = e.logic.kind === 'and' ? AND('TOP', e.group.members) : e.logic.kind === 'or' ? OR('TOP', e.group.members) : VOTE('TOP', e.group.members, e.logic.k!);
+  const doc = mkDoc('TOP', events, [gate]);
+  return { ...doc, assumptions: { ...(doc.assumptions as Record<string, unknown>), independence: 'beta-factor-groups' }, common_cause_groups: [{ id: e.group.id, method: 'beta-factor', members: e.group.members, beta: e.group.beta }] } as GroupDoc;
 }
