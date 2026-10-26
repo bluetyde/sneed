@@ -91,10 +91,26 @@ export class EventTreeComparePanel {
             ...d.headings.removed.map((x) => h('li', {}, `Removed: ${x}`)),
             ...d.headings.changed.map((x) => h('li', {}, `${x.id}: `, x.name ? `renamed ${x.name.from} → ${x.name.to}` : '', x.name && x.event ? '; ' : '', x.event ? `now fails when ${x.event.to} occurs (was ${x.event.from})` : ''))))
         : null,
+      this.groups(d),
       d.numbersCompared ? this.sequences(d) : null,
       d.numbersCompared ? this.endStates(d) : null,
       d.assumptions.length ? h('div', {}, h('h3', {}, 'Assumptions'), h('ul', {}, ...d.assumptions.map((x) => h('li', {}, `${x.key}: ${x.from ?? 'not stated'} → ${x.to ?? 'not stated'}`)))) : null));
     return out;
+  }
+
+  private groups(d: NonNullable<EventTreeEditor['comparison']>['diff']): Child {
+    const g = d.groups;
+    if (!g.used.a && !g.used.b) return null;
+    const show = (x: { id: string; members: string[]; beta: number | null }): string => `${x.id}: ${x.members.join(', ')}; beta ${x.beta ?? 'not stated'}`;
+    const lines: Child[] = [
+      ...g.added.map((x) => h('li', { 'data-group': x.id }, `Only in the later analysis: ${show(x)}`)),
+      ...g.removed.map((x) => h('li', { 'data-group': x.id }, `Only in the earlier analysis: ${show(x)}`)),
+      ...g.changed.map((x) => h('li', { 'data-group': x.id }, `${x.id}: `, x.members ? `members ${x.members.from.join(', ')} → ${x.members.to.join(', ')}` : '', x.members && x.beta ? '; ' : '', x.beta ? `beta ${x.beta.from ?? 'not stated'} → ${x.beta.to ?? 'not stated'}` : '')),
+    ];
+    return h('div', { 'data-testid': 'et-compare-groups' },
+      h('h3', {}, 'Common-cause groups'),
+      h('p', {}, `The earlier analysis ${g.used.a ? 'used' : 'did not use'} common-cause groups; the later one ${g.used.b ? 'used' : 'did not use'} them. A result made with groups is a different kind of result from one made with independent events.`),
+      lines.length ? h('ul', {}, ...lines) : h('p', { 'data-testid': 'et-compare-groups-same' }, 'The same groups, with the same members and beta, in both.'));
   }
 
   private sequences(d: NonNullable<EventTreeEditor['comparison']>['diff']): Child {

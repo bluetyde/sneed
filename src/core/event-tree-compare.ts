@@ -33,6 +33,16 @@ export interface EtResultDiff {
   sequences: { added: EtSequenceLine[]; removed: EtSequenceLine[]; changed: { key: string; words: string; frequency: Moved | null; end_state: Change<string> | null }[]; unchanged: number };
   endStates: { added: { id: string; name: string; frequency: number }[]; removed: { id: string; name: string; frequency: number }[]; changed: { id: string; name: string; frequency: Moved }[]; unchanged: number };
   total: Moved | null;
+  /**
+   * Common-cause groups the two analyses used (plan 15): a result made with groups is a different kind of result, so a comparison says which
+   * groups each used, even when the numbers moved for another reason.
+   */
+  groups: {
+    used: { a: boolean; b: boolean };
+    added: { id: string; members: string[]; beta: number | null }[];
+    removed: { id: string; members: string[]; beta: number | null }[];
+    changed: { id: string; members: Change<string[]> | null; beta: Change<number | null> | null }[];
+  };
   assumptions: { key: string; from: string | null; to: string | null }[];
   engine: Change<string> | null;
   /** Both records state the engine's name, version AND full build hash. Without that, "same engine" is not a claim anyone can make. */
@@ -62,6 +72,9 @@ interface ReadRecord {
   endStates: Map<string, { id: string; name: string; frequency: number }>;
   total: number | null;
   assumptions: Map<string, string>;
+  /** The record has a `common_cause` block (the fault-tree model had groups). */
+  groupsUsed: boolean;
+  groups: Map<string, { id: string; members: string[]; beta: number | null }>;
   /** Some row or the total was not readable although the record claims to be complete. */
   malformed: boolean;
 }
@@ -92,6 +105,19 @@ export function readEventTreeRecord(raw: unknown): ReadRecord | null {
       else damaged = true;
     }
   }
+  // a `common_cause` block that is present but not readable is damage, like a damaged row: the record's numbers are then not trusted
+  const groups = new Map<string, { id: string; members: string[]; beta: number | null }>();
+  const groupsUsed = raw.common_cause !== undefined;
+  if (groupsUsed) {
+    const cc = raw.common_cause;
+    if (!isObj(cc) || !Array.isArray(cc.groups)) damaged = true;
+    else {
+      for (const g of cc.groups) {
+        if (!isObj(g) || !str(g.id) || !Array.isArray(g.members) || !g.members.every(str)) damaged = true;
+        else groups.set(g.id, { id: g.id, members: [...(g.members as string[])].sort(), beta: num(g.beta) ? g.beta : null });
+      }
+    }
+  }
   const assumptions = new Map<string, string>();
   if (isObj(raw.assumptions)) for (const [k, v] of Object.entries(raw.assumptions)) assumptions.set(k, typeof v === 'string' ? v : JSON.stringify(v) ?? 'undefined');
   const hashes = isObj(raw.input_hashes) ? raw.input_hashes : {};
@@ -115,11 +141,14 @@ export function readEventTreeRecord(raw: unknown): ReadRecord | null {
     endStates,
     total: num(total.frequency) ? total.frequency : null,
     assumptions,
+    groupsUsed,
+    groups,
     // a complete record has a total and rows that can all be read; the check applies only to a record that claims to be complete
     malformed: status === 'completed' && completeness === 'complete' && (damaged || !num(total.frequency)),
   };
 }
 
+const same = (x: string[], y: string[]): boolean => x.length === y.length && x.every((v, i) => v === y[i]);
 const moved = (from: number, to: number): Moved | null => (from === to ? null : { from, to, delta: to - from, ratio: from === 0 ? null : to / from });
 
 /** The path in words: heading names from the later record when it knows the heading, else the earlier one, else the id. */
@@ -172,6 +201,16 @@ export function diffEventTreeResults(rawA: unknown, rawB: unknown): EtResultDiff
     for (const [id, ea] of a.endStates) if (!b.endStates.has(id)) ends.removed.push({ id, name: ea.name, frequency: ea.frequency });
   }
 
+  const gAdded = [...b.groups.values()].filter((g) => !a.groups.has(g.id));
+  const gRemoved = [...a.groups.values()].filter((g) => !b.groups.has(g.id));
+  const gChanged: EtResultDiff['groups']['changed'] = [];
+  for (const [id, ga] of a.groups) {
+    const gb = b.groups.get(id);
+    if (!gb) continue;
+    const members = !same(ga.members, gb.members) ? { from: ga.members, to: gb.members } : null;
+    const beta = ga.beta !== gb.beta ? { from: ga.beta, to: gb.beta } : null;
+    if (members || beta) gChanged.push({ id, members, beta });
+  }
   const keys = [...new Set([...a.assumptions.keys(), ...b.assumptions.keys()])].sort();
   const assumptions = keys.map((key) => ({ key, from: a.assumptions.get(key) ?? null, to: b.assumptions.get(key) ?? null })).filter((x) => x.from !== x.to);
   // the identity compared is the full build hash; only the label shows 12 characters of it
@@ -192,6 +231,7 @@ export function diffEventTreeResults(rawA: unknown, rawB: unknown): EtResultDiff
     sequences: seqs,
     endStates: ends,
     total: numbers && a.total !== null && b.total !== null ? moved(a.total, b.total) : null,
+    groups: { used: { a: a.groupsUsed, b: b.groupsUsed }, added: gAdded, removed: gRemoved, changed: gChanged },
     assumptions,
     engine: engineA !== null && engineB !== null && (idA !== idB || engineA !== engineB) ? { from: engineA, to: engineB } : null,
     engineKnown: idA !== null && idB !== null,
