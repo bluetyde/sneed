@@ -86,6 +86,7 @@ Each code gets one failing fixture (item 6). "Level" says where it is raised.
 | `W_UNREACHABLE` | validator | A gate or event not reachable from the top; kept, not analysed |
 | `W_UNKNOWN_FIELD` | schema | Unknown field; preserved |
 | `W_LAYOUT_STALE` | validator | A layout entry points at a missing ID |
+| `W_CCF_LARGE_Q` | validator | In a common-cause group beta (1 - beta) Q^2 is over 0.01: a member then fails with a probability noticeably below Q (the independent part and the common cause are independent events, so both can happen); says the probability it really has. The model stays valid |
 
 Validate every stored gate, reachable or not. Messages show IDs, not only names. All checks run before any export or run. `E_SCHEMA`, `E_ID_FORMAT` and `E_PROB_RANGE` are expressible in JSON Schema; the rest need validator code, and the validator must report every error it finds, not stop at the first.
 
