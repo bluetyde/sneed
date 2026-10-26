@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import { expect, test, SHARED_MODEL as MODEL, saveSharedModel } from './fixtures.js';
+import { rmSync } from 'node:fs';
+import { App, expect, newServer, test, SHARED_MODEL as MODEL, saveSharedModel } from './fixtures.js';
 
 // The small things of the event-tree screen that the larger flows in event-tree.spec.ts pass through without looking at: the limits of the
 // heading buttons, what Save, New and Open do with unsaved work, the note for a student with no saved model, how an end state that is an
@@ -17,11 +18,19 @@ async function newTreeOnSharedModel(page: Page): Promise<void> {
 }
 
 test.describe('event tree screen, small behaviours', () => {
-  test('a student with no saved model is told so', async ({ app, page }) => {
-    await app.open();
-    await mode(page, 'event-tree').click();
-    await page.locator('[data-action="et-new"]').click();
-    await expect(page.getByTestId('et-no-models')).toBeVisible();
+  test('a student with no saved model is told so', async ({ page }) => {
+    const { server, dir } = await newServer(); // a server of its own: the shared one already holds models saved by other tests
+    try {
+      const app = new App(page);
+      await page.goto(server.url);
+      await app.ready();
+      await mode(page, 'event-tree').click();
+      await page.locator('[data-action="et-new"]').click();
+      await expect(page.getByTestId('et-no-models')).toBeVisible();
+    } finally {
+      await server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('the heading buttons keep to their limits: the only heading cannot be removed, the first cannot move up, the last cannot move down, and there are at most 12', async ({ app, page }) => {
