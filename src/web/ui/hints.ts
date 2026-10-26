@@ -56,7 +56,9 @@ export const METHOD_TEXT: Record<string, string> = {
 export function reasonText(code: string): string {
   if (REASON_TEXT[code]) return REASON_TEXT[code]!;
   if (code.startsWith('too-many-events-with-groups:')) {
-    return `The model has as many basic events as the engine allows, and its common-cause groups (${code.slice(28).split(',').join(', ')}) each add one shared event, which is one too many. Take a group or an event out.`;
+    const [counts = '', ids = ''] = code.slice(28).split(':');
+    const [before = '?', after = '?'] = counts.split('>');
+    return `The model has ${before} basic events, which the engine allows, but its common-cause groups (${ids.split(',').join(', ')}) add one shared event each, which makes ${after}: over the limit. Take a group or an event out.`;
   }
   if (code.startsWith('engine-exit-')) return `The engine stopped with an error (${code.slice(12)}).`;
   if (code.startsWith('engine-error:')) return `The engine refused the input (${code.slice(13)}).`;
