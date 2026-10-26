@@ -277,6 +277,7 @@ describe('the editor with common-cause groups', () => {
     ed.setNotice(null);
     ed.addToGroup('CC1', 'E3');
     expect(ed.notice?.text).toContain(`E3 (0.3 to ${first})`);
+    expect(ed.undoLabel).toContain('probability of E3 (0.3 to'); // joining names the change in the undo step too
     // events that already agree: no notice
     const ed2 = await editor();
     ed2.doc = base();
