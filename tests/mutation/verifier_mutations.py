@@ -1353,6 +1353,41 @@ MUTATIONS += [
 ]
 
 
+# Event tree view (src/web/ui/event-tree.ts): browser-only code, so the check is the end-to-end tests of the event-tree editor and its common-cause screens.
+ETV = ROOT / "src/web/ui/event-tree.ts"
+ETV_SUITE = ("cmd:npm run e2e --silent -- event-tree.spec.ts common-cause.spec.ts", 300)
+
+
+def etv(name: str, old: str, new: str) -> tuple:
+    return (f"event tree view: {name}", ETV, old, new, ETV_SUITE)
+
+
+MUTATIONS += [
+    etv("the stale banner is not shown", "if (e.stale) out.push(h('div', { class: 'stale-banner', role: 'status', 'data-testid': 'et-stale' }", "if (false as boolean) out.push(h('div', { class: 'stale-banner', role: 'status', 'data-testid': 'et-stale' }"),
+    etv("the partition check is not shown", "    if (rec.total) {", "    if (false as boolean) {"),
+    etv("approximation columns are always drawn", "const withApprox = rec.sequences.some((s) => s.approximation);", "const withApprox = true as boolean;"),
+    etv("the approximation note is not shown", "    if (rec.approximation) {", "    if (false as boolean) {"),
+    etv("the common-cause note on a result is not shown", "    if (rec.common_cause) {", "    if (false as boolean) {"),
+    etv("a caveat is not shown", "for (const c of rec.caveats)", "for (const c of [] as string[])"),
+    etv("the problems list is replaced by the no-problems line", "if (items.length === 0) return", "if (true as boolean) return"),
+    etv("the last heading can be removed", "disabled: d.headings.length <= 1, 'data-action': `et-remove-${hd.id}`", "disabled: false as boolean, 'data-action': `et-remove-${hd.id}`"),
+    etv("headings can be added past the limit", "disabled: d.headings.length >= MAX_HEADINGS,", "disabled: false as boolean,"),
+    etv("the first heading can be moved up", "disabled: i === 0, 'data-action': `et-up-${hd.id}`", "disabled: false as boolean, 'data-action': `et-up-${hd.id}`"),
+    etv("a field being typed is not committed before Save", "if ((a instanceof HTMLInputElement || a instanceof HTMLSelectElement) && this.el.contains(a)) a.blur();", "void a;"),
+    etv("Save of an unnamed tree does not ask for a name", "if (!(await this.ed.save())) await this.saveAs();", "await this.ed.save();"),
+    etv("New does not ask before discarding", "    if (!confirmDiscard(this.ed, 'event tree')) return;\n    await this.ed.newTree();", "    await this.ed.newTree();"),
+    etv("Open does not ask before discarding", "    if (!confirmDiscard(this.ed, 'event tree')) return;\n    const name = await openEventTreeDialog(this.ed);", "    const name = await openEventTreeDialog(this.ed);"),
+    etv("the changed-model banner is not shown", "    if (e.modelChanged) {", "    if (false as boolean) {"),
+    etv("the no-saved-models note is not shown", "if (names.length === 0) out.push(", "if (false as boolean) out.push("),
+    etv("sequences without an end state are not offered a bulk choice", "    if (unset > 0) {", "    if (false as boolean) {"),
+    etv("a bad frequency draft shows no error", "const freqError = e.frequencyDraft === null ? null :", "const freqError = true ? null :"),
+    etv("headings that fail together are not listed", "    if (shared.length) {", "    if (false as boolean) {"),
+    etv("a heading does not name its common-cause group", "...e.headingGroups(hd.id).map((g) =>", "...e.headingGroups(hd.id).slice(0, 0).map((g) =>"),
+    etv("an example end state is not marked as an example in the result", "endStateLabel(x.name, synthetic.get(x.id) === true)", "endStateLabel(x.name, false)"),
+    etv("a failed run shows no reasons", "...rec.reasons.map((x) =>", "...[].map((x: string) =>"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1542,6 +1577,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("ccf review:")]
     if only == "literature":  # just the literature oracle mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("literature:")]
+    if only == "etview":  # just the event tree view mutations (browser tests, about 20 seconds each)
+        chosen = [m for m in MUTATIONS if m[0].startswith("event tree view:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "ccf":  # just the common-cause group mutations (plan 15); an optional second argument keeps the ones whose name matches it
