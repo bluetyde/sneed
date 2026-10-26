@@ -518,6 +518,36 @@ describe('one run per folder, and nothing followed or replaced (Codex review)', 
     expect(reply(calls).status).toBe('completed');
   });
 
+  it('an engine that died of the cancel kill, before the poll saw the request, ends cancelled, not failed (the race that failed the real-SCRAM cancel test)', async () => {
+    const { d, calls } = deps({
+      pollMs: 100000, // the poll never fires: only the order of events counts
+      analyze: async (_t, opts) => {
+        writeFileSync(path.join(out, 'cancel.requested'), opts.runId!); // cancel writes its request first, then kills the engine
+        return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ status: 'failed', completeness: 'unknown', reasons: ['engine-exit-9'], top_event_probability: null, minimal_cut_sets: [] }) };
+      },
+    });
+    expect(await main(['run', modelFile, '--out', out], d)).toBe(0);
+    expect(reply(calls)).toMatchObject({ ok: true, status: 'cancelled', reason: 'cancelled' });
+    expect(existsSync(path.join(out, 'pra'))).toBe(false);
+    expect(JSON.parse(readFileSync(path.join(out, 'active-run.json'), 'utf8'))).toMatchObject({ state: 'ended', status: 'cancelled' });
+  });
+
+  it('a failure with no request for this run, or a request for another run, stays failed', async () => {
+    for (const flag of [null, 'pra-0123456789ab']) {
+      rmSync(out, { recursive: true, force: true });
+      mkdirSync(out);
+      const { d, calls } = deps({
+        pollMs: 100000,
+        analyze: async (_t, opts) => {
+          if (flag) writeFileSync(path.join(out, 'cancel.requested'), flag);
+          return { kind: 'ran', runDir: path.join(opts.runsDir, opts.runId!), record: record({ status: 'failed', completeness: 'unknown', reasons: ['engine-exit-9'], top_event_probability: null, minimal_cut_sets: [] }) };
+        },
+      });
+      expect(await main(['run', modelFile, '--out', out], d)).toBe(0);
+      expect(reply(calls), String(flag)).toMatchObject({ ok: true, status: 'failed' });
+    }
+  });
+
   it('a result that cannot be placed leaves no half-written folder behind', async () => {
     const { d, calls } = deps({
       analyze: async (_t, opts) => {

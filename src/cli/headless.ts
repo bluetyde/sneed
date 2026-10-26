@@ -392,6 +392,10 @@ export async function main(argv: string[], deps: Deps = realDeps()): Promise<num
         return reply({ ok: false, errors: outcome.errors, warnings: outcome.warnings }, 2);
       }
 
+      // cancel writes its request before it kills the engine, so an engine that died of that kill can reach this point before the poll
+      // above has seen the request: a run that failed while a request for this run stands was stopped, not broken
+      if (outcome.status === 'failed' && readFlag(flag) === workId) outcome = { ...outcome, status: 'cancelled', reasons: ['cancelled'] };
+
       ended = outcome.status;
       if (outcome.status !== 'completed' || outcome.completeness !== 'complete') {
         // never a result: nothing is written into the run folder, the reason travels in the reply
