@@ -134,6 +134,8 @@ export interface FrozenCase {
   id: string;
   group: GroupDef & { q: number };
   logic: { kind: 'and' | 'or' | 'atleast'; k?: number };
+  /** An event outside the group, in OR with the group's gate: top = OR(gate, outside). Optional (CC7). */
+  outside?: { id: string; probability: number };
   expected_probability: number;
   expected_cut_sets: string[][] | null;
   independent_value: number;
@@ -142,9 +144,11 @@ export interface FrozenCase {
 
 /** The frozen case as a native model: the members are events of one probability, the top is the stated gate over them. */
 export function frozenCaseDoc(e: FrozenCase): GroupDoc {
-  const events = Object.fromEntries(e.group.members.map((m) => [m, e.group.q]));
-  const gate = e.logic.kind === 'and' ? AND('TOP', e.group.members) : e.logic.kind === 'or' ? OR('TOP', e.group.members) : VOTE('TOP', e.group.members, e.logic.k!);
-  const doc = mkDoc('TOP', events, [gate]);
+  const events: Record<string, number> = Object.fromEntries(e.group.members.map((m) => [m, e.group.q]));
+  const id = e.outside ? 'GRP' : 'TOP';
+  const gate = e.logic.kind === 'and' ? AND(id, e.group.members) : e.logic.kind === 'or' ? OR(id, e.group.members) : VOTE(id, e.group.members, e.logic.k!);
+  if (e.outside) events[e.outside.id] = e.outside.probability;
+  const doc = mkDoc('TOP', events, e.outside ? [OR('TOP', ['GRP', e.outside.id]), gate] : [gate]);
   return { ...doc, assumptions: { ...(doc.assumptions as Record<string, unknown>), independence: 'beta-factor-groups' }, common_cause_groups: [{ id: e.group.id, method: 'beta-factor', members: e.group.members, beta: e.group.beta }] } as GroupDoc;
 }
 

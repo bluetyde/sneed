@@ -59,7 +59,7 @@ All values use `Q = 0.1` and `beta = 0.1`. So `P(I) = 0.09` and `P(C) = 0.01`. T
 | CC4 | CC1 with `beta = 0` | **0.01** | Zero check: must equal A AND B with independent events, exactly. Required by plan 07. |
 | CC5 | CC2 with `beta = 0` | **0.19** | The same zero check for an OR. |
 | CC6 | CC1 with `beta = 1` | **0.1** | All failure is common: the AND of two members fails as often as one member. |
-| CC7 | A AND B, group {A, B}, and a third event D (not in the group) in OR with the AND | to be fixed in section 5a | Checks that a group does not touch other events. |
+| CC7 | A AND B, group {A, B} (Q = 0.1, beta = 0.1), and a third event D (probability 0.2, not in the group) in OR with the AND | **0.2144152** | `P = 1 - (1 - 0.018019) x (1 - 0.2) = 1 - 0.7855848`. Cut sets: {D}, {C}, {I_A, I_B}. The independent value is 0.208. Checks that a group does not touch other events. |
 
 Two more checks are required:
 
@@ -68,7 +68,7 @@ Two more checks are required:
 
 ### 5a. To fix before code
 
-CC7 needs a chosen tree and a hand value. I will not freeze a number for it until the owner has approved the model.
+CC7 was frozen on 2026-10-26 (`cc-outside-event` in `tests/oracles-common-cause.json`) on a tree I chose: the group part of CC1 in OR with an event D of probability 0.2. The owner has not yet approved that tree; if another is wanted, only the entry and this row change.
 
 ## 6. What the student sees
 
