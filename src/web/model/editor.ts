@@ -280,7 +280,7 @@ export class Editor {
     const before = this.doc;
     const { doc, id } = D.addGroup(before, [eventId, otherId]);
     if (id === '') return '';
-    this.commit(doc, `Make a common-cause group ${id} of ${eventId} and ${otherId}`);
+    this.commit(doc, `Make a common-cause group ${id} of ${eventId} and ${otherId}${this.changedProbabilities(before, doc)}`);
     this.selectGroup(id);
     this.noteSharedProbability(before, doc);
     return id;
@@ -288,16 +288,24 @@ export class Editor {
   addToGroup(groupId: string, eventId: string): void {
     const before = this.doc;
     const next = D.addToGroup(before, groupId, eventId);
-    this.commit(next, `Add ${eventId} to group ${groupId}`);
+    this.commit(next, `Add ${eventId} to group ${groupId}${this.changedProbabilities(before, next)}`);
     this.noteSharedProbability(before, next);
   }
   /**
    * The members of a group share one probability, so joining a group can change an event's probability. Say which, with the old and the new
    * value, instead of changing it silently (undo puts it back).
    */
-  private noteSharedProbability(before: D.Doc, after: D.Doc): void {
+  private changedList(before: D.Doc, after: D.Doc): string[] {
     const was = new Map(before.events.map((e) => [e.id, e.probability]));
-    const changed = after.events.filter((e) => was.has(e.id) && was.get(e.id) !== e.probability).map((e) => `${e.id} (${was.get(e.id)} to ${e.probability})`);
+    return after.events.filter((e) => was.has(e.id) && was.get(e.id) !== e.probability).map((e) => `${e.id} (${was.get(e.id)} to ${e.probability})`);
+  }
+  /** The same list as a suffix for the name of the undo step, so the change stays visible after the notice is replaced by another. */
+  private changedProbabilities(before: D.Doc, after: D.Doc): string {
+    const changed = this.changedList(before, after);
+    return changed.length ? `; probability of ${changed.join(' and ')}` : '';
+  }
+  private noteSharedProbability(before: D.Doc, after: D.Doc): void {
+    const changed = this.changedList(before, after);
     if (changed.length === 0) return;
     this.setNotice('warning', `The members of a group share one probability, so ${changed.join(' and ')} changed. Undo puts ${changed.length === 1 ? 'it' : 'them'} back.`);
   }

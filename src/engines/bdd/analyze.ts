@@ -9,7 +9,7 @@ import type { Method, NativeModel, Settings } from '../../core/model.js';
 import type { ParsedReport } from '../../core/report.js';
 import { assess, AssessAborted, type ResultRecord } from '../../core/result.js';
 import { reachableEvents } from '../../core/bounds.js';
-import { commonCauseRecord, expandGroups, withoutGroups } from '../../core/ccf.js';
+import { commonCauseRecord, expandGroups, groupEventId, withoutGroups } from '../../core/ccf.js';
 import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
 import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, MAX_EVENTS, type Solution } from './solve.js';
@@ -98,7 +98,13 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   // (plan 15), so the student knows what to remove; a model over the limit on its own keeps the plain code.
   const failureCode = (why: string): string => {
     if (why === 'internal') return 'engine-error';
-    if (why === 'too-many-events' && groups.length > 0 && reachableEvents(original).length <= MAX_EVENTS) return `too-many-events-with-groups:${groups.map((g) => g.id).join(',')}`;
+    const before = reachableEvents(original).length;
+    if (why === 'too-many-events' && groups.length > 0 && before <= MAX_EVENTS) {
+      // only a group with a reachable member adds its shared event; the code carries the count before and after, then the groups
+      const reached = new Set(events);
+      const adding = groups.filter((g) => reached.has(groupEventId(g.id)));
+      return `too-many-events-with-groups:${before}>${events.length}:${(adding.length ? adding : groups).map((g) => g.id).join(',')}`;
+    }
     return why;
   };
   let independentValue: number | null = null; // with groups: what the same events give as independent events, so the answer can be read against it

@@ -184,6 +184,8 @@ function tidyGroups(d: Doc): void {
 /** A new group of two or more events that are not in a group yet. They all take the probability of the first one. Returns id '' when nothing was made. */
 export function addGroup(doc: Doc, memberIds: string[], opts: { beta?: number; name?: string } = {}): Added {
   const d = clone(doc);
+  // a group list that is present but not a list is damaged data (the validator names it): it is not replaced here without a word
+  if (d.common_cause_groups !== undefined && !Array.isArray(d.common_cause_groups)) return { doc, id: '' };
   const members = [...new Set(memberIds)].filter((m) => isEvent(d, m) && !groupOf(d, m));
   if (members.length < 2) return { doc, id: '' };
   const id = nextId(d, 'CC');

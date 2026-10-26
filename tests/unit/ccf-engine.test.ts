@@ -58,7 +58,13 @@ describe('the event limit with groups', () => {
     expect(ok.record.reasons.join()).not.toContain('too-many-events'); // 2000 events are allowed (a 2000-event AND then stops at the size of its diagram, which is not what is tested here)
     const refused = await run(big(2000, [{ id: 'CC1', method: 'beta-factor', members: ['E0', 'E1'], beta: 0.1 }, { id: 'CC2', method: 'beta-factor', members: ['E2', 'E3'], beta: 0.1 }]));
     expect(refused.record.status).toBe('failed');
-    expect(refused.record.reasons).toEqual(['too-many-events-with-groups:CC1,CC2']);
+    expect(refused.record.reasons).toEqual(['too-many-events-with-groups:2000>2002:CC1,CC2']); // the counts before and after, then the groups
+
+    // a group whose members cannot be reached adds nothing, so it is not named
+    const unreachable = JSON.parse(big(2000, [{ id: 'CC1', method: 'beta-factor', members: ['E0', 'E1'], beta: 0.1 }, { id: 'CC9', method: 'beta-factor', members: ['U0', 'U1'], beta: 0.1 }])) as { events: { id: string; probability: number }[] };
+    unreachable.events.push({ id: 'U0', probability: 0.5 }, { id: 'U1', probability: 0.5 });
+    const named = await run(JSON.stringify(unreachable));
+    expect(named.record.reasons).toEqual(['too-many-events-with-groups:2000>2001:CC1']);
   }, 60_000);
 
   it('a model over the limit on its own keeps the plain code, and one that reaches the limit exactly with its groups is not stopped by it', async () => {
@@ -71,7 +77,10 @@ describe('the event limit with groups', () => {
   }, 60_000);
 
   it('the words say which groups', () => {
-    expect(reasonText('too-many-events-with-groups:CC1,CC2')).toContain('(CC1, CC2)');
+    const text = reasonText('too-many-events-with-groups:1999>2001:CC1,CC2');
+    expect(text).toContain('(CC1, CC2)');
+    expect(text).toContain('1999 basic events');
+    expect(text).toContain('makes 2001');
     expect(reasonText('too-many-events')).toContain('more basic events than the engine allows');
   });
 });

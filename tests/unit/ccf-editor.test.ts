@@ -54,6 +54,13 @@ describe('document operations on groups', () => {
     expect(valid(second.doc)).toBe(true);
   });
 
+  it('addGroup does not build on a damaged group list: a present field that is not a list is left for the validator to name', () => {
+    for (const bad of [null, 'oops', 5, { CC1: 1 }]) {
+      const d = { ...base(), common_cause_groups: bad } as unknown as D.Doc;
+      expect(D.addGroup(d, ['E1', 'E2']), JSON.stringify(bad)).toEqual({ doc: d, id: '' });
+    }
+  });
+
   it('addGroup refuses what the validator would: fewer than two events, a gate, an event that is already in a group', () => {
     const d = base();
     for (const members of [['E1'], ['E1', 'E1'], ['E1', 'G1'], ['E1', 'ZZ'], []]) expect(D.addGroup(d, members).id, members.join()).toBe('');
@@ -259,6 +266,9 @@ describe('the editor with common-cause groups', () => {
     expect(ed.notice?.text).toContain(`E2 (0.2 to ${first})`);
     expect(ed.notice?.text).not.toContain('E1 (');
     expect(D.findEvent(ed.doc, 'E2')!.probability).toBe(first);
+    expect(ed.undoLabel).toContain(`probability of E2 (0.2 to ${first})`); // the name of the step keeps the change after the notice is gone
+    ed.setNotice('info', 'Saved something.'); // another notice replaces the first
+    expect(ed.undoLabel).toContain('E2 (0.2 to');
     ed.undo();
     expect(D.findEvent(ed.doc, 'E2')!.probability).toBe(0.2);
     // a third event with another probability joins: it is named
