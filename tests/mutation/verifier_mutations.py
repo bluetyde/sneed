@@ -1327,6 +1327,28 @@ MUTATIONS += [
 ]
 
 
+LIT = ROOT / "tests/oracles-literature.json"
+LIT_SUITE = ("tests/unit/oracle-literature.test.ts", 60)
+
+
+def lit(name: str, old: str, new: str) -> tuple:
+    return (f"literature: {name}", LIT, old, new, LIT_SUITE)
+
+
+MUTATIONS += [
+    lit("a table value of the pressure tank is changed", '"K2": 3e-5, "S": 1e-4,', '"K2": 3e-4, "S": 1e-4,'),
+    lit("the AND gate of the pressure tank is an OR", '{ "id": "E3", "type": "and", "inputs": ["S", "E4"] }', '{ "id": "E3", "type": "or", "inputs": ["S", "E4"] }'),
+    lit("a published cut set of the pressure tank is dropped", '[["K2"], ["T"], ["S", "S1"], ["K1", "S"], ["R", "S"]]', '[["K2"], ["T"], ["S", "S1"], ["K1", "S"]]'),
+    lit("a printed cut set probability is changed", '"R,S": 1e-8', '"R,S": 1e-7'),
+    lit("a printed importance is changed", '"T": 14, "K2": 86', '"T": 15, "K2": 86'),
+    lit("the printed top value is made to agree with the sum", '"top_event_printed": 3.4e-5,', '"top_event_printed": 3.5016e-5,'),
+    lit("a gate of the three motor tree takes the wrong input", '{ "id": "E4", "type": "and", "inputs": ["K3", "E6"] }', '{ "id": "E4", "type": "and", "inputs": ["K3", "E5"] }'),
+    lit("the timers of the three motor tree are an OR", '{ "id": "E7", "type": "and", "inputs": ["KT1", "KT2", "KT3"] }', '{ "id": "E7", "type": "or", "inputs": ["KT1", "KT2", "KT3"] }'),
+    lit("a published cut set of the three motor tree is dropped", '["K3", "S1"], ["K3", "KT1", "KT2", "KT3"]]', '["K3", "KT1", "KT2", "KT3"]]'),
+    lit("the non-minimal example becomes a published cut set", '"minimal_cut_sets": [["K2", "K5"], ["K1", "K5"]', '"minimal_cut_sets": [["K1", "K2", "K3"], ["K2", "K5"], ["K1", "K5"]'),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1514,6 +1536,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th judge:")]
     if only == "ccfr":  # just the mutations of the fixes after the common-cause Codex review
         chosen = [m for m in MUTATIONS if m[0].startswith("ccf review:")]
+    if only == "literature":  # just the literature oracle mutations
+        chosen = [m for m in MUTATIONS if m[0].startswith("literature:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "ccf":  # just the common-cause group mutations (plan 15); an optional second argument keeps the ones whose name matches it
