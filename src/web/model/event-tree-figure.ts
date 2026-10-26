@@ -70,6 +70,7 @@ export function eventTreeResultLines(r: EtFigureResult | null | undefined): stri
   if (rec.total) out.push(`Check: the sequence probabilities add up to ${fmt(rec.total.probability_sum)} (they must add to 1; difference ${rec.total.partition_error.toExponential(1)}).`);
   if (rec.approximation) out.push('The "success branches ignored" approximation was also computed; it is a different kind of number and is not drawn.');
   out.push(`Engine: ${rec.engine.name} ${rec.engine.version}. Event tree hash ${rec.input_hashes.tree_hash.slice(0, 12)}, model hash ${rec.input_hashes.model_hash.slice(0, 12)}.`);
+  if (rec.common_cause) out.push(`Common-cause groups used (beta-factor): ${rec.common_cause.groups.map((g) => `${g.id} = ${g.members.join(', ')}, beta ${g.beta}`).join('; ')}. A different kind of result from one with independent events.`);
   for (const c of rec.caveats) out.push(c);
   for (const w of rec.warnings) out.push(`Warning: ${w}`);
   return out;
