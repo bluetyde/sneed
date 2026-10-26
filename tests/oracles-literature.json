@@ -1,0 +1,57 @@
+{
+  "note": "Literature oracles (docs/oracles.md): values and structures worked out in a published source, not by us. Numbers, gate structure and page references only; no text or figure of the source is reproduced. Each entry says exactly what was read and where. The tolerances are exact for products of printed values and whole percentages for printed importances.",
+  "source": {
+    "document": "NUREG-0492, Fault Tree Handbook, U.S. Nuclear Regulatory Commission, January 1981 (W. E. Vesely, F. F. Goldberg, N. H. Roberts, D. F. Haasl)",
+    "copy_read": "the NRC's own PDF, https://www.nrc.gov/docs/ML1007/ML100780465.pdf (7.92 MB), through its text layer and the page images, 2026-10-26; the catalogue page is https://www.nrc.gov/regulations-legislation/nureg-series-publications/publications-prepared-by-nrc-staff/sr0492",
+    "terms": "The NRC says its website is a U.S. Government work and not subject to copyright, and that a NUREG may contain third-party material that needs its own permission. Only numbers, Boolean structure and page references are used here, which are facts about the example; the PDF is not kept in this repository."
+  },
+  "entries": [
+    {
+      "id": "nureg0492-pressure-tank",
+      "kind": "literature",
+      "where": "Chapter VIII, pages VIII-12 to VIII-14: Figure VIII-14 (the reduced fault tree), Table VIII-1 (failure probabilities) and the evaluation that follows",
+      "model": {
+        "top": "E1",
+        "events": { "T": 5e-6, "K2": 3e-5, "S": 1e-4, "K1": 3e-5, "R": 1e-4, "S1": 3e-5 },
+        "gates": [
+          { "id": "E1", "type": "or", "inputs": ["T", "E2"] },
+          { "id": "E2", "type": "or", "inputs": ["E3", "K2"] },
+          { "id": "E3", "type": "and", "inputs": ["S", "E4"] },
+          { "id": "E4", "type": "or", "inputs": ["S1", "E5"] },
+          { "id": "E5", "type": "or", "inputs": ["K1", "R"] }
+        ]
+      },
+      "published": {
+        "minimal_cut_sets": [["K2"], ["T"], ["S", "S1"], ["K1", "S"], ["R", "S"]],
+        "cut_set_probabilities": { "T": 5e-6, "K2": 3e-5, "K1,S": 3e-9, "R,S": 1e-8, "S,S1": 3e-9 },
+        "top_event_printed": 3.4e-5,
+        "top_event_printed_method": "the rare-event approximation: the sum of the minimal cut set probabilities",
+        "importance_printed_percent": { "T": 14, "K2": 86, "each of K1,S and R,S and S,S1": "less than 0.1" }
+      },
+      "known_disagreement": "The handbook prints P(E1) = 3.4e-5, but the sum of the five cut set probabilities printed on the same page is 5e-6 + 3e-5 + 3e-9 + 1e-8 + 3e-9 = 3.5016e-5, and the printed importances (14 percent and 86 percent) are the shares of 3.5e-5 (shares of 3.4e-5 would be 15 and 88). So the printed top value is an arithmetic slip in the source. The test pins the discrepancy (about 2.9 percent) so that it is noticed if either side changes; the value we hold is the sum of the printed cut set probabilities."
+    },
+    {
+      "id": "nureg0492-three-motor-2",
+      "kind": "literature",
+      "where": "Chapter IX, pages IX-7 and IX-8: the Boolean equations of the reduced fault tree for the overrun of Motor 2 (Figure IX-11) and the minimal cut sets printed for it; K5 is the relay the OCR text reads as KS, checked on the page image",
+      "model": {
+        "top": "E1",
+        "events": { "K5": 0.01, "K3": 0.01, "K1": 0.01, "K2": 0.01, "KT1": 0.01, "KT2": 0.01, "KT3": 0.01, "S1": 0.01 },
+        "events_note": "The handbook gives no probabilities for this example. These are invented (0.01 for every event) and only the cut sets are literature.",
+        "gates": [
+          { "id": "E1", "type": "and", "inputs": ["E2", "E3"] },
+          { "id": "E2", "type": "or", "inputs": ["K5", "E4"] },
+          { "id": "E3", "type": "or", "inputs": ["K2", "E5"] },
+          { "id": "E4", "type": "and", "inputs": ["K3", "E6"] },
+          { "id": "E5", "type": "or", "inputs": ["K1", "KT2", "S1"] },
+          { "id": "E6", "type": "or", "inputs": ["K1", "E7", "S1"] },
+          { "id": "E7", "type": "and", "inputs": ["KT1", "KT2", "KT3"] }
+        ]
+      },
+      "published": {
+        "minimal_cut_sets": [["K2", "K5"], ["K1", "K5"], ["K5", "KT2"], ["K5", "S1"], ["K1", "K3"], ["K3", "S1"], ["K3", "KT1", "KT2", "KT3"]],
+        "not_minimal_example_per_the_handbook": ["K3", "K1", "K2"]
+      }
+    }
+  ]
+}
