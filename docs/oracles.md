@@ -2,7 +2,7 @@
 
 An **oracle** is an expected value that does not come from the code it checks. This page lists every kind SNEED has, where each number comes from, how tight it is and which test holds it. If a result is right, it is right against one of these. Where there is none, or only a weak one, that is said at the end.
 
-**Read this first:** SNEED has no oracle taken from a published source. Every expected value was worked out by us, by hand or by a second program we wrote, and the one independent third-party program, SCRAM, is itself known to be wrong for some voting gates. The probabilities in the examples and lessons are invented. These checks show that the code computes what the documents say it computes; they do not show that the model describes any real plant.
+**Read this first:** SNEED has two small oracles taken from a published source (two worked examples of NUREG-0492, the Fault Tree Handbook, one of which has a printed arithmetic slip that is pinned and explained). Every other expected value was worked out by us, by hand or by a second program we wrote, and the one independent third-party program, SCRAM, is itself known to be wrong for some voting gates. The probabilities in the examples and lessons are invented. These checks show that the code computes what the documents say it computes; they do not show that the model describes any real plant.
 
 ## The rules every oracle follows
 
@@ -16,7 +16,7 @@ An **oracle** is an expected value that does not come from the code it checks. T
 
 | Kind | Where the number comes from | What it can catch |
 |---|---|---|
-| **Literature** | numbers printed in a published source | a formula that is wrong in the same way as the code. **SNEED has none.** |
+| **Literature** | numbers, structures and cut sets printed in a published source | a formula or a reading of the model that is wrong in the same way as the code. **SNEED has two examples, both from one handbook.** |
 | **Independent program** | the same quantity from software written by someone else (SCRAM) | a bug in our solver or exporter, and a bug in theirs |
 | **Independent implementation** | the same quantity from a different method that we wrote (exact brute force over every failure state) | a bug in the diagram solver, the exporter, the expansion of groups, the event-tree evaluation |
 | **Closed form** | a formula worked out by hand and written in the oracle's own file | a bug in the code that implements the same model |
@@ -28,7 +28,16 @@ An **oracle** is an expected value that does not come from the code it checks. T
 
 ### Literature
 
-None. A worked example from a textbook or from NUREG-0492 (the Fault Tree Handbook) would be the strongest addition; neither has been read for this, and their terms have not been checked. Parameter data (for example NUREG/CR-6928) is a different thing: it would feed a data library (TODO, P4), not serve as an oracle.
+`tests/oracles-literature.json` holds two worked examples of **NUREG-0492, the Fault Tree Handbook** (U.S. Nuclear Regulatory Commission, January 1981), read on 2026-10-26 from the NRC's own copy (<https://www.nrc.gov/docs/ML1007/ML100780465.pdf>, 7.92 MB; the catalogue page is <https://www.nrc.gov/regulations-legislation/nureg-series-publications/publications-prepared-by-nrc-staff/sr0492>) through its text layer and the page images. The NRC says its website is a U.S. Government work and not subject to copyright, and that a NUREG can contain third-party material with its own permission; only numbers, Boolean structure and page references are used here, and the PDF is not kept in the repository.
+
+| Oracle | What the handbook prints | Held by |
+|---|---|---|
+| **The pressure tank example**, Chapter VIII, pages VIII-12 to VIII-14 (Figure VIII-14, Table VIII-1) | The reduced tree (E1 = T OR E2; E2 = E3 OR K2; E3 = S AND E4; E4 = S1 OR E5; E5 = K1 OR R); the six failure probabilities; the five minimal cut sets T, K2, S.S1, S.K1, S.R; the five cut set probabilities (5e-6, 3e-5, 3e-9, 1e-8, 3e-9, each the exact product of the table values); the importances 14 percent, 86 percent and under 0.1 percent | `tests/unit/oracle-literature.test.ts` (solver, enumerator, exact products, shares to the whole percent); `tests/engine/oracle-literature.test.ts` (the real SCRAM) |
+| **The three motor example**, overrun of Motor 2, Chapter IX, pages IX-7 and IX-8 | The Boolean equations of the reduced tree and its seven minimal cut sets; the events K1, S1 and KT2 appear in more than one branch, and the handbook names K3.K1.K2 as a set that is not minimal. The handbook gives no probabilities for this example, so ours are invented and only the cut sets are literature. | the same two files |
+
+**A disagreement we found, pinned and explained.** On page VIII-14 the handbook prints P(E1) = 3.4e-5 as the sum of the cut set probabilities, but the five probabilities it prints on the same page add up to 3.5016e-5, and the importances it prints (14 percent and 86 percent) are the shares of 3.5e-5; shares of 3.4e-5 would be 15 and 88. So the printed top value is an arithmetic slip in the source. The value we hold is the sum of the printed cut set probabilities; the test pins the gap (about 2.9 percent) so that it is noticed if either side changes. Our exact probability (3.5016e-5 to five digits) agrees with that sum to better than 1e-5 of itself, which supports the handbook's own remark that the rare-event approximation applies.
+
+Parameter data (for example NUREG/CR-6928) is a different thing: it would feed a data library (TODO, P4), not serve as an oracle.
 
 ### Independent program
 
@@ -75,7 +84,7 @@ SCRAM is wrong for some `atleast` shapes and says nothing (reported upstream, is
 
 ## What the oracles do not prove
 
-- **No real system.** Nothing here is compared with plant data or a published benchmark. The probabilities and frequencies are inputs, invented and labelled.
+- **No real system.** Nothing here is compared with plant data. The two published examples are teaching examples from a 1981 handbook, a relay circuit and a motor circuit with independent events: they say nothing about voting gates, common-cause groups or event trees, the handbook's quantitative chapters and its other examples have not been mined, and its numbers are not plant data. The probabilities and frequencies everywhere else are inputs, invented and labelled.
 - **Our own derivations.** The hand closed forms and the brute-force oracles were written by the same people (and the same AI) who wrote the solver. They use a different method, so a bug in the method shows, but a shared misreading of what a model means would pass every one of them. The one independent program, SCRAM, has a known defect and is compared at a looser tolerance.
 - **The model class.** Static, coherent trees, independent basic events of constant probability, one initiating event with a constant frequency: these assumptions are stated, not tested against anything.
 - **Beta-factor.** The oracles check our implementation of the stated definition (a member fails if its independent part or the group event occurs, so its probability is Q - beta(1-beta)Q^2, not Q). They do not show that the model fits real failures; beta is an invented input.
@@ -83,7 +92,7 @@ SCRAM is wrong for some `atleast` shapes and says nothing (reported upstream, is
 - **Event-tree frequencies and importance tables** are exact for the stated assumptions and checked against enumeration and hand cases, not against a published table.
 - **Lessons.** The expected answers are the oracles above; no instructor has read the lessons yet (`docs/LESSON-REVIEW.md`).
 - **No second solver.** The cross-check against a second solver such as XFTA is not done (TODO, P4).
-- **The mutation checks** show the tests would notice a break. They are not a source of truth.
+- **The mutation checks** show the tests would notice a break. They are not a source of truth. (For the literature file they change the entries on purpose, for example a table value, a gate or a cut set, and the test must fail.)
 
 ## Adding one
 
