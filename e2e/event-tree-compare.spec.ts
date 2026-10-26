@@ -59,6 +59,32 @@ test.describe('comparing saved event-tree analyses', () => {
     expect(text).not.toMatch(/better|worse|safer|improv|degrad/i); // a difference is a difference
   });
 
+  test('the fault-tree model saved again with a common-cause group: the comparison names the group and says it is a different kind of result', async ({ app, page }) => {
+    await app.open();
+    await build(page);
+    await analyse(page);
+    const doc = JSON.parse(SHARED_MODEL(0.1)) as { events: { id: string; probability: number }[]; assumptions: Record<string, unknown>; common_cause_groups?: unknown[] };
+    for (const e of doc.events) if (e.id === 'a' || e.id === 'b') e.probability = 0.2; // the members of a group share one probability
+    doc.assumptions = { ...doc.assumptions, independence: 'beta-factor-groups' };
+    doc.common_cause_groups = [{ id: 'CC1', name: 'Supports', method: 'beta-factor', members: ['a', 'b'], beta: 0.1 }];
+    await saveSharedModel(page, JSON.stringify(doc));
+    await page.locator('[data-mode="fault-tree"]').click();
+    await page.locator('[data-mode="event-tree"]').click();
+    await expect(page.getByTestId('et-model-changed')).toBeVisible();
+    await page.locator('[data-action="et-adopt"]').click();
+    await expect(page.getByTestId('et-no-problems')).toBeVisible();
+    await analyse(page);
+    await page.locator('[data-action="et-compare"]').click();
+    const groups = page.getByTestId('et-compare-groups');
+    await expect(groups).toContainText('The earlier analysis did not use common-cause groups; the later one used them');
+    await expect(groups).toContainText('different kind of result');
+    await expect(groups.locator('li[data-group="CC1"]')).toContainText('Only in the later analysis: CC1: a, b; beta 0.1');
+    // two analyses of the same grouped model: the same groups in both
+    await analyse(page);
+    await page.locator('[data-action="et-compare"]').click();
+    await expect(page.getByTestId('et-compare-groups-same')).toBeVisible();
+  });
+
   test('the choice follows the two newest analyses, can be changed by keyboard, and a pair that is the same one is not compared', async ({ app, page }) => {
     await app.open();
     await build(page);

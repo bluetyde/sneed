@@ -209,3 +209,40 @@ describe('comparing two saved event-tree analyses', () => {
     expect(diffEventTreeResults(rec(), rec())!.malformed).toEqual({ a: false, b: false });
   });
 });
+
+describe('common-cause groups in the comparison of two analyses', () => {
+  const groups = (over: Rec[] = [{ id: 'G', members: ['B', 'A'], beta: 0.1 }]): Rec => ({ common_cause: { method: 'beta-factor', groups: over, note: 'n' } });
+
+  it('two analyses without groups: not used, nothing listed', () => {
+    const d = diffEventTreeResults(rec(), rec())!;
+    expect(d.groups).toEqual({ used: { a: false, b: false }, added: [], removed: [], changed: [] });
+  });
+
+  it('a group in the later analysis only is added; in the earlier only is removed; both say which side used groups', () => {
+    const added = diffEventTreeResults(rec(), rec(undefined, groups()))!;
+    expect(added.groups.used).toEqual({ a: false, b: true });
+    expect(added.groups.added).toEqual([{ id: 'G', members: ['A', 'B'], beta: 0.1 }]); // members sorted
+    expect(added.groups.removed).toEqual([]);
+    const removed = diffEventTreeResults(rec(undefined, groups()), rec())!;
+    expect(removed.groups.used).toEqual({ a: true, b: false });
+    expect(removed.groups.removed).toEqual([{ id: 'G', members: ['A', 'B'], beta: 0.1 }]);
+    expect(removed.groups.added).toEqual([]);
+  });
+
+  it('a changed beta or members is listed; the same groups with members in another order are not a change', () => {
+    const beta = diffEventTreeResults(rec(undefined, groups()), rec(undefined, groups([{ id: 'G', members: ['A', 'B'], beta: 0.2 }])))!;
+    expect(beta.groups.changed).toEqual([{ id: 'G', members: null, beta: { from: 0.1, to: 0.2 } }]);
+    const members = diffEventTreeResults(rec(undefined, groups()), rec(undefined, groups([{ id: 'G', members: ['A', 'C'], beta: 0.1 }])))!;
+    expect(members.groups.changed).toEqual([{ id: 'G', members: { from: ['A', 'B'], to: ['A', 'C'] }, beta: null }]);
+    const reordered = diffEventTreeResults(rec(undefined, groups()), rec(undefined, groups([{ id: 'G', members: ['A', 'B'], beta: 0.1 }])))!;
+    expect(reordered.groups).toEqual({ used: { a: true, b: true }, added: [], removed: [], changed: [] });
+  });
+
+  it('a common_cause block that is present but damaged is damage: a complete record is then malformed and its numbers are not compared', () => {
+    for (const bad of ['oops', 5, null, { groups: 'x' }, { groups: [{ id: 'G' }] }, { groups: [{ id: 'G', members: [1] }] }]) {
+      const d = diffEventTreeResults(rec(), rec(undefined, { common_cause: bad }))!;
+      expect(d.malformed.b, JSON.stringify(bad)).toBe(true);
+      expect(d.numbersCompared, JSON.stringify(bad)).toBe(false);
+    }
+  });
+});
