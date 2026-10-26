@@ -1355,7 +1355,7 @@ MUTATIONS += [
 
 # Event tree view (src/web/ui/event-tree.ts): browser-only code, so the check is the end-to-end tests of the event-tree editor and its common-cause screens.
 ETV = ROOT / "src/web/ui/event-tree.ts"
-ETV_SUITE = ("cmd:npm run e2e --silent -- event-tree.spec.ts common-cause.spec.ts", 300)
+ETV_SUITE = ("cmd:npm run e2e --silent -- event-tree.spec.ts event-tree-view.spec.ts common-cause.spec.ts", 300)
 
 
 def etv(name: str, old: str, new: str) -> tuple:
