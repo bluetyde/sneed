@@ -11,6 +11,7 @@ interface Entry {
   type: string;
   group: { id: string; members: string[]; q: number; beta: number };
   logic: { kind: 'and' | 'or' | 'atleast'; k?: number };
+  outside?: { id: string; probability: number };
   expected_probability: number;
   expected_cut_sets: string[][] | null;
   independent_value: number;
@@ -59,11 +60,14 @@ function independentProbability(e: Entry): Q {
   return total;
 }
 
+/** An event outside the group joined by OR: 1 - (1 - P(group part)) * (1 - P(outside)). */
+const withOutside = (e: Entry, part: Q): Q => (e.outside ? Q.ONE.sub(Q.ONE.sub(part).mul(Q.ONE.sub(qFromNumber(e.outside.probability)))) : part);
+
 const close = (exact: Q, frozen: number, tol: number): boolean => Math.abs(exact.toNumber() - frozen) <= tol;
 
 describe('frozen common-cause oracles (tests/oracles-common-cause.json), reproduced by exact evaluation of the group definition', () => {
-  it('holds the six cases of plan 15, each once', () => {
-    expect(entries.map((e) => e.id)).toEqual(['cc-and', 'cc-or', 'cc-vote', 'cc-and-beta0', 'cc-or-beta0', 'cc-and-beta1']);
+  it('holds the seven cases of plan 15, each once', () => {
+    expect(entries.map((e) => e.id)).toEqual(['cc-and', 'cc-or', 'cc-vote', 'cc-and-beta0', 'cc-or-beta0', 'cc-and-beta1', 'cc-outside-event']);
     for (const e of entries) {
       expect(e.type).toBe('numerical');
       expect(e.group.members.length).toBeGreaterThanOrEqual(2);
@@ -74,8 +78,8 @@ describe('frozen common-cause oracles (tests/oracles-common-cause.json), reprodu
 
   for (const e of entries) {
     it(`${e.id}: the frozen probability and the frozen independent value are the exact values`, () => {
-      expect(close(groupProbability(e, qFromNumber(e.group.beta)), e.expected_probability, e.tolerance.absolute)).toBe(true);
-      expect(close(independentProbability(e), e.independent_value, e.tolerance.absolute)).toBe(true);
+      expect(close(withOutside(e, groupProbability(e, qFromNumber(e.group.beta))), e.expected_probability, e.tolerance.absolute)).toBe(true);
+      expect(close(withOutside(e, independentProbability(e)), e.independent_value, e.tolerance.absolute)).toBe(true);
     });
   }
 
@@ -113,7 +117,7 @@ describe('frozen common-cause oracles (tests/oracles-common-cause.json), reprodu
       const sets = e.expected_cut_sets!.map((s) => new Set(s));
       for (const [i, a] of sets.entries()) {
         for (const [j, b] of sets.entries()) if (i !== j) expect([...a].every((x) => b.has(x))).toBe(false);
-        for (const name of a) expect(name === `${e.group.id}.CCF` || e.group.members.some((m) => name === `${m}.independent`)).toBe(true);
+        for (const name of a) expect(name === `${e.group.id}.CCF` || name === e.outside?.id || e.group.members.some((m) => name === `${m}.independent`)).toBe(true);
       }
     }
   });

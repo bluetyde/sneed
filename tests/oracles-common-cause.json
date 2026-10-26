@@ -82,5 +82,20 @@
     "method": "exact",
     "derivation": "P(I) = 0, P(C) = 0.1. Both members fail exactly when C occurs: P = 0.1, as often as one member alone. Cut sets are not frozen (see cc-and-beta0)",
     "tolerance": { "absolute": 1e-12, "relative": 0 }
+  },
+  {
+    "id": "cc-outside-event",
+    "type": "numerical",
+    "plan": "docs/plans/15-common-cause.md, case CC7",
+    "model": "As cc-and, and a third event D (probability 0.2) that is not in the group: top = (A AND B) OR D",
+    "group": { "id": "G", "members": ["A", "B"], "q": 0.1, "beta": 0.1 },
+    "logic": { "kind": "and" },
+    "outside": { "id": "D", "probability": 0.2 },
+    "expected_probability": 0.2144152,
+    "expected_cut_sets": [["D"], ["G.CCF"], ["A.independent", "B.independent"]],
+    "independent_value": 0.208,
+    "method": "exact",
+    "derivation": "The group part is cc-and: 0.018019. D is independent of it and outside the group. P = 1 - (1 - 0.018019) * (1 - 0.2) = 1 - 0.981981 * 0.8 = 1 - 0.7855848 = 0.2144152. Without the group: 1 - (1 - 0.01) * 0.8 = 0.208. D keeps its own probability and its own cut set {D}",
+    "tolerance": { "absolute": 1e-12, "relative": 0 }
   }
 ]

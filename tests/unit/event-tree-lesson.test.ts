@@ -168,6 +168,19 @@ describe('a student who follows the steps', () => {
     expect(p.complete).toBe(false);
   });
 
+  it('a fault-tree model with common-cause groups is another model: an analysis made on it does not complete the lesson, even when its numbers happen to match', () => {
+    const l = lesson(L3);
+    const d = solve(L3);
+    const good = analysis(l, d);
+    // the lessons teach independent events; a model with groups has its own hash (the groups are part of what a model means), and the record says so
+    const grouped = { ...good, input_hashes: { model_hash: 'c'.repeat(64) }, common_cause: { method: 'beta-factor', groups: [{ id: 'CC1', members: ['X', 'Y'], beta: 0.1 }], note: 'n' } } as EtRecordLike;
+    expect(matchEtOutcome(l, grouped)).not.toBeNull(); // the numbers alone cannot tell
+    const p = checkEtLesson(l, d, grouped, ctxOf(null));
+    expect(p.modelMismatch).toBe(true);
+    expect(p.complete).toBe(false);
+    expect(checkEtLesson(l, d, good, ctxOf(null)).complete).toBe(true);
+  });
+
   it('an unrelated fault-tree model that gives the same numbers does not complete the lesson', () => {
     const l = lesson(L3);
     const d = solve(L3);
