@@ -1316,6 +1316,13 @@ MUTATIONS += [
     cr("the warning is given beside unequal probabilities", "src/core/validate.ts", "    } else if (first !== undefined && typeof g.beta === 'number' && g.beta >= 0 && g.beta <= 1) {", "    }\n    if (first !== undefined && typeof g.beta === 'number' && g.beta >= 0 && g.beta <= 1) {"),
     cr("an event-tree result with groups keeps the plain assumptions", "src/core/event-tree-result.ts", "if (!rec?.common_cause) return EVENT_TREE_ASSUMPTIONS_TEXT;", "if (true as boolean) return EVENT_TREE_ASSUMPTIONS_TEXT;"),
     cr("an event-tree result without groups gets the group sentence", "src/core/event-tree-result.ts", "if (!rec?.common_cause) return EVENT_TREE_ASSUMPTIONS_TEXT;", "if (false as boolean) return EVENT_TREE_ASSUMPTIONS_TEXT;"),
+    cr("a group with no reachable member is named in the refusal", "src/engines/bdd/analyze.ts", "(adding.length ? adding : groups).map((g) => g.id).join(',')", "groups.map((g) => g.id).join(',')"),
+    cr("every group is taken to add an event", "src/engines/bdd/analyze.ts", "const adding = groups.filter((g) => reached.has(groupEventId(g.id)));", "const adding = groups;"),
+    cr("the refusal gives the counts the wrong way round", "src/engines/bdd/analyze.ts", "`too-many-events-with-groups:${before}>${events.length}:", "`too-many-events-with-groups:${events.length}>${before}:"),
+    cr("the words give the old count as the new one", "src/web/ui/hints.ts", "which makes ${after}: over the limit.", "which makes ${before}: over the limit."),
+    cr("the undo step does not name the probability that changed (group)", "src/web/model/editor.ts", "and ${otherId}${this.changedProbabilities(before, doc)}`", "and ${otherId}`"),
+    cr("the undo step does not name the probability that changed (join)", "src/web/model/editor.ts", "to group ${groupId}${this.changedProbabilities(before, next)}`", "to group ${groupId}`"),
+    cr("a group is built on a damaged group list", "src/web/model/doc.ts", "if (d.common_cause_groups !== undefined && !Array.isArray(d.common_cause_groups)) return { doc, id: '' };", ""),
     cr("the figure prints the plain assumptions for a result with groups", "src/web/model/event-tree-figure.ts", "eventTreeAssumptionsText(opts.result?.record)", "eventTreeAssumptionsText(null)"),
 ]
 
