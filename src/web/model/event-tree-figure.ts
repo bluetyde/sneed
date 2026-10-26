@@ -3,7 +3,7 @@
 // variables, so the same string opens in any viewer, converts to PNG in the browser and prints in black and white. Shape, line style and words
 // carry the meaning, never colour. The drawing is a picture of the tables, not a second source: every number in it is a row of the result.
 import { enumeratePaths, pathKey, type PathStep } from '../../core/event-tree-paths.js';
-import { EVENT_TREE_ASSUMPTIONS_TEXT, endStateLabel, eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
+import { endStateLabel, eventTreeAssumptionsText, eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
 import type { EtDoc } from './event-tree-doc.js';
 import { CHAR_W, FONT, LINE, esc, num, short, wrapText } from './figure.js';
 
@@ -107,7 +107,7 @@ export function eventTreeSvg(doc: EtDoc, opts: EtFigureOptions = {}): string {
   });
   const legend = 'Each heading works (upper branch) or fails (lower branch). A heading that is not asked on a path has no branch there. Each line on the right is one sequence and the end state it ends in.';
   const tooMany = drawable ? [] : [`This tree has too many sequences to draw (more than ${MAX_DRAWN_SEQUENCES}). The sequence table lists all of them.`];
-  const foot = [...tooMany, ...headingLines, legend, EVENT_TREE_ASSUMPTIONS_TEXT, ...eventTreeResultLines(opts.result), `${appName}${opts.generated ? ` · ${opts.generated}` : ''}`].flatMap((t) => wrapText(t, Math.floor(contentW / CHAR_W)));
+  const foot = [...tooMany, ...headingLines, legend, eventTreeAssumptionsText(opts.result?.record), ...eventTreeResultLines(opts.result), `${appName}${opts.generated ? ` · ${opts.generated}` : ''}`].flatMap((t) => wrapText(t, Math.floor(contentW / CHAR_W)));
 
   const headH = 20 + head.length * LINE + 10;
   const top = m + headH + HEAD_H;

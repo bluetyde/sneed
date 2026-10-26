@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enumeratePaths, pathKey } from '../../src/core/event-tree-paths.js';
-import { EVENT_TREE_RESULT_SCHEMA, endStateLabel, type EventTreeResult } from '../../src/core/event-tree-result.js';
+import { EVENT_TREE_ASSUMPTIONS_TEXT, EVENT_TREE_RESULT_SCHEMA, endStateLabel, eventTreeAssumptionsText, type EventTreeResult } from '../../src/core/event-tree-result.js';
 import * as E from '../../src/web/model/event-tree-doc.js';
 import { MAX_DRAWN_SEQUENCES, eventTreeFileStem, eventTreeResultLines, eventTreeSvg } from '../../src/web/model/event-tree-figure.js';
 
@@ -203,5 +203,32 @@ describe('the figure of an event tree', () => {
     expect(draft).not.toContain('· 0.5 per year');
     expect(draft).toContain('>not set<');
     expect(eventTreeSvg(d, { frequencyDraft: null })).toContain('0.5 per year');
+  });
+});
+
+describe('the assumptions of an event-tree result with common-cause groups', () => {
+  it('are the plain sentence without groups, and say the members of a group are not independent with groups', () => {
+    expect(eventTreeAssumptionsText(null)).toBe(EVENT_TREE_ASSUMPTIONS_TEXT);
+    expect(eventTreeAssumptionsText(undefined)).toBe(EVENT_TREE_ASSUMPTIONS_TEXT);
+    expect(eventTreeAssumptionsText({})).toBe(EVENT_TREE_ASSUMPTIONS_TEXT);
+    const grouped = eventTreeAssumptionsText({ common_cause: { method: 'beta-factor' } });
+    expect(grouped).not.toBe(EVENT_TREE_ASSUMPTIONS_TEXT);
+    expect(grouped).toContain('except the members of the common-cause groups named with this result');
+    expect(grouped).toContain('beta-factor');
+    expect(grouped).not.toContain('with independent basic events'); // the plain claim is gone
+    expect(grouped.startsWith('Static, coherent fault trees with basic events')).toBe(true);
+    expect(grouped.endsWith(EVENT_TREE_ASSUMPTIONS_TEXT.slice(-60))).toBe(true); // the rest of the sentence is untouched
+  });
+
+  it('are in the printable figure: the group-aware sentence for a result with groups, the plain one for a result without', () => {
+    const d = twoHeadings();
+    // the footer sentence is wrapped over several text lines: read the text as one string
+    const words = (svg: string): string => svg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const withGroups = words(eventTreeSvg(d, { result: { record: record(d, { common_cause: { method: 'beta-factor', groups: [{ id: 'G', members: ['A', 'B'], beta: 0.1 }], note: 'n' } }), stale: false } }));
+    expect(withGroups).toContain('except the members of the common-cause groups named with this result');
+    const without = words(eventTreeSvg(d, { result: { record: record(d), stale: false } }));
+    expect(without).not.toContain('except the members of the common-cause groups');
+    expect(without).toContain('with independent basic events of constant probability');
+    expect(words(eventTreeSvg(d))).toContain('with independent basic events of constant probability'); // no result at all: the plain sentence
   });
 });
