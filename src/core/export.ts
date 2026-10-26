@@ -77,7 +77,7 @@ function safeNames(model: NativeModel): { model: NativeModel; renamed: Record<st
   if (dotted.length === 0) return { model, renamed: {} };
   const taken = new Set<string>([...model.events.map((e) => e.id), ...model.gates.map((g) => g.id)]);
   const to = new Map<string, string>();
-  const renamed: Record<string, string> = {};
+  const renamed = Object.create(null) as Record<string, string>; // no prototype: any id is an ordinary key
   for (const e of dotted) {
     const base = e.id.replaceAll('.', '__');
     let name = base;
@@ -211,7 +211,7 @@ export function exportOpenPsa(input: NativeModel, options: ExportOptions = {}): 
   }
   lines.push('  </define-fault-tree>', '</opsa-mef>', '');
 
-  const collapsed: Record<string, string> = {};
+  const collapsed = Object.create(null) as Record<string, string>; // no prototype: a gate called __proto__ is an ordinary key
   for (const [id, to] of resolved) if (id !== to && gateById.has(id)) collapsed[id] = to;
   return {
     xml: lines.join('\n'),

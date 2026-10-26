@@ -115,6 +115,25 @@ dup_group = group_doc(); dup_group["common_cause_groups"].append(dict(dup_group[
 group_clash = group_doc(); group_clash["common_cause_groups"][0]["id"] = "P1"
 refusal_cases += [{"id": n, "document_json": json.dumps(d), "error": "E_DUP_ID"} for n, d in (("duplicate-group-id", dup_group), ("group-event-namespace-clash", group_clash))]
 
+# an id of __proto__ is valid and must count (it once dropped out of the hash in the JavaScript implementations)
+def proto_case(cid, d, **rel):
+    text = json.dumps(d, indent=2)
+    model_cases.append({"id": cid, "relation_to_base": "differs", **rel, "document_json": text, "model_hash": model_hash(d), "document_hash": document_hash(text.encode("utf-8"))})
+
+
+pe = to_array_doc(BASE); pe["events"].append({"id": "__proto__", "probability": 0.25}); pe["gates"][0]["inputs"].append("__proto__")
+proto_case("proto-event-base", pe, differs_from="base")
+pe2 = json.loads(json.dumps(pe)); pe2["events"][-1]["probability"] = 0.5
+proto_case("proto-event-probability-changed", pe2, differs_from="proto-event-base")
+pg = to_array_doc(BASE); pg["gates"].append({"id": "__proto__", "type": "or", "inputs": ["P1", "P2"]}); pg["gates"][0]["inputs"].append("__proto__")
+proto_case("proto-gate-base", pg, differs_from="base")
+pg2 = json.loads(json.dumps(pg)); pg2["gates"][-1]["type"] = "and"
+proto_case("proto-gate-type-changed", pg2, differs_from="proto-gate-base")
+pc = group_doc(); pc["common_cause_groups"][0]["id"] = "__proto__"
+proto_case("proto-group-base", pc, differs_from="groups-base")
+pc2 = json.loads(json.dumps(pc)); pc2["common_cause_groups"][0]["beta"] = 0.2
+proto_case("proto-group-beta-changed", pc2, differs_from="proto-group-base")
+
 out = {"serializer": "RFC 8785 (JCS) subset; IDs per canon.ID_PATTERN", "projection": "plan 01 model identity", "number_cases": [{"value": v, "canonical": c} for v, c in NUMBERS], "model_cases": model_cases, "refusal_cases": refusal_cases, "id_cases": id_cases}
 open("vectors.json", "w", newline="\n").write(json.dumps(out, indent=1) + "\n")
 print(len(NUMBERS), "number cases,", len(model_cases), "model cases")

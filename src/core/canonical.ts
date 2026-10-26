@@ -25,12 +25,13 @@ interface Doc {
 
 /** Semantic projection hashed as model_hash. Callers validate first; duplicates are refused here too. */
 export function projection(doc: Doc): unknown {
-  const events: Record<string, number> = {};
+  // no prototype: an id such as __proto__ is an ordinary key here, not the object's prototype (it would otherwise drop out of the hash)
+  const events = Object.create(null) as Record<string, number>;
   for (const e of doc.events) {
     if (Object.hasOwn(events, e.id)) throw new Error('E_DUP_ID event ' + e.id);
     events[e.id] = e.probability;
   }
-  const gates: Record<string, unknown> = {};
+  const gates = Object.create(null) as Record<string, unknown>;
   for (const g of doc.gates) {
     if (Object.hasOwn(gates, g.id) || Object.hasOwn(events, g.id)) throw new Error('E_DUP_ID gate ' + g.id);
     const entry: Record<string, unknown> = { type: g.type, inputs: [...g.inputs].sort() };
@@ -39,7 +40,7 @@ export function projection(doc: Doc): unknown {
   }
   const out: Record<string, unknown> = { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
   // common-cause groups (plan 15): present only when the list is not empty, so a model without groups keeps its hash
-  const groups: Record<string, unknown> = {};
+  const groups = Object.create(null) as Record<string, unknown>;
   for (const g of doc.common_cause_groups ?? []) {
     if (Object.hasOwn(groups, g.id) || Object.hasOwn(events, g.id) || Object.hasOwn(gates, g.id)) throw new Error('E_DUP_ID group ' + g.id);
     groups[g.id] = { method: g.method, members: [...g.members].sort(), beta: g.beta };

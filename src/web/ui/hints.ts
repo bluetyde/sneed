@@ -22,6 +22,7 @@ export const PROBLEM_HINTS: Record<string, string> = {
   E_EXPORT_LIMIT: 'This K-of-N gate is too large to hand to the engine. Split it into smaller gates.',
   W_UNREACHABLE: 'This node is not connected to the top event. It is kept in the model but ignored by the analysis.',
   W_UNKNOWN_FIELD: 'The file has a field this editor does not know. It is kept as it is and ignored.',
+  W_CCF_LARGE_Q: 'With a large probability the beta-factor expansion gives members a probability below the one you set. Lower the probability, or read the answer with that in mind.',
   W_LAYOUT_STALE: 'A stored position refers to a node that no longer exists. It has no effect on any result.',
 };
 
@@ -37,6 +38,7 @@ export const REASON_TEXT: Record<string, string> = {
   'probability-inconsistent-with-cut-sets': 'The engine\'s probability does not match its own cut sets, so the result is not accepted.',
   'probability-out-of-range': 'The engine reported a probability outside 0 to 1.',
   'empty-result-inconsistent': 'The engine reported no cut sets for a model that must have some.',
+  'too-many-events': 'The model has more basic events than the engine allows.',
   'toolchain-lock-mismatch': 'The installed runtime failed its integrity check.',
 };
 
@@ -53,6 +55,9 @@ export const METHOD_TEXT: Record<string, string> = {
 /** What a reason code means; falls back to the code itself so nothing is ever hidden. */
 export function reasonText(code: string): string {
   if (REASON_TEXT[code]) return REASON_TEXT[code]!;
+  if (code.startsWith('too-many-events-with-groups:')) {
+    return `The model has as many basic events as the engine allows, and its common-cause groups (${code.slice(28).split(',').join(', ')}) each add one shared event, which is one too many. Take a group or an event out.`;
+  }
   if (code.startsWith('engine-exit-')) return `The engine stopped with an error (${code.slice(12)}).`;
   if (code.startsWith('engine-error:')) return `The engine refused the input (${code.slice(13)}).`;
   if (code.startsWith('report-')) return `The engine's report could not be read (${code.slice(7)}).`;

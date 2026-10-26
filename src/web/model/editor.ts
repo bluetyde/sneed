@@ -277,14 +277,29 @@ export class Editor {
   // ---- common-cause groups (plan 15) ----
   /** Makes a group of two events that are not in a group yet. The group takes the first event's probability for both. */
   makeGroup(eventId: string, otherId: string): string {
-    const { doc, id } = D.addGroup(this.doc, [eventId, otherId]);
+    const before = this.doc;
+    const { doc, id } = D.addGroup(before, [eventId, otherId]);
     if (id === '') return '';
     this.commit(doc, `Make a common-cause group ${id} of ${eventId} and ${otherId}`);
     this.selectGroup(id);
+    this.noteSharedProbability(before, doc);
     return id;
   }
   addToGroup(groupId: string, eventId: string): void {
-    this.commit(D.addToGroup(this.doc, groupId, eventId), `Add ${eventId} to group ${groupId}`);
+    const before = this.doc;
+    const next = D.addToGroup(before, groupId, eventId);
+    this.commit(next, `Add ${eventId} to group ${groupId}`);
+    this.noteSharedProbability(before, next);
+  }
+  /**
+   * The members of a group share one probability, so joining a group can change an event's probability. Say which, with the old and the new
+   * value, instead of changing it silently (undo puts it back).
+   */
+  private noteSharedProbability(before: D.Doc, after: D.Doc): void {
+    const was = new Map(before.events.map((e) => [e.id, e.probability]));
+    const changed = after.events.filter((e) => was.has(e.id) && was.get(e.id) !== e.probability).map((e) => `${e.id} (${was.get(e.id)} to ${e.probability})`);
+    if (changed.length === 0) return;
+    this.setNotice('warning', `The members of a group share one probability, so ${changed.join(' and ')} changed. Undo puts ${changed.length === 1 ? 'it' : 'them'} back.`);
   }
   removeFromGroup(groupId: string, eventId: string): void {
     this.commit(D.removeFromGroup(this.doc, groupId, eventId), `Remove ${eventId} from group ${groupId}`);
