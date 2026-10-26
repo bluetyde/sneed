@@ -60,6 +60,17 @@ export interface EventTreeResult {
 export const EVENT_TREE_ASSUMPTIONS_TEXT =
   'Static, coherent fault trees with independent basic events of constant probability per demand; one initiating event with a constant frequency that does not depend on any basic event; each heading either works or fails, and "works" is exactly "its event does not occur"; sequence frequencies are exact joint probabilities (events shared by headings count once); no recovery and no change with time. A frequency here is a model result under these assumptions, not a plant figure.';
 
+/**
+ * The assumptions in words for one result. A result made on a fault-tree model with common-cause groups does not rest on independent basic events
+ * for the members of those groups, so the sentence says so instead of repeating the plain statement (plan 15).
+ */
+export function eventTreeAssumptionsText(rec?: { common_cause?: unknown } | null): string {
+  if (!rec?.common_cause) return EVENT_TREE_ASSUMPTIONS_TEXT;
+  const plain = 'independent basic events of constant probability per demand';
+  if (!EVENT_TREE_ASSUMPTIONS_TEXT.includes(plain)) throw new Error('the assumptions sentence changed: update eventTreeAssumptionsText');
+  return EVENT_TREE_ASSUMPTIONS_TEXT.replace(plain, 'basic events of constant probability per demand that are independent, except the members of the common-cause groups named with this result, which follow the beta-factor model');
+}
+
 /** An end state's name with "(example)" after it when it is marked as an example, unless the name already says so. */
 export const endStateLabel = (name: string, synthetic: boolean): string => (synthetic && !/\(example\)\s*$/i.test(name) ? `${name} (example)` : name);
 

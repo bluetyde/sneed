@@ -218,6 +218,10 @@ test.describe('common-cause groups', () => {
     await expect(page.getByTestId('et-common-cause')).toContainText('CC1: A, B; beta 0.1');
     await expect(page.getByTestId('et-common-cause')).toContainText('different kind of result');
     await expect(page.getByTestId('et-caveat').filter({ hasText: 'common-cause groups' })).toHaveCount(1);
+    // the assumptions say the members of the group are not independent: the sentence, and the independence entry of the list
+    await expect(page.getByTestId('et-assumptions')).toContainText('except the members of the common-cause groups below');
+    await expect(page.locator('p.hint').filter({ hasText: 'except the members of the common-cause groups named with this result' })).toHaveCount(1);
+    await expect(page.locator('p.hint').filter({ hasText: 'with independent basic events of constant probability' })).toHaveCount(0);
     await audit(page, 'event tree result with a common-cause group');
   });
 });

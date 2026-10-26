@@ -1,7 +1,7 @@
 // The event-tree view (docs/plans/13-event-trees.md, stage S3). Table first: every part of the tree is a labelled table or form that the
 // keyboard and a screen reader can walk, and the numbers come back as tables too. The branching drawing is a later stage (S4).
 import type { EventTreeEditor } from '../model/event-tree-editor.js';
-import { EVENT_TREE_ASSUMPTIONS_TEXT, endStateLabel, eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
+import { endStateLabel, eventTreeAssumptionsText, eventTreeFailureText, type EventTreeResult } from '../../core/event-tree-result.js';
 import type { EtIssue } from '../../core/event-tree.js';
 import { MAX_HEADINGS, pathKey } from '../../core/event-tree-paths.js';
 import { h, rerender, type Child } from './dom.js';
@@ -340,8 +340,8 @@ export class EventTreeView {
     for (const w of rec.warnings) out.push(h('div', { class: 'caveat', role: 'note' }, h('strong', {}, 'Warning. '), w));
 
     out.push(h('h3', {}, 'Assumptions'));
-    out.push(h('dl', { class: 'kv', 'data-testid': 'et-assumptions' }, ...Object.entries(rec.assumptions).flatMap(([k, v]) => [h('dt', {}, ASSUMPTION_TEXT[k] ?? k), h('dd', {}, String(v))])));
-    out.push(h('p', { class: 'hint' }, EVENT_TREE_ASSUMPTIONS_TEXT));
+    out.push(h('dl', { class: 'kv', 'data-testid': 'et-assumptions' }, ...Object.entries(rec.assumptions).flatMap(([k, v]) => [h('dt', {}, ASSUMPTION_TEXT[k] ?? k), h('dd', {}, k === 'independence' && rec.common_cause ? `${String(v)}, except the members of the common-cause groups below` : String(v))])));
+    out.push(h('p', { class: 'hint' }, eventTreeAssumptionsText(rec)));
     out.push(h('h3', {}, 'How this was produced'));
     out.push(h('dl', { class: 'kv' },
       h('dt', {}, 'Engine'), h('dd', {}, `${rec.engine.name} ${rec.engine.version}`),
