@@ -232,3 +232,13 @@ describe('export semantics (exported XML evaluated independently, without the en
     }
   });
 });
+
+describe('an id of __proto__ in the export', () => {
+  it('a gate called __proto__ that collapses to its one input is an ordinary entry of the collapse record, not lost', () => {
+    const e = exportOpenPsa(model(mkDoc('TOP', { A: 0.1, B: 0.2 }, [OR('__proto__', ['A', 'A']), AND('TOP', ['__proto__', 'B'])])));
+    expect(Object.keys(e.mapping.collapsed)).toContain('__proto__');
+    expect(Object.getOwnPropertyDescriptor(e.mapping.collapsed, '__proto__')?.value).toBe('A');
+    // and the record survives being written out and read back
+    expect(Object.keys(JSON.parse(JSON.stringify(e.mapping.collapsed)))).toContain('__proto__');
+  });
+});

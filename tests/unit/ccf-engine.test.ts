@@ -9,6 +9,7 @@ import type { NativeModel } from '../../src/core/model.js';
 import { enumerateGroups, frozenCaseDoc, randomGroupDoc, type FrozenCase, type GroupDoc } from '../oracle/groups.js';
 import { AND, OR, VOTE, mkDoc } from '../oracle/models.js';
 import { enumerate } from '../oracle/enumerate.js';
+import { reasonText } from '../../src/web/ui/hints.js';
 
 // Plan 15, stage C2: the built-in engine analyses a model with common-cause groups by expanding them. The oracles are the six frozen
 // cases (tests/oracles-common-cause.json) and an exact evaluation of the group definition on random trees (tests/oracle/groups.ts).
@@ -37,6 +38,43 @@ let counter = 0;
 const runId = (): string => `ccf-run-${String(++counter).padStart(6, '0')}`;
 
 const modelOf = frozenCaseDoc;
+
+describe('the event limit with groups', () => {
+  const big = (n: number, groups: unknown[]): string => {
+    const ids = Array.from({ length: n }, (_, i) => `E${i}`);
+    // one AND of every event: a single cut set, so only the event limit can stop it (an OR of 2000 events has 2000 cut sets, and probabilities this high keep the product from underflowing)
+    const doc = mkDoc('TOP', Object.fromEntries(ids.map((id) => [id, 0.999])), [AND('TOP', ids)]) as Record<string, unknown>;
+    if (groups.length) {
+      doc.common_cause_groups = groups;
+      doc.assumptions = { ...(doc.assumptions as object), independence: 'beta-factor-groups' };
+    }
+    return JSON.stringify(doc);
+  };
+  // the default node limit would stop a 2000-event AND first, so it is raised here
+  const run = async (text: string) => (await analyzeBuiltin(text, { runsDir: temp(), runId: runId(), limits: { maxNodes: 1_000_000 } })) as { kind: string; record: { status: string; reasons: string[] } };
+
+  it('a model that fits the limit only without its groups is refused with the groups named; the same model without groups is not stopped by the event limit', async () => {
+    const ok = await run(big(2000, []));
+    expect(ok.record.reasons.join()).not.toContain('too-many-events'); // 2000 events are allowed (a 2000-event AND then stops at the size of its diagram, which is not what is tested here)
+    const refused = await run(big(2000, [{ id: 'CC1', method: 'beta-factor', members: ['E0', 'E1'], beta: 0.1 }, { id: 'CC2', method: 'beta-factor', members: ['E2', 'E3'], beta: 0.1 }]));
+    expect(refused.record.status).toBe('failed');
+    expect(refused.record.reasons).toEqual(['too-many-events-with-groups:CC1,CC2']);
+  }, 60_000);
+
+  it('a model over the limit on its own keeps the plain code, and one that reaches the limit exactly with its groups is not stopped by it', async () => {
+    const over = await run(big(2001, []));
+    expect(over.record.reasons).toEqual(['too-many-events']);
+    const overWithGroup = await run(big(2001, [{ id: 'CC1', method: 'beta-factor', members: ['E0', 'E1'], beta: 0.1 }]));
+    expect(overWithGroup.record.reasons).toEqual(['too-many-events']); // not the groups' doing
+    const fine = await run(big(1999, [{ id: 'CC1', method: 'beta-factor', members: ['E0', 'E1'], beta: 0.1 }]));
+    expect(fine.record.reasons.join()).not.toContain('too-many-events'); // 1999 and one shared event is 2000: at the limit, not over it
+  }, 60_000);
+
+  it('the words say which groups', () => {
+    expect(reasonText('too-many-events-with-groups:CC1,CC2')).toContain('(CC1, CC2)');
+    expect(reasonText('too-many-events')).toContain('more basic events than the engine allows');
+  });
+});
 
 describe('expandGroups', () => {
   const pair = { id: 'G', members: ['A', 'B'], beta: 0.1 };

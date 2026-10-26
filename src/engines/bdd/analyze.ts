@@ -12,7 +12,7 @@ import { reachableEvents } from '../../core/bounds.js';
 import { commonCauseRecord, expandGroups, withoutGroups } from '../../core/ccf.js';
 import { validateModelText } from '../../core/validate.js';
 import { solveIsolated } from './isolate.js';
-import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, type Solution } from './solve.js';
+import { BDD_ENGINE_NAME, BDD_ENGINE_VERSION, MAX_EVENTS, type Solution } from './solve.js';
 import { BDD_SOURCE_SHA256 } from './build-id.js';
 import type { BddLimits } from './bdd.js';
 
@@ -94,6 +94,13 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   const engine = { name: BDD_ENGINE_NAME, version: BDD_ENGINE_VERSION, sha256: BDD_SOURCE_SHA256, runtime: null };
   const base = { model, settings, engine, expectedVersion: BDD_ENGINE_VERSION, expectedName: BDD_ENGINE_NAME, hashes, exportedEvents: events, check };
   const idle = { exit: 0, timedOut: false, cancelled: false, stderr: '' };
+  // The expansion adds one shared event per group. A model that fits the event limit only without its groups is refused with the groups named
+  // (plan 15), so the student knows what to remove; a model over the limit on its own keeps the plain code.
+  const failureCode = (why: string): string => {
+    if (why === 'internal') return 'engine-error';
+    if (why === 'too-many-events' && groups.length > 0 && reachableEvents(original).length <= MAX_EVENTS) return `too-many-events-with-groups:${groups.map((g) => g.id).join(',')}`;
+    return why;
+  };
   let independentValue: number | null = null; // with groups: what the same events give as independent events, so the answer can be read against it
   const finish = (record: ResultRecord, extra: Record<string, unknown> = {}): AnalyzeOutcome => {
     const final: ResultRecord = {
@@ -115,7 +122,7 @@ export async function analyzeBuiltin(documentText: string, opts: BuiltinOptions)
   if (!answer.ok) {
     if (answer.why === 'cancelled') return finish(assess({ ...base, outcome: { ...idle, cancelled: true }, reportText: null }));
     if (answer.why === 'timeout') return finish(assess({ ...base, outcome: { ...idle, timedOut: true }, reportText: null }));
-    return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [answer.why === 'internal' ? 'engine-error' : answer.why] }));
+    return finish(assess({ ...base, outcome: idle, reportText: null, forceFail: [failureCode(answer.why)] }));
   }
   sol = answer.solution;
   if (groups.length) {

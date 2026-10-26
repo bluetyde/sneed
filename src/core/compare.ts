@@ -76,6 +76,8 @@ export function readDoc(raw: unknown): ReadDoc | null {
     gates.set(g.id, { id: g.id, type: g.type, threshold: num(g.threshold) ? g.threshold : null, inputs: g.inputs as string[] });
   }
   const groups = new Map<string, ReadGroup>();
+  // present but not a list: the file is damaged, and two damaged files must not compare as "the same groups"
+  if (raw.common_cause_groups !== undefined && !Array.isArray(raw.common_cause_groups)) return null;
   if (Array.isArray(raw.common_cause_groups)) {
     for (const g of raw.common_cause_groups) {
       if (!isObj(g) || !str(g.id) || !Array.isArray(g.members) || !g.members.every(str)) return null;

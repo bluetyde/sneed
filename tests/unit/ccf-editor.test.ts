@@ -226,12 +226,56 @@ function realApi(lessonText: string): Api {
   } as unknown as Api;
 }
 
+describe('Compare with damaged group data', () => {
+  it('a model whose common_cause_groups is present but not a list cannot be compared (it is not read as "no groups")', () => {
+    const good = JSON.parse(D.serialize(D.addGroup(base(), ['E1', 'E2']).doc));
+    expect(diffModels(good, good)).not.toBeNull();
+    for (const bad of ['oops', 5, { CC1: 1 }, null, true]) {
+      const damaged = { ...good, common_cause_groups: bad };
+      expect(diffModels(good, damaged), JSON.stringify(bad)).toBeNull();
+      expect(diffModels(damaged, good), JSON.stringify(bad)).toBeNull();
+    }
+    // a model that simply has no groups field still compares
+    const { common_cause_groups: _drop, ...plain } = good;
+    void _drop;
+    expect(diffModels(plain, plain)).not.toBeNull();
+  });
+});
+
 describe('the editor with common-cause groups', () => {
   const editor = async (): Promise<Editor> => {
     const ed = new Editor(realApi(readFileSync(path.join(root, 'lessons', '05-common-cause.json'), 'utf8')), { debounceMs: 0 });
     await ed.loadLessons();
     return ed;
   };
+
+  it('joining a group says which probabilities changed, with the old and new value, and undo puts them back; nothing is said when nothing changed', async () => {
+    const ed = await editor();
+    ed.doc = D.setProbability(base(), 'E2', 0.2); // E1 keeps its default probability, so the two differ
+    const first = D.findEvent(ed.doc, 'E1')!.probability;
+    ed.setNotice(null);
+    ed.makeGroup('E1', 'E2');
+    expect(ed.notice?.kind).toBe('warning');
+    expect(ed.notice?.text).toContain(`E2 (0.2 to ${first})`);
+    expect(ed.notice?.text).not.toContain('E1 (');
+    expect(D.findEvent(ed.doc, 'E2')!.probability).toBe(first);
+    ed.undo();
+    expect(D.findEvent(ed.doc, 'E2')!.probability).toBe(0.2);
+    // a third event with another probability joins: it is named
+    ed.redo();
+    ed.doc = D.setProbability(ed.doc, 'E3', 0.3);
+    ed.setNotice(null);
+    ed.addToGroup('CC1', 'E3');
+    expect(ed.notice?.text).toContain(`E3 (0.3 to ${first})`);
+    // events that already agree: no notice
+    const ed2 = await editor();
+    ed2.doc = base();
+    ed2.setNotice(null);
+    ed2.makeGroup('E1', 'E2');
+    expect(ed2.notice).toBeNull();
+    ed2.addToGroup('CC1', 'E3');
+    expect(ed2.notice).toBeNull();
+  });
 
   it('makeGroup, undo and redo, selection of a group, and the group labels', async () => {
     const ed = await editor();

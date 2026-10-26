@@ -16,7 +16,7 @@ function canon(v) {
   return JSON.stringify(v);
 }
 function byId(items, kind) {
-  const out = {};
+  const out = Object.create(null); // no prototype: an id such as __proto__ is an ordinary key
   for (const it of items) {
     if (Object.prototype.hasOwnProperty.call(out, it.id)) throw new Error('E_DUP_ID ' + kind + ' ' + it.id);
     out[it.id] = it;
@@ -27,19 +27,19 @@ function projection(doc) {
   const evById = byId(doc.events, 'event');
   const gById = byId(doc.gates, 'gate');
   for (const id of Object.keys(evById)) if (id in gById) throw new Error('E_DUP_ID namespace clash');
-  const gates = {};
+  const gates = Object.create(null);
   for (const [gid, g] of Object.entries(gById)) {
     const e = { type: g.type, inputs: [...g.inputs].sort() };
     if ('threshold' in g) e.threshold = g.threshold;
     gates[gid] = e;
   }
-  const events = {};
+  const events = Object.create(null);
   for (const [id, e] of Object.entries(evById)) events[id] = e.probability;
   const out = { schema: { id: doc.schema.id, version: doc.schema.version }, assumptions: doc.assumptions, top: doc.top, events, gates };
   const grById = byId(doc.common_cause_groups || [], 'group');
   for (const id of Object.keys(grById)) if (id in evById || id in gById) throw new Error('E_DUP_ID group namespace clash');
   if (Object.keys(grById).length) {
-    out.common_cause_groups = {};
+    out.common_cause_groups = Object.create(null);
     for (const [gid, g] of Object.entries(grById)) out.common_cause_groups[gid] = { method: g.method, members: [...g.members].sort(), beta: g.beta };
   }
   return out;

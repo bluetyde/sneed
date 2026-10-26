@@ -157,3 +157,41 @@ describe('a gate with very many inputs (Codex review)', () => {
     expect(validateModel(doc).errors.filter((e) => e.code === 'E_CYCLE')).toHaveLength(1);
   });
 });
+
+describe('the warning for a large Q in a common-cause group', () => {
+  const doc = (q: number, beta: number): Record<string, unknown> => ({
+    schema: { id: 'sneed.fault-tree', version: 1 },
+    model: { id: 'm', name: 'M', created: '2026-10-26T00:00:00Z', updated: '2026-10-26T00:00:00Z' },
+    assumptions: { probability_model: 'constant', independence: 'beta-factor-groups', coherence: 'coherent', time: 'none' },
+    top: 'TOP',
+    events: [{ id: 'A', probability: q }, { id: 'B', probability: q }],
+    gates: [{ id: 'TOP', type: 'and', inputs: ['A', 'B'] }],
+    common_cause_groups: [{ id: 'G', method: 'beta-factor', members: ['A', 'B'], beta }],
+  });
+  const codes = (q: number, beta: number): string[] => validateModel(doc(q, beta)).warnings.map((w) => w.code);
+
+  it('is given when beta (1 - beta) Q^2 is over 0.01, with the probability a member really has, and the model stays valid', () => {
+    const r = validateModel(doc(1, 0.5));
+    expect(r.valid).toBe(true);
+    expect(r.warnings.map((w) => w.code)).toEqual(['W_CCF_LARGE_Q']);
+    expect(r.warnings[0]!.message).toContain('0.75'); // 1 - (1 - 0.5)(1 - 0.5)
+    expect(r.warnings[0]!.ids).toEqual(['G']);
+    expect(codes(0.5, 0.5)).toEqual(['W_CCF_LARGE_Q']); // 0.0625
+  });
+
+  it('is not given for small values, at the edges of beta, or exactly at the difference of 0.01', () => {
+    expect(codes(0.1, 0.1)).toEqual([]); // 0.0009
+    expect(codes(0.2, 0.5)).toEqual([]); // 0.01 exactly is not over it
+    expect(codes(1, 0)).toEqual([]);
+    expect(codes(1, 1)).toEqual([]);
+    expect(codes(0.2, 0.51)).toEqual([]); // 0.009996
+    expect(codes(0.21, 0.5)).toEqual(['W_CCF_LARGE_Q']); // 0.011025
+  });
+
+  it('is not given beside an error that makes the numbers meaningless (unequal probabilities, beta out of range)', () => {
+    const d = doc(1, 0.5) as { events: { probability: number }[] };
+    d.events[1]!.probability = 0.9;
+    expect(validateModel(d).warnings.map((w) => w.code)).toEqual([]);
+    expect(codes(1, 2)).toEqual([]);
+  });
+});

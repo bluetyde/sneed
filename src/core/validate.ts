@@ -28,7 +28,7 @@ export type ErrorCode =
   | 'E_CCF_TOO_LARGE'
   | 'E_CCF_BETA_RANGE'
   | 'E_CCF_UNEQUAL_Q';
-export type WarningCode = 'W_UNREACHABLE' | 'W_UNKNOWN_FIELD' | 'W_LAYOUT_STALE';
+export type WarningCode = 'W_UNREACHABLE' | 'W_UNKNOWN_FIELD' | 'W_LAYOUT_STALE' | 'W_CCF_LARGE_Q';
 export type Code = ErrorCode | WarningCode;
 
 export interface Issue {
@@ -142,7 +142,13 @@ interface Gate {
 /** Common-cause groups (plan 15). A group is a visible object: its members are basic events with one shared probability, and the model's assumptions say groups are in use. */
 const CCF_MIN = 2;
 const CCF_MAX = 8;
-function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'event' | 'gate'>, errors: Issue[]): void {
+/**
+ * A member fails when its independent part or the group event occurs, and those are independent events, so its probability is
+ * Q - beta (1 - beta) Q^2, not Q. Above this difference the model says so (plan 15, section 2): it is a good approximation for small Q only.
+ */
+const CCF_LARGE_DIFFERENCE = 0.01;
+
+function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'event' | 'gate'>, errors: Issue[], warnings: Issue[]): void {
   const groups = Array.isArray(doc.common_cause_groups) ? doc.common_cause_groups : [];
   const independence = isObj(doc.assumptions) ? doc.assumptions.independence : undefined;
   if (groups.length > 0 && independence !== 'beta-factor-groups') {
@@ -186,6 +192,13 @@ function commonCauseChecks(doc: Record<string, unknown>, kinds: Map<string, 'eve
     const first = known.length ? probability.get(known[0]!) : undefined;
     if (first !== undefined && known.some((m) => probability.get(m) !== first)) {
       errors.push(issue('E_CCF_UNEQUAL_Q', `${path}/members`, `the members of group ${q(gid)} must have one probability (the beta-factor model has one total probability per group)`, [gid, ...known]));
+    } else if (first !== undefined && typeof g.beta === 'number' && g.beta >= 0 && g.beta <= 1) {
+      const difference = g.beta * (1 - g.beta) * first * first;
+      // a tolerance: 0.5 x 0.5 x 0.2 x 0.2 is 0.010000000000000002 in floating point
+      if (difference - CCF_LARGE_DIFFERENCE > 1e-12) {
+        const member = first - difference;
+        warnings.push(issue('W_CCF_LARGE_Q', `${path}/beta`, `in group ${q(gid)}, with Q = ${first} and beta = ${g.beta}, a member fails with probability ${Number(member.toPrecision(4))}, not ${first}: the independent part and the common cause are independent events, so both can happen (the approximation is good for small Q only)`, [gid]));
+      }
     }
   });
 }
@@ -246,7 +259,7 @@ function semanticChecks(doc: Record<string, unknown>, errors: Issue[], warnings:
     }
   }
 
-  commonCauseChecks(doc, kinds, errors);
+  commonCauseChecks(doc, kinds, errors, warnings);
 
   // cycles among gates (iterative three-colour DFS; first definition of an id wins)
   const color = new Map<string, 0 | 1 | 2>();
