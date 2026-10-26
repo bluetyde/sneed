@@ -703,6 +703,8 @@ MUTATIONS += [
 ETE = ROOT / "src/engines/bdd/event-tree.ts"
 ETA = ROOT / "src/engines/bdd/event-tree-analyze.ts"
 CCF = ROOT / "src/core/ccf.ts"
+ETED = ROOT / "src/web/model/event-tree-editor.ts"  # the editor model; ETE (above) is the engine
+ETFIG = ROOT / "src/web/model/event-tree-figure.ts"
 ETB = ROOT / "src/engines/bdd/bdd.ts"
 ETS = ROOT / "src/engines/bdd/solve.ts"
 ETE_SUITE = ("tests/unit/event-tree-engine.test.ts tests/unit/event-tree-analyze.test.ts tests/unit/server.test.ts tests/unit/bdd.test.ts", 240)
@@ -1388,6 +1390,12 @@ MUTATIONS += [
     cc("importance: no note about the groups", SA, "assumptions: original.common_cause_groups?.length ? `${IMPORTANCE_ASSUMPTIONS} ${IMPORTANCE_GROUPS_NOTE}` : IMPORTANCE_ASSUMPTIONS", "assumptions: IMPORTANCE_ASSUMPTIONS"),
     cc("importance: the added events have no names", SA, "for (const [id, name] of derivedEventNames(original)) names.set(id, name);", "void derivedEventNames;"),
     cc("importance: a group event is named like a member", CCF, "out.set(groupEventId(g.id), `common cause of group ${g.name?.trim() || g.id}`);", "out.set(groupEventId(g.id), `${g.name?.trim() || g.id} on its own`);"),
+    cc("event tree editor: a gate over a member is not followed", ETED, "if (g) g.inputs.forEach(walk);", "if (g) void g;"),
+    cc("event tree editor: a heading depends on a group only if it has all its members", ETED, "return m.groups.filter((g) => g.members.some((x) => events.has(x)));", "return m.groups.filter((g) => g.members.every((x) => events.has(x)));"),
+    cc("event tree editor: one heading counts as sharing a group", ETED, "if (headings.length >= 2) out.push({ group: g, headings });", "if (headings.length >= 1) out.push({ group: g, headings });"),
+    cc("event tree editor: the groups of the model are not read", ETED, "groups: (m.common_cause_groups ?? []).map(", "groups: ([] as NonNullable<typeof m.common_cause_groups>).map("),
+    cc("event tree editor: the inputs of the gates are not read", ETED, "inputs: Array.isArray(g.inputs) ? g.inputs : [] })),", "inputs: [] as string[] })),"),
+    cc("event tree editor: the figure does not name the groups", ETFIG, "if (rec.common_cause) out.push(`Common-cause groups used", "if (false as boolean) out.push(`Common-cause groups used"),
     cc("setting a member's probability leaves the other members", WD, "const members = groupOf(d, id)?.members ?? [id];", "const members = [id];"),
     cc("a group of one is kept", WD, "d.common_cause_groups.filter((g) => g.members.length >= 2);", "d.common_cause_groups.filter((g) => g.members.length >= 1);"),
     cc("the assumption never follows the groups", WD, "independence: used ? 'beta-factor-groups' : 'declared-independent' };", "independence: 'declared-independent' };"),

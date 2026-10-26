@@ -16,7 +16,15 @@ export interface ModelInfoView {
   hash: string | null;
   top: string;
   events: { id: string; name: string }[];
-  gates: { id: string; name: string }[];
+  gates: { id: string; name: string; inputs: string[] }[];
+  /** The common-cause groups of the model (plan 15): headings whose events depend on the same group fail together. */
+  groups: { id: string; name: string; members: string[]; beta: number }[];
+}
+
+/** A common-cause group and the headings that depend on it. */
+export interface GroupLink {
+  group: ModelInfoView['groups'][number];
+  headings: string[];
 }
 
 export interface EtOptions {
@@ -365,9 +373,16 @@ export class EventTreeEditor {
     let info: ModelInfoView | null = null;
     try {
       const text = await this.api.loadModel(name);
-      const m = JSON.parse(text) as { top: string; events: { id: string; name?: string }[]; gates: { id: string; name?: string }[] };
+      const m = JSON.parse(text) as { top: string; events: { id: string; name?: string }[]; gates: { id: string; name?: string; inputs?: string[] }[]; common_cause_groups?: { id: string; name?: string; members: string[]; beta: number }[] };
       const v = await this.api.validate(text);
-      info = { name, hash: v.valid ? v.model_hash : null, top: m.top, events: m.events.map((e) => ({ id: e.id, name: e.name ?? e.id })), gates: m.gates.map((g) => ({ id: g.id, name: g.name ?? g.id })) };
+      info = {
+        name,
+        hash: v.valid ? v.model_hash : null,
+        top: m.top,
+        events: m.events.map((e) => ({ id: e.id, name: e.name ?? e.id })),
+        gates: m.gates.map((g) => ({ id: g.id, name: g.name ?? g.id, inputs: Array.isArray(g.inputs) ? g.inputs : [] })),
+        groups: (m.common_cause_groups ?? []).map((g) => ({ id: g.id, name: g.name?.trim() || g.id, members: g.members, beta: g.beta })),
+      };
     } catch {
       info = null; // not saved, or not a model: the validator names which
     }
@@ -376,6 +391,34 @@ export class EventTreeEditor {
     this.emit();
   }
   private modelSeq = 0;
+
+  /** The common-cause groups the event of a heading depends on, found through the gates of the saved model. Empty when the model has none. */
+  headingGroups(headingId: string): ModelInfoView['groups'] {
+    const m = this.model;
+    const h = this.doc.headings.find((x) => x.id === headingId);
+    if (!m || !h || m.groups.length === 0) return [];
+    const gates = new Map(m.gates.map((g) => [g.id, g]));
+    const seen = new Set<string>();
+    const events = new Set<string>();
+    const walk = (id: string): void => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const g = gates.get(id);
+      if (g) g.inputs.forEach(walk);
+      else events.add(id);
+    };
+    walk(h.event);
+    return m.groups.filter((g) => g.members.some((x) => events.has(x)));
+  }
+  /** The groups that two or more headings depend on: those headings do not fail independently. */
+  get sharedGroups(): GroupLink[] {
+    const out: GroupLink[] = [];
+    for (const g of this.model?.groups ?? []) {
+      const headings = this.doc.headings.filter((h) => this.headingGroups(h.id).some((x) => x.id === g.id)).map((h) => h.id);
+      if (headings.length >= 2) out.push({ group: g, headings });
+    }
+    return out;
+  }
   /** Looks again at everything outside the document: the models on disk, the one named, the checks. Called when the page returns to this view. */
   async refreshContext(): Promise<void> {
     await Promise.all([this.refreshModels(), this.refreshTrees(), this.loadModelInfo(), this.refreshRuns()]);
