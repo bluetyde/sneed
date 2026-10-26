@@ -1286,6 +1286,40 @@ MUTATIONS += [
 ]
 
 
+CCFR_SUITE = ("tests/unit/canonical.test.ts tests/unit/export.test.ts tests/unit/ccf-editor.test.ts tests/unit/ccf-engine.test.ts tests/unit/validate.test.ts tests/unit/event-tree-figure.test.ts", 150)
+
+
+def cr(name: str, file: str, old: str, new: str) -> tuple:
+    return (f"ccf review: {name}", ROOT / file, old, new, CCFR_SUITE)
+
+
+MUTATIONS += [
+    cr("an event called __proto__ drops out of the hash", "src/core/canonical.ts", "const events = Object.create(null) as Record<string, number>;", "const events: Record<string, number> = {};"),
+    cr("a gate called __proto__ drops out of the hash", "src/core/canonical.ts", "const gates = Object.create(null) as Record<string, unknown>;", "const gates: Record<string, unknown> = {};"),
+    cr("a group called __proto__ drops out of the hash", "src/core/canonical.ts", "const groups = Object.create(null) as Record<string, unknown>;", "const groups: Record<string, unknown> = {};"),
+    cr("a collapsed gate called __proto__ is lost from the export record", "src/core/export.ts", "const collapsed = Object.create(null) as Record<string, string>;", "const collapsed: Record<string, string> = {};"),
+    cr("making a group changes probabilities without a word", "src/web/model/editor.ts", "    this.selectGroup(id);\n    this.noteSharedProbability(before, doc);", "    this.selectGroup(id);"),
+    cr("joining a group changes a probability without a word", "src/web/model/editor.ts", "    this.commit(next, `Add ${eventId} to group ${groupId}`);\n    this.noteSharedProbability(before, next);", "    this.commit(next, `Add ${eventId} to group ${groupId}`);"),
+    cr("the note names no event", "src/web/model/editor.ts", "was.has(e.id) && was.get(e.id) !== e.probability", "false"),
+    cr("the note is given when nothing changed", "src/web/model/editor.ts", "    if (changed.length === 0) return;\n", ""),
+    cr("the note names the wrong old value", "src/web/model/editor.ts", "`${e.id} (${was.get(e.id)} to ${e.probability})`", "`${e.id} (${e.probability} to ${was.get(e.id)})`"),
+    cr("a damaged group list compares as no groups", "src/core/compare.ts", "if (raw.common_cause_groups !== undefined && !Array.isArray(raw.common_cause_groups)) return null;", ""),
+    cr("a null group list compares as no groups", "src/core/compare.ts", "raw.common_cause_groups !== undefined && !Array.isArray", "raw.common_cause_groups !== undefined && raw.common_cause_groups !== null && !Array.isArray"),
+    cr("the event limit with groups is refused without the groups", "src/engines/bdd/analyze.ts", "if (why === 'too-many-events' && groups.length > 0 && reachableEvents(original).length <= MAX_EVENTS) return", "if (false as boolean) return"),
+    cr("a model over the limit on its own is blamed on its groups", "src/engines/bdd/analyze.ts", "groups.length > 0 && reachableEvents(original).length <= MAX_EVENTS", "groups.length > 0"),
+    cr("the refusal names no group", "src/engines/bdd/analyze.ts", "`too-many-events-with-groups:${groups.map((g) => g.id).join(',')}`", "'too-many-events-with-groups:'"),
+    cr("the words for the refusal are missing", "src/web/ui/hints.ts", "if (code.startsWith('too-many-events-with-groups:')) {", "if (false as boolean) {"),
+    cr("a large Q gets no warning", "src/core/validate.ts", "if (difference - CCF_LARGE_DIFFERENCE > 1e-12) {", "if (false as boolean) {"),
+    cr("the warning is given at exactly 0.01", "src/core/validate.ts", "if (difference - CCF_LARGE_DIFFERENCE > 1e-12) {", "if (difference > CCF_LARGE_DIFFERENCE) {"),
+    cr("the warning waits for a larger difference", "src/core/validate.ts", "const CCF_LARGE_DIFFERENCE = 0.01;", "const CCF_LARGE_DIFFERENCE = 0.1;"),
+    cr("the warning states Q as the probability a member has", "src/core/validate.ts", "const member = first - difference;", "const member = first;"),
+    cr("the warning is given beside unequal probabilities", "src/core/validate.ts", "    } else if (first !== undefined && typeof g.beta === 'number' && g.beta >= 0 && g.beta <= 1) {", "    }\n    if (first !== undefined && typeof g.beta === 'number' && g.beta >= 0 && g.beta <= 1) {"),
+    cr("an event-tree result with groups keeps the plain assumptions", "src/core/event-tree-result.ts", "if (!rec?.common_cause) return EVENT_TREE_ASSUMPTIONS_TEXT;", "if (true as boolean) return EVENT_TREE_ASSUMPTIONS_TEXT;"),
+    cr("an event-tree result without groups gets the group sentence", "src/core/event-tree-result.ts", "if (!rec?.common_cause) return EVENT_TREE_ASSUMPTIONS_TEXT;", "if (false as boolean) return EVENT_TREE_ASSUMPTIONS_TEXT;"),
+    cr("the figure prints the plain assumptions for a result with groups", "src/web/model/event-tree-figure.ts", "eventTreeAssumptionsText(opts.result?.record)", "eventTreeAssumptionsText(null)"),
+]
+
+
 ANSI = re.compile(chr(27) + r"\[[0-9;]*m")
 
 
@@ -1471,6 +1505,8 @@ def main() -> int:
         chosen = [m for m in MUTATIONS if m[0].startswith("th answers:")]
     if only == "thjudge":  # just the mutation-record route and judgement route mutations
         chosen = [m for m in MUTATIONS if m[0].startswith("th judge:")]
+    if only == "ccfr":  # just the mutations of the fixes after the common-cause Codex review
+        chosen = [m for m in MUTATIONS if m[0].startswith("ccf review:")]
     if only == "lessons":  # just the lesson mutations
         chosen = [m for m in MUTATIONS if "lesson" in m[0] or m[0].startswith("editor: a lesson") or "hand calculation" in m[0]]
     if only == "ccf":  # just the common-cause group mutations (plan 15); an optional second argument keeps the ones whose name matches it
