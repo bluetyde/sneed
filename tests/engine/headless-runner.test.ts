@@ -130,7 +130,7 @@ describe('built headless runner against the installed SCRAM runtime', () => {
       const c = cli(['cancel', '--out', f.out]);
       expect(c.json).toMatchObject({ ok: true, cancelled: true });
       expect(await done).toBe(0);
-      expect(JSON.parse(stdout)).toMatchObject({ ok: true, status: 'cancelled' });
+      expect(JSON.parse(stdout), stdout).toMatchObject({ ok: true, status: 'cancelled' });
       expect(existsSync(path.join(f.out, 'pra'))).toBe(false);
       expect(c.json.nativeStopped).toBe(true);
     } finally {
