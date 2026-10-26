@@ -170,7 +170,9 @@ export class EventTreeView {
         return h('tr', { 'data-heading': hd.id },
           h('th', { scope: 'row' }, String(i + 1)),
           h('td', {}, h('input', { type: 'text', value: hd.name, 'aria-label': label('Name'), 'data-field': `et-h-name-${hd.id}`, onchange: (ev) => e.patchHeading(hd.id, { name: (ev.target as HTMLInputElement).value.trim() || hd.name }) })),
-          h('td', {}, h('select', { 'aria-label': label('Event whose occurrence is the failure'), 'data-field': `et-h-event-${hd.id}`, onchange: (ev) => e.patchHeading(hd.id, { event: (ev.target as HTMLSelectElement).value }) }, ...eventOptions(hd.event))),
+          h('td', {},
+            h('select', { 'aria-label': label('Event whose occurrence is the failure'), 'data-field': `et-h-event-${hd.id}`, onchange: (ev) => e.patchHeading(hd.id, { event: (ev.target as HTMLSelectElement).value }) }, ...eventOptions(hd.event)),
+            ...e.headingGroups(hd.id).map((g) => h('div', { class: 'hint cc-tag', 'data-testid': `et-h-group-${hd.id}`, 'data-group': g.id }, `Depends on common-cause group ${g.name} (beta ${g.beta})`))),
           h('td', {}, h('select', { 'aria-label': label('When it is asked'), 'data-field': `et-h-ask-${hd.id}`, onchange: (ev) => {
             const v = (ev.target as HTMLSelectElement).value;
             if (!v) e.setBypass(hd.id, null);
@@ -184,6 +186,14 @@ export class EventTreeView {
             h('button', { class: 'btn', type: 'button', 'aria-label': `Move ${hd.name} down`, disabled: i === d.headings.length - 1, 'data-action': `et-down-${hd.id}`, 'data-field': `et-down-${hd.id}`, onclick: () => e.moveHeading(hd.id, 1) }, 'Down'),
             h('button', { class: 'btn danger', type: 'button', 'aria-label': `Remove ${hd.name}`, disabled: d.headings.length <= 1, 'data-action': `et-remove-${hd.id}`, onclick: () => { e.removeHeading(hd.id); setTimeout(() => this.edit.querySelector<HTMLElement>('[data-field="et-add-heading"]')?.focus(), 30); } }, 'Remove'))));
       }))));
+    const shared = e.sharedGroups;
+    if (shared.length) {
+      const name = new Map(d.headings.map((x) => [x.id, x.name]));
+      out.push(h('div', { class: 'cc-result', role: 'note', 'data-testid': 'et-groups-note' },
+        h('strong', {}, 'Headings that fail together. '),
+        'Headings that depend on the same common-cause group do not fail independently: the analysis counts the shared failure once, so they fail together more often than independent events would.',
+        h('ul', {}, ...shared.map((s) => h('li', { 'data-group': s.group.id }, `Group ${s.group.name} (beta ${s.group.beta}): ${s.headings.map((x) => name.get(x) ?? x).join(', ')}.`)))));
+    }
     out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', 'data-action': 'et-add-heading', 'data-field': 'et-add-heading', disabled: d.headings.length >= MAX_HEADINGS, onclick: () => e.addHeading() }, 'Add a heading')));
 
     // end states
@@ -319,6 +329,12 @@ export class EventTreeView {
     }
     if (rec.approximation) {
       out.push(h('div', { class: 'caveat', role: 'note', 'data-testid': 'et-approximation' }, h('strong', {}, 'Approximation, a different kind of number. '), rec.approximation.note, ` The approximate sequence frequencies add up to ${fmt(rec.approximation.frequency_sum)} per year, not ${fmt(rec.total?.frequency)}.`));
+    }
+    if (rec.common_cause) {
+      out.push(h('div', { class: 'cc-result', role: 'note', 'data-testid': 'et-common-cause' },
+        h('strong', {}, 'Common-cause groups used (beta-factor). '),
+        'This is a different kind of result from one with independent events.',
+        h('ul', {}, ...rec.common_cause.groups.map((g) => h('li', { 'data-group': g.id }, `${g.id}: ${g.members.join(', ')}; beta ${g.beta}`)))));
     }
     for (const c of rec.caveats) out.push(h('div', { class: 'caveat', role: 'note', 'data-testid': 'et-caveat' }, h('strong', {}, 'Note. '), c));
     for (const w of rec.warnings) out.push(h('div', { class: 'caveat', role: 'note' }, h('strong', {}, 'Warning. '), w));

@@ -169,4 +169,55 @@ test.describe('common-cause groups', () => {
     await expect(page.getByTestId('results')).toContainText('common-cause groups (beta-factor)');
     await audit(page, 'importance table of a model with a group');
   });
+
+  test('event tree: headings on the two pumps of a group are marked and listed as failing together, and the result names the group', async ({ app, page }) => {
+    const model = JSON.stringify({
+      schema: { id: 'sneed.fault-tree', version: 1 },
+      model: { id: 'pumps', name: 'Pumps', created: '2026-10-25T00:00:00Z', updated: '2026-10-25T00:00:00Z' },
+      assumptions: { probability_model: 'constant', independence: 'beta-factor-groups', coherence: 'coherent', time: 'none' },
+      top: 'TOP',
+      events: [{ id: 'A', name: 'Pump A', probability: 0.1 }, { id: 'B', name: 'Pump B', probability: 0.1 }, { id: 'D', probability: 0.2 }],
+      gates: [{ id: 'TOP', type: 'and', inputs: ['A', 'B'] }],
+      common_cause_groups: [{ id: 'CC1', name: 'Pumps', method: 'beta-factor', members: ['A', 'B'], beta: 0.1 }],
+    }) + '\n';
+    await app.open();
+    const saved = await page.request.put('/api/models/pumps', { headers: { 'x-sneed-request': '1' }, data: { text: model } });
+    expect(saved.ok()).toBe(true);
+    await page.locator('[data-mode="event-tree"]').click();
+    await page.locator('[data-action="et-new"]').click();
+    await page.locator('[data-field="et-model"]').selectOption('pumps');
+    await expect(page.locator('[data-field="et-h-event-H1"] option[value="A"]')).toHaveCount(1);
+    await page.locator('[data-field="et-h-event-H1"]').selectOption('A');
+    await page.locator('[data-action="et-add-heading"]').click();
+    await page.locator('[data-field="et-h-event-H2"]').selectOption('B');
+    await page.locator('[data-field="et-ie-freq"]').fill('0.5');
+    await page.locator('[data-field="et-ie-freq"]').press('Enter');
+    await expect(page.locator('[data-seq]')).toHaveCount(4);
+    await page.locator('[data-field="et-set-all"]').selectOption('ES1');
+
+    // both headings depend on the group, and the page says they fail together
+    await expect(page.getByTestId('et-h-group-H1')).toContainText('Depends on common-cause group Pumps (beta 0.1)');
+    await expect(page.getByTestId('et-h-group-H2')).toBeVisible();
+    await expect(page.getByTestId('et-groups-note')).toContainText('Headings that fail together');
+    await expect(page.getByTestId('et-groups-note')).toContainText('Group Pumps (beta 0.1): Heading 1, Heading 2');
+    await audit(page, 'event tree with headings on a common-cause group');
+
+    // a heading on an event outside the group is not marked, and the note goes when only one heading is left on the group
+    await page.locator('[data-field="et-h-event-H2"]').selectOption('D');
+    await expect(page.getByTestId('et-h-group-H2')).toHaveCount(0);
+    await expect(page.getByTestId('et-groups-note')).toHaveCount(0);
+    await page.locator('[data-field="et-h-event-H2"]').selectOption('B');
+    await expect(page.getByTestId('et-groups-note')).toBeVisible();
+
+    // the analysis: both pumps lost has the group's probability, 0.5 x 0.018019, not the 0.5 x 0.01 of independent pumps
+    await expect(page.getByTestId('et-no-problems')).toBeVisible(); // every sequence still ends somewhere
+    await page.locator('[data-action="et-run"]').click();
+    await expect(page.getByTestId('et-result-status')).toHaveText(/completed \/ complete/);
+    const freq = Number(await page.getByTestId('et-result-seqs').locator('tr[data-seq="H1:fails,H2:fails"]').locator('td[data-value]').first().getAttribute('data-value'));
+    expect(freq).toBeCloseTo(0.0090095, 10);
+    await expect(page.getByTestId('et-common-cause')).toContainText('CC1: A, B; beta 0.1');
+    await expect(page.getByTestId('et-common-cause')).toContainText('different kind of result');
+    await expect(page.getByTestId('et-caveat').filter({ hasText: 'common-cause groups' })).toHaveCount(1);
+    await audit(page, 'event tree result with a common-cause group');
+  });
 });
