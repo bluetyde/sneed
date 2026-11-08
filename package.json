@@ -22,7 +22,7 @@
     "dev:server": "tsx src/server/main.ts --dev",
     "start": "vite build && tsx src/server/main.ts"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "devDependencies": {
     "@playwright/test": "1.63",
     "@types/node": "^24.19.1",

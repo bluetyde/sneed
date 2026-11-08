@@ -6,7 +6,7 @@ SNEED has two analysis engines. Both produce the same result record through the 
 |---|---|---|
 | Where | inside the app, `src/engines/bdd/` | the installed runtime in WSL2 (`docs/RUNTIME.md`) |
 | Install | none | `npm run runtime -- install` (built from pinned source) |
-| Licence | MIT, same as SNEED, written from the published algorithms | GPL-3.0, never bundled |
+| Licence | AGPL-3.0-or-later, same as SNEED, written from the published algorithms | GPL-3.0, never bundled |
 | How | reads the native model directly; a reduced ordered binary decision diagram and Rauzy's minimal solutions | exports Open-PSA XML, runs the engine, parses its report |
 | K-of-N | built into the diagram, exact for every shape | native `atleast` is wrong for some shapes, so the exporter expands it |
 | Limits | 2000 events, 2,000,000 diagram nodes, 50,000 cut sets, a 20-million-number cache budget, a 1 GB heap for its thread, whole-analysis time limit, cancel | product-order limit, 50,000 cut sets, report size cap, time limit, cancel |

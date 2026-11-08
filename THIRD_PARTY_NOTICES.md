@@ -1,6 +1,6 @@
 # Third-party notices
 
-SNEED is MIT licensed (see [LICENSE](LICENSE)). It uses the software below. Licenses were read from the installed packages or from the SCRAM source on 2026-10-05; they were not independently audited.
+SNEED is licensed under the GNU AGPL, version 3 or later (see [LICENSE](LICENSE) and [AUTHORS](AUTHORS)). It uses the software below. Licenses were read from the installed packages or from the SCRAM source on 2026-10-05; they were not independently audited.
 
 ## Run-time dependencies (npm)
 

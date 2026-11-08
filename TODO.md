@@ -145,6 +145,7 @@ Reconciled 2026-10-23. Each box below is ticked only with implementation or fixt
 - [x] 2026-10-05 Rare-event sum above 1: show it labelled, do not fail (user); implemented, see Known engine defects.
 - [x] 2026-10-05 Upstream report of the SCRAM `atleast` defect: no, not now (user); tracked under Known engine defects.
 - [x] 2026-10-05 Distribution license of the app itself: MIT (user).
+- [x] 2026-11-07 Licence changed to AGPL-3.0-or-later for the whole suite (owner); `AUTHORS` carries the non-binding request and the section 7(b) attribution term.
 
 ## Done
 

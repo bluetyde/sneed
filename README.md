@@ -58,7 +58,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to help, and [SECURITY.md](SECURITY.md) t
 
 ## Licence and third-party software
 
-SNEED is MIT licensed ([LICENSE](LICENSE)). Packages it uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+SNEED is free software, licensed under the GNU Affero General Public License, version 3 or (at your option) any later version ([LICENSE](LICENSE), SPDX `AGPL-3.0-or-later`). Under section 7(b) of the GNU Affero General Public License version 3, redistributions must preserve the attribution notice in AUTHORS. Versions published before 2026-11-07 were released under the MIT licence and stay under it. Packages it uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **SCRAM** (an open-source fault-tree engine, GPL-3.0) is optional, is built separately on your machine from its own source, and is never bundled with or distributed by this repository. SNEED runs it as a separate program and reads its XML report.
 

@@ -38,7 +38,7 @@ Other test commands:
 
 ## Licence
 
-SNEED is MIT licensed. By sending a change, you agree that it is released under the same licence ([LICENSE](LICENSE)). Do not add code with an incompatible licence. Record any new package in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+SNEED is licensed under the GNU AGPL, version 3 or later. By sending a change, you agree that it is released under the same licence ([LICENSE](LICENSE)). Do not add code with an incompatible licence. Record any new package in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Conduct
 
